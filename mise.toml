@@ -1,0 +1,10 @@
+# Toolchain for this project. With mise activated, entering the directory selects these exact
+# versions; `mise install` fetches them. Keep pnpm in sync with `packageManager` in package.json and
+# node with `engines`.
+[tools]
+node = "26.10.0"
+pnpm = "12.9.1"
+
+[tasks.setup]
+description = "Install pinned tools and locked dependencies"
+run = ["mise install", "pnpm install --frozen-lockfile"]

@@ -1,0 +1,11 @@
+packages:
+  - packages/*
+  - apps/*
+
+allowBuilds:
+  electron: true
+  esbuild: true
+  lefthook: true
+
+minimumReleaseAgeExclude:
+  - hono@4.13.14

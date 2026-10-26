@@ -143,7 +143,13 @@
       }
       .controls .seg button + button {
         border-left: 0;
+        border-radius: 0;
+      }
+      .controls .seg button:last-child:not(:first-child) {
         border-radius: 0 6px 6px 0;
+      }
+      .seg[hidden] {
+        display: none;
       }
       .strip a {
         text-decoration: none;
@@ -324,7 +330,8 @@
         <p>
           Every mark below is drawn live from the same shape as the octopus on the landing page: a
           mantle, eyes and eight curling arms, sampled into rounded tiles. Switch between the
-          stylised mark and a more realistic animal; the strip below always shows both. Each
+          stylised mark and a more realistic animal (in four poses); the strip below always shows
+          both, and "tiles + ascii" sets a character from the density ramp inside every tile. Each
           direction shows the app tile, the small sizes where icons usually fall apart, and how it
           sits in a dock and a browser tab. The sliders apply to all of them.
         </p>
@@ -335,13 +342,18 @@
           ><button data-shape="stylised" aria-pressed="true">stylised</button
           ><button data-shape="realistic" aria-pressed="false">realistic</button></span
         >
+        <span class="seg" id="poses" hidden></span>
         <label
           >density <input id="density" type="range" min="12" max="48" value="22" />
           <span id="densityOut">22</span></label
         >
         <label>arms <input id="curl" type="range" min="0" max="100" value="60" /></label>
         <button id="animate" aria-pressed="true">animate</button>
-        <button id="glyphs" aria-pressed="true">glyphs in tiles</button>
+        <span class="seg" title="characters in the tiles"
+          ><button data-glyphs="none" aria-pressed="false">plain</button
+          ><button data-glyphs="subtle" aria-pressed="true">glyphs</button
+          ><button data-glyphs="ascii" aria-pressed="false">tiles + ascii</button></span
+        >
         <button id="theme">light page</button>
       </div>
 
@@ -381,7 +393,8 @@
         density: { stylised: 22, realistic: 32 },
         curl: 0.6,
         animate: true,
-        glyphs: true,
+        pose: "three",
+        glyphs: "subtle",
       };
 
       // Each direction: the tile behind the mark, how cells are painted, and its tile palette.
@@ -550,38 +563,122 @@
         ];
       }
 
-      // The animal: a three-quarter view with the mantle tilted back behind the head, eyes on the
-      // sides, a web between the arm roots, and eight arms that each reach and curl their own way,
-      // suckers along the near ones and mottling on the skin.
-      const ARMS = [
-        // base angle (0 = right, PI/2 = down), length, curl, near (drawn over the web)
-        [2.95, 0.4, -2.2, false],
-        [2.05, 0.34, 2.4, false],
-        [0.3, 0.4, 2.0, false],
-        [2.45, 0.44, 1.9, true],
-        [1.95, 0.46, -2.6, true],
-        [1.55, 0.42, 3.0, true],
-        [1.15, 0.46, -2.2, true],
-        [0.7, 0.44, 2.5, true],
-      ];
+      // The animal, in a few poses. Each pose places the mantle (the bag of the body), the head,
+      // the eyes and eight arms that each reach and curl their own way; suckers run along the near
+      // arms and mottling covers the skin. Lengths are fractions of the square, angles are radians
+      // (0 = right, PI/2 = down), curl > 0 rolls an arm clockwise.
+      const POSES = {
+        // three-quarter: the mantle tilted back behind the head, a web between the arm roots
+        three: {
+          label: "three-quarter",
+          head: [0.5, 0.43, 0.125, 0.085, 0.08],
+          mantle: [0.43, 0.24, 0.135, 0.2, -0.42],
+          eyes: [
+            [-0.085, -0.03],
+            [0.075, -0.035],
+          ],
+          siphon: [0.12, 0.02],
+          web: true,
+          wave: 0.6,
+          arms: [
+            // angle, length, curl, near
+            [2.95, 0.4, -2.2, false],
+            [2.05, 0.34, 2.4, false],
+            [0.3, 0.4, 2.0, false],
+            [2.45, 0.44, 1.9, true],
+            [1.95, 0.46, -2.6, true],
+            [1.55, 0.42, 3.0, true],
+            [1.15, 0.46, -2.2, true],
+            [0.7, 0.44, 2.5, true],
+          ],
+        },
+        // front: facing you, mantle upright, arms falling and splaying like a skirt
+        front: {
+          label: "front",
+          head: [0.5, 0.42, 0.13, 0.08, 0],
+          mantle: [0.5, 0.22, 0.15, 0.185, 0],
+          eyes: [
+            [-0.075, -0.02],
+            [0.075, -0.02],
+          ],
+          web: true,
+          wave: 0.5,
+          arms: [
+            [2.85, 0.4, 2.0, false],
+            [0.29, 0.4, -2.2, false],
+            [2.35, 0.44, 2.4, false],
+            [0.8, 0.44, -1.8, false],
+            [2.0, 0.46, 1.6, true],
+            [1.7, 0.42, -2.6, true],
+            [1.42, 0.44, 2.2, true],
+            [1.12, 0.46, -1.5, true],
+          ],
+        },
+        // side: jetting along, mantle first, the arms streaming behind in a bundle
+        side: {
+          label: "swimming",
+          head: [0.6, 0.42, 0.1, 0.085, 0.7],
+          mantle: [0.73, 0.25, 0.12, 0.2, 0.75],
+          eyes: [
+            [-0.05, -0.035],
+            [0.035, -0.06],
+          ],
+          siphon: [-0.02, 0.07],
+          wave: 1.1,
+          arms: [
+            [2.55, 0.56, 0.5, false],
+            [2.25, 0.54, -0.6, false],
+            [2.75, 0.5, -0.4, false],
+            [2.4, 0.6, 0.7, true],
+            [2.15, 0.58, -0.5, true],
+            [2.62, 0.58, -0.8, true],
+            [2.3, 0.62, 0.3, true],
+            [2.48, 0.6, -0.3, true],
+          ],
+        },
+        // top: seen from above, the arms radiating all around the body
+        top: {
+          label: "from above",
+          head: [0.5, 0.56, 0.1, 0.07, 0],
+          mantle: [0.5, 0.4, 0.115, 0.155, 0],
+          eyes: [
+            [-0.075, -0.005],
+            [0.075, -0.005],
+          ],
+          wave: 0.5,
+          root: 0.03,
+          arms: [
+            [-2.3, 0.4, -1.8, true],
+            [-0.85, 0.4, 1.8, true],
+            [3.05, 0.4, -2.2, true],
+            [0.1, 0.4, 2.2, true],
+            [2.5, 0.42, 2.0, true],
+            [0.65, 0.42, -2.0, true],
+            [1.95, 0.4, -2.4, true],
+            [1.2, 0.4, 2.4, true],
+          ],
+        },
+      };
+
       function drawRealistic(g, S, t, N) {
         g.clearRect(0, 0, S, S);
+        const P = POSES[state.pose];
         const grey = (v) => `rgb(${v * 255},${v * 255},${v * 255})`;
         const detail = N >= 18;
         const curl = 0.35 + state.curl * 1.3;
-        const hx = S * 0.5;
-        const hy = S * 0.43;
+        const [hx, hy, hrx, hry, hrot] = P.head.map((v, i) => (i < 4 ? v * S : v));
+        const root = (P.root ?? 0.05) * S;
 
-        const arms = ARMS.map(([a0, len0, k, near], i) => {
+        const arms = P.arms.map(([a0, len0, k, near], i) => {
           const n = 32;
           const len = S * len0;
           let ang = a0;
-          let x = hx + Math.cos(a0) * S * 0.05;
-          let y = hy + S * 0.03 + Math.sin(a0) * S * 0.04;
+          let x = hx + Math.cos(a0) * root;
+          let y = hy + S * 0.02 + Math.sin(a0) * root * 0.8;
           const pts = [[x, y, ang]];
           for (let j = 0; j < n; j++) {
             const u = j / n;
-            const wave = state.animate ? 0.6 * Math.sin(t * 1.3 + i * 1.9 - u * 3.5) * u : 0;
+            const wave = state.animate ? P.wave * Math.sin(t * 1.3 + i * 1.9 - u * 3.5) * u : 0;
             // a gentle S along the arm, then the tip rolls up
             const turn = 0.5 * Math.sin(u * Math.PI * 1.6 + i) + k * curl * 3 * Math.pow(u, 2.4);
             ang += (turn + wave) / n;
@@ -605,7 +702,7 @@
           pts.forEach(([x, y, a], j) => {
             const u = j / pts.length;
             if (j % 3 !== 1 || u < 0.12 || u > 0.85) return;
-            const side = Math.sign(k);
+            const side = Math.sign(k) || 1;
             const w = width(u);
             g.fillStyle = grey(0.93);
             g.beginPath();
@@ -621,27 +718,27 @@
         };
 
         for (const arm of arms) if (!arm.near) drawArm(arm);
-        // the web between the arm roots
-        g.fillStyle = grey(0.47);
-        g.beginPath();
-        arms
-          .filter((a) => a.near)
-          .forEach(({ pts }, i) => {
-            const [x, y] = pts[4];
-            if (i === 0) g.moveTo(x, y);
-            else g.lineTo(x, y);
-          });
-        g.lineTo(hx, hy);
-        g.fill();
+        if (P.web) {
+          // the web between the arm roots
+          g.fillStyle = grey(0.47);
+          g.beginPath();
+          arms
+            .filter((a) => a.near)
+            .forEach(({ pts }, i) => {
+              const [x, y] = pts[4];
+              if (i === 0) g.moveTo(x, y);
+              else g.lineTo(x, y);
+            });
+          g.lineTo(hx, hy);
+          g.fill();
+        }
         for (const arm of arms) if (arm.near) drawArm(arm);
 
-        // the mantle, tilted back behind the head, with mottled skin
+        // the mantle, with mottled skin
         const breathe = state.animate ? 1 + 0.035 * Math.sin(t * 1.1) : 1;
-        const mx = S * 0.43;
-        const my = S * 0.24;
-        const rot = -0.42;
-        const mrx = S * 0.135 * breathe;
-        const mry = (S * 0.2) / breathe;
+        const [mx, my, mrx0, mry0, rot] = P.mantle.map((v, i) => (i < 4 ? v * S : v));
+        const mrx = mrx0 * breathe;
+        const mry = mry0 / breathe;
         const mantle = () => {
           g.beginPath();
           g.ellipse(mx, my, mrx, mry, rot, 0, 7);
@@ -682,17 +779,15 @@
         hg.addColorStop(1, grey(0.55));
         g.fillStyle = hg;
         g.beginPath();
-        g.ellipse(hx, hy, S * 0.125, S * 0.085, 0.08, 0, 7);
+        g.ellipse(hx, hy, hrx, hry, hrot, 0, 7);
         g.fill();
-        // siphon on the right side
-        g.fillStyle = grey(0.5);
-        g.beginPath();
-        g.ellipse(hx + S * 0.12, hy + S * 0.02, S * 0.03, S * 0.018, 0.5, 0, 7);
-        g.fill();
-        const eyes = [
-          [hx - S * 0.085, hy - S * 0.03],
-          [hx + S * 0.075, hy - S * 0.035],
-        ];
+        if (P.siphon) {
+          g.fillStyle = grey(0.5);
+          g.beginPath();
+          g.ellipse(hx + P.siphon[0] * S, hy + P.siphon[1] * S, S * 0.03, S * 0.018, 0.5, 0, 7);
+          g.fill();
+        }
+        const eyes = P.eyes.map(([dx, dy]) => [hx + dx * S, hy + dy * S]);
         for (const [x, y] of eyes) {
           g.fillStyle = grey(0.95);
           g.beginPath();
@@ -711,7 +806,7 @@
       // Every canvas in a frame shares the same few (shape, density) samples.
       let memo = new Map();
       function sample(N, t, shape) {
-        const key = `${shape} ${N} ${t}`;
+        const key = `${shape} ${state.pose} ${N} ${t}`;
         if (!memo.has(key)) memo.set(key, sampleShape(N, t, shape));
         return memo.get(key);
       }
@@ -778,17 +873,29 @@
           else if (lum > 0.36) col = P.deep;
           else col = P.grey;
           if (!col) return;
+          // tiles + ascii: a quiet tile carrying a character from the density ramp in its colour
+          const ascii = state.glyphs === "ascii" && !isEye && cell >= 5;
           g.fillStyle = col;
+          if (ascii) g.globalAlpha = 0.3;
           g.beginPath();
           g.roundRect(x + gap / 2, y + gap / 2, cell - gap, cell - gap, rad);
           g.fill();
-          if (isEye && dir.mode !== "flat" && cell > 5) {
+          g.globalAlpha = 1;
+          if (ascii) {
+            const v = dir.mode === "flat" ? 0.4 + 0.6 * cov : lum * (0.4 + 0.6 * cov);
+            g.font = `600 ${cell * 0.92}px "Geist Mono", monospace`;
+            g.fillText(
+              RAMP[Math.max(2, Math.min(9, Math.round(v * 9)))],
+              x + cell / 2,
+              y + cell / 2 + 0.5,
+            );
+          } else if (isEye && dir.mode !== "flat" && cell > 5) {
             g.fillStyle = P.dot;
             g.beginPath();
             g.arc(x + cell * 0.5, y + cell * 0.5, cell * 0.16, 0, 7);
             g.fill();
           } else if (
-            state.glyphs &&
+            state.glyphs === "subtle" &&
             !small &&
             dir.mode !== "flat" &&
             col !== P.fringe &&
@@ -957,6 +1064,7 @@
           for (const o of document.querySelectorAll("[data-shape]"))
             o.setAttribute("aria-pressed", o === b);
           $("density").value = $("densityOut").textContent = state.density[state.shape];
+          $("poses").hidden = state.shape !== "realistic";
           if (!state.animate) renderAll();
         };
       }
@@ -971,11 +1079,25 @@
         if (state.animate) raf = requestAnimationFrame(loop);
         else renderAll();
       };
-      $("glyphs").onclick = (e) => {
-        state.glyphs = !state.glyphs;
-        e.target.setAttribute("aria-pressed", state.glyphs);
-        if (!state.animate) renderAll();
-      };
+      // A segmented control: one button per value, pressed when it is the state's.
+      function segment(buttons, key, read) {
+        for (const b of buttons) {
+          b.onclick = () => {
+            state[key] = read(b);
+            for (const o of buttons) o.setAttribute("aria-pressed", o === b);
+            if (!state.animate) renderAll();
+          };
+        }
+      }
+      segment(document.querySelectorAll("[data-glyphs]"), "glyphs", (b) => b.dataset.glyphs);
+      for (const [id, pose] of Object.entries(POSES)) {
+        const b = document.createElement("button");
+        b.dataset.pose = id;
+        b.textContent = pose.label;
+        b.setAttribute("aria-pressed", id === state.pose);
+        $("poses").append(b);
+      }
+      segment(document.querySelectorAll("[data-pose]"), "pose", (b) => b.dataset.pose);
       $("theme").onclick = (e) => {
         const light = root.dataset.theme !== "light";
         root.dataset.theme = light ? "light" : "dark";

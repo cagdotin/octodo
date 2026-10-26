@@ -1,0 +1,13 @@
+{
+  "name": "@tasksmd/mcp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@tasksmd/core": "workspace:*",
+    "effect": "^4.0.6"
+  }
+}

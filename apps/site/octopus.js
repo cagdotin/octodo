@@ -372,7 +372,9 @@
       const s = a.s,
         sg = Math.sign(s);
       const ra = -0.36 * ML + Math.abs(s) * 0.06 * ML,
-        rb = s * MW * 0.36;
+        // closed, the roots sit a little wider round the crown, so the bundle behind them stays a
+        // fan of separate arms rather than one rope
+        rb = s * MW * (0.36 + 0.18 * O.shut);
       let x = O.x + f0 * ra + n0 * rb,
         y = O.y + f1 * ra + n1 * rb;
       const T = a.t;
@@ -393,22 +395,23 @@
         s * (0.08 + 0.75 * spread) -
         sg * 0.3 * e +
         pose.relax * 0.16 * nz(a, t, 1);
-      // tip curl: inward (toward the axis, a bell) when swimming, wandering when relaxed, and
-      // straightened out by reaching
-      const c =
-        pose.curl *
-        (sg * 0.6 * (1 - pose.relax) + pose.relax * (0.45 * sg + 0.65 * nz(a, t, 2))) *
-        (1 - 0.8 * e);
+      // tip curl: inward (toward the axis, a bell) when swimming; relaxed, each arm hangs fairly
+      // straight with a loose curl of its own toward the tip, slowly coming and going, either
+      // way; straightened out by reaching
+      const loose = 0.85 * nz(a, t * 0.55, 2) + 0.2 * sg;
+      const c = pose.curl * (sg * 0.6 * (1 - pose.relax) + pose.relax * loose) * (1 - 0.8 * e);
+      const r = pose.relax;
       const seg = (a.len * AL) / N;
       for (let j = 1; j <= N; j++) {
         const u = (j - 0.5) / N;
         const k =
           -s * spread * 0.5 +
-          sg * pose.relax * 0.55 * spread +
-          c * 8 * u * u * u +
+          sg * r * 0.3 * spread +
+          // (swimming the curl runs along the arm; relaxed it gathers in the last half)
+          c * ((1 - r) * 8 * u * u * u + r * 14 * Math.max(0, (u - 0.4) / 0.6) ** 3) +
           // the reaching arm's tip curls into a spiral, away from the body
           -sg * 10 * e * e * Math.max(0, (u - 0.7) / 0.3) ** 2 +
-          pose.wave * (0.25 + u) * Math.sin(t * 1.7 + a.ph[1] - u * 5) +
+          pose.wave * (0.25 + u - 0.15 * r) * Math.sin(t * (1.7 - 0.6 * r) + a.ph[1] - u * 5) +
           // closing and gliding in a fright, a quicker ripple runs down the arm toward the tip
           RIPPLE * O.shut * Math.min(1, 2 * O.fear) * u * u * Math.sin(t * 13 + a.ph[2] - u * 7);
         ang += k / N;
@@ -647,7 +650,7 @@
         const ahead = Math.cos(wrapA(dir - O.th));
         const sc =
           appeal(x, y) -
-          Math.abs(d - 320 * S) / (300 * S) +
+          Math.abs(d - 460 * S) / (300 * S) +
           ahead * 0.4 -
           Math.max(0, Math.sin(dir) - 0.3) * 1.2 +
           random() * 0.6;
@@ -711,16 +714,9 @@
     }
     // The margin it keeps from an edge: room for its arms to swing round as it turns (FREE
     // mantle lengths), or as far as the body reaches that way now (e), if that is further.
-    const FREE = 3;
+    const FREE = 2.2;
     function reachTo(_a, _nx, _ny, e) {
       return Math.max(e, FREE * ML) + PAD * ML;
-    }
-    // Which way is inward, and how urgently: each edge closer to the neck than FREE + 1 mantle
-    // lengths pushes, harder the closer it is. Returns [x, y] (0 when clear of them all).
-    function inward() {
-      const z = (FREE + 1) * ML,
-        k = (d) => clamp((z - d) / (1.5 * ML), 0, 1);
-      return [k(O.x) - k(W - O.x), k(O.y) - k(H - O.y)];
     }
     // How far the body is from each edge now (px, PAD already taken off)
     function clearance() {
@@ -752,9 +748,8 @@
       measure();
     }
 
-    // Where it wants to head, unhurried: toward its waypoint, along a meandering path, and
-    // away from an edge it is nearing. It never bounces off an edge: well before one it begins
-    // a smooth curved turn toward the side with more room, harder the closer it gets.
+    // Where it wants to head, unhurried: toward its waypoint, along a meandering path (the
+    // walls bend it afterwards, see walls()).
     function desiredHeading(dt) {
       let dx = O.wx - O.x,
         dy = O.wy - O.y;
@@ -766,41 +761,93 @@
       O.weave += dt * (0.5 + 0.35 * Math.sin(O.weave * 0.27 + 1));
       const sway = 0.38 * Math.sin(O.weave) * (0.6 + 0.4 * Math.sin(O.weave * 0.41));
       let want = Math.atan2(dy, dx) + O.wander * 0.6 + sway;
-      // it looks ahead as far as it needs to come about at its speed (a turn's radius at its
-      // turn rate) plus a margin, and turns early toward the side with more room
-      // close to an edge (ahead, beside or behind) it bends its way inward
-      const [ix, iy] = inward(),
-        ik = Math.min(1, Math.hypot(ix, iy));
-      if (ik > 0) want += wrapA(Math.atan2(iy, ix) - want) * ik * 0.7;
-      const look = edgeLook();
-      const r0 = room(O.th);
-      O.edgeK = r0 < look ? 1 - r0 / look : 0;
-      if (O.edgeK > 0) {
-        const k = O.edgeK;
-        // which way has more room, looking well round; toward the middle of the screen breaks
-        // a tie, so it never turns into a corner
-        const cx = W / 2 - O.x,
-          cy = H / 2 - O.y,
-          side = (g) =>
-            room(O.th + g * 0.9) +
-            room(O.th + g * 1.6) * 0.5 +
-            (Math.cos(O.th + g * 0.9) * cx + Math.sin(O.th + g * 0.9) * cy) * 0.15;
-        const rl = side(-1),
-          rr = side(1);
-        // keep turning the way it began unless the other way is clearly roomier
-        if (!O.edgeSide || (O.edgeSide > 0 ? rl > rr * 1.4 + ML : rr > rl * 1.4 + ML))
-          O.edgeSide = rr >= rl ? 1 : -1;
-        const away = O.th + O.edgeSide * (0.6 + 1.6 * k);
-        want += wrapA(away - want) * Math.min(1, 1.8 * k);
-      } else O.edgeSide = 0;
       return want;
     }
 
-    // how far ahead it watches for an edge: a margin, the radius of a turn at its speed, and the
-    // way it would coast meanwhile
-    function edgeLook() {
-      const v = Math.max(0, O.vx * Math.cos(O.th) + O.vy * Math.sin(O.th));
-      return ML * 1.5 + v / 1.1 + v / 2.5;
+    // --- the walls ------------------------------------------------------------------------------
+    // One steering term keeps it off every edge. Each wall presses on it as its free distance
+    // (the neck's distance less the body's reach that way, see reachTo()) falls below how far it
+    // looks that way: a margin beside it, and ahead the way a jet and its glide would carry it
+    // plus the radius of the turn away. The presses add up into one inward vector, so a corner's
+    // two walls agree on the way to turn instead of fighting over it; the turn's sign is chosen
+    // from that vector against the heading and kept (latched) until it is clear, so it never
+    // dithers left-right. Nothing is ever reflected or snapped: the term only bends the heading it
+    // wants and quickens its turn (and so its arch), and a stroke that would still carry it out
+    // is softened (see update()).
+    const wall = { x: 0, y: 0, k: 0, hR: 1, hold: 0, last: 0 };
+    const TAU = 2 * Math.PI;
+    function walls(dt) {
+      const h0 = Math.cos(O.th),
+        h1 = Math.sin(O.th);
+      const vf = Math.max(0, O.vx * h0 + O.vy * h1);
+      // a stroke under way, or about to start, adds its jet (ML/s)
+      const jet = O.mode === "swim" || O.rest < 0.6 || O.hurry ? (O.hurry ? 4.5 : 3.2) * ML : 0;
+      const v = Math.max(vf, jet);
+      // the glide it cannot help, and the radius of a turn at about 1.5 rad/s
+      const ahead = v * 0.3 + v / 1.5;
+      let rx = 0,
+        ry = 0;
+      const press = (free, out, nx, ny) => {
+        const look = 0.9 * ML + Math.max(0, out) * ahead;
+        const u = ease(clamp(1 - free / look, 0, 1));
+        rx += nx * u;
+        ry += ny * u;
+      };
+      press(O.x - reachTo(0, -1, 0, ext.l), -h0, 1, 0);
+      press(W - O.x - reachTo(0, 1, 0, ext.r), h0, -1, 0);
+      press(O.y - reachTo(0, 0, -1, ext.t), -h1, 0, 1);
+      press(H - O.y - reachTo(0, 0, 1, ext.b), h1, 0, -1);
+      const k = Math.min(1, Math.hypot(rx, ry));
+      wall.x = rx;
+      wall.y = ry;
+      wall.k = k;
+      wall.hold = Math.max(0, wall.hold - dt);
+      const rl = Math.hypot(rx, ry) || 1,
+        hR = (h0 * rx + h1 * ry) / rl;
+      wall.hR = k > 0 ? hR : 1;
+      if (O.edgeSide) {
+        // clear: far enough off, or heading well inward
+        if (k < 0.02 || hR > 0.5) {
+          wall.last = O.edgeSide;
+          wall.hold = 1.5;
+          O.edgeSide = 0;
+        }
+      } else if (k > 0.05 && hR < 0.3) {
+        const cross = h0 * ry - h1 * rx;
+        let side;
+        // just after a turn from an edge it turns the same way again
+        if (wall.hold > 0 && wall.last) side = wall.last;
+        // head-on to a wall (or into a corner): toward the side with more room; unhurried, over
+        // the top rather than through mantle-down
+        else if (Math.abs(cross) < 0.35 * rl) {
+          const sc = (g) =>
+            room(O.th + g * 0.9) +
+            0.5 * room(O.th + g * 1.6) +
+            (O.hurry ? 0 : 60 * S * Math.cos(O.th + g * 1.2 + Math.PI / 2));
+          side = sc(1) >= sc(-1) ? 1 : -1;
+        } else side = cross > 0 ? 1 : -1;
+        O.edgeSide = side;
+      }
+      O.edgeK = O.edgeSide ? k : 0;
+    }
+    // bends the heading it wants away from the walls, toward the latched side: at a light press
+    // along the wall, at a hard one well inward (only ever toward safety: a heading that already
+    // points further inward is kept)
+    function edgeWant(want) {
+      if (!O.edgeSide) return want;
+      const k = wall.k,
+        aR = Math.atan2(wall.y, wall.x);
+      let target = aR - O.edgeSide * (Math.PI / 2) * (1 - 0.7 * k);
+      // unhurried, never mantle-first steeply downward (resting upside down): a shallow descent
+      // (whichever of the two it reaches first turning the way it chose)
+      if (!O.hurry && Math.sin(target) > 0.45) {
+        const ahead = (a) => ((((a - O.th) * O.edgeSide) % TAU) + TAU) % TAU;
+        const a1 = Math.asin(0.45),
+          a2 = Math.PI - a1;
+        target = ahead(a1) <= ahead(a2) ? a1 : a2;
+      }
+      if (Math.cos(want - aR) >= Math.cos(target - aR)) return want;
+      return want + wrapA(target - want) * Math.min(1, 0.4 + 2 * k);
     }
 
     // --- the world around it ----------------------------------------------------------------
@@ -820,22 +867,23 @@
       return [O.x - f0 * ML * 0.1 + n0 * MW * 0.42, O.y - f1 * ML * 0.1 + n1 * MW * 0.42];
     }
 
-    // How long it coasts between bouts: mostly a short pause before a quick burst, often a
-    // longer glide, now and then a slow hover. Each kind is exponential above a floor, capped,
-    // and the whole never runs past REST_MAX: it never parks.
-    const REST_MAX = 2.4;
+    // It travels in one or two big pushes that carry it somewhere new, then floats a while,
+    // looking about (the breathing keeps it drifting, so it never parks): a shorter float after
+    // a single push, a longer one after two. Each is exponential above a floor, capped, and the
+    // whole never runs past REST_MAX.
+    const REST_MAX = 4.2;
     function restLength() {
       const u = random(),
         ex = (floor, mean, cap) => Math.min(cap, floor - mean * Math.log(1 - random()));
       let r;
-      if (u < 0.5) {
-        O.burst = random() < 0.6 ? 2 : 3;
-        r = ex(0.15, 0.65, 1.8);
+      if (u < 0.55) {
+        O.burst = 1;
+        r = ex(1, 0.7, 3.2);
       } else {
-        O.burst = Math.round(rnd(2, 4));
-        r = u < 0.88 ? ex(1, 0.6, 2.8) : ex(2.2, 0.5, 3.4);
+        O.burst = 2;
+        r = u < 0.9 ? ex(1.6, 0.8, 3.8) : ex(2.6, 0.6, 4.2);
       }
-      return Math.min(REST_MAX, r / Math.sqrt(Math.max(0.3, tune.speed)));
+      return Math.min(REST_MAX, r / Math.max(0.3, tune.speed) ** 0.25);
     }
 
     // Between bouts an arm now and then reaches out on its own: it straightens and swings out a
@@ -869,6 +917,7 @@
       overlays(dt);
       pressure(dt);
       scrolled(dt);
+      walls(dt);
       O.grip = approach(O.grip, Math.max(O.hurry ? 1 : 0, O.sk), 6, dt);
       // the reach (mantle lengths) closes in as the grip firms, but never faster than
       // REACH_IN a second, so an arm caught wide is drawn in, not snatched
@@ -879,11 +928,6 @@
       if (O.mode === "drift" && !O.hurry && behind(O.x, O.y) > 0) O.rest = Math.min(O.rest, 0.3);
       const toWaypoint = O.hurry ? 0 : desiredHeading(dt);
       let want = O.hurry ? O.fleeA : toWaypoint;
-      if (O.hurry) {
-        const [ix, iy] = inward(),
-          ik = Math.min(1, Math.hypot(ix, iy));
-        if (ik > 0) want += wrapA(Math.atan2(iy, ix) - want) * ik * 0.5;
-      }
       // unhurried, it never sets off or coasts mantle-first steeply downward: a waypoint below
       // is reached on a shallow descent
       // (straight down, it keeps to the side it already faces, so the choice can't flicker)
@@ -910,8 +954,8 @@
           if (O.hurry) O.period = fleePeriod();
           // no two strokes of a bout quite alike
           if (!O.hurry) {
-            O.thrust = rnd(0.85, 1.15);
-            O.period = O.style === "web" ? rnd(2, 2.6) : rnd(1.4, 1.8);
+            O.thrust = rnd(1.1, 1.4);
+            O.period = O.style === "web" ? rnd(2, 2.6) : rnd(1.5, 1.9);
           }
           // a hurrying octopus keeps stroking until it gets there
           if (!O.hurry && --O.strokes <= 0) {
@@ -934,7 +978,7 @@
         const fear = O.hurry ? O.fear : 0;
         const flare = web ? 0.8 : O.hurry ? 0.64 - 0.22 * fear : 0.62;
         const pc = (O.pc = O.hurry ? (0.32 - 0.05 * fear) / O.period : web ? 0.42 : 0.28);
-        const shutT = web ? 0.34 : -0.08 - 0.06 * fear;
+        const shutT = web ? 0.34 : -0.03 - 0.05 * fear;
         if (p < pc) {
           const u = p / pc;
           power = Math.sin(u * Math.PI) * (0.28 / pc) * (web ? 0.75 : 1);
@@ -968,7 +1012,7 @@
         spreadT = 0.55 + 0.35 * open;
         curlT = 1;
         relaxT = 1;
-        waveT = 0.55;
+        waveT = 0.35;
         squeezeT = 0.12 * Math.sin(t * 2.4);
         turnRate = O.hurry ? 1.3 : 0.42;
         // hanging in the water the mantle floats up; it only lines up with where it is going
@@ -977,6 +1021,8 @@
           const up = -Math.PI / 2;
           want = up + clamp(wrapA(O.th - up), -0.7, 0.7) * 0.9;
         }
+        // floating, it looks about: small, slow turns of the head a few degrees either way
+        want += 0.14 * Math.sin(t * 0.45 + 2) + 0.07 * Math.sin(t * 1.1);
         // ...unless that would face it into the edge: then it hangs level, a little nose-up,
         // toward the side its waypoint is on (never mantle-down, resting upside down)
         if (!O.hurry && offside(want) > 0.25) want = O.wx >= O.x ? -0.25 : Math.PI + 0.25;
@@ -996,8 +1042,8 @@
           // unhurried, about one bout in three is web pulses rather than jetting
           O.style = !O.hurry && random() < 0.35 ? "web" : "jet";
           if (!O.hurry) {
-            O.period = O.style === "web" ? rnd(2, 2.6) : rnd(1.4, 1.8);
-            O.thrust = rnd(0.85, 1.15);
+            O.period = O.style === "web" ? rnd(2, 2.6) : rnd(1.5, 1.9);
+            O.thrust = rnd(1.1, 1.4);
           }
         }
       }
@@ -1017,9 +1063,6 @@
       // between them it turns as briskly from an edge close ahead
       if (!O.hurry && (Math.sin(O.th) > 0.45 || (O.mode === "drift" && offside(O.th) > 0.25)))
         turnRate = Math.max(turnRate, 1.3);
-      // nearing an edge it comes about briskly, the more so the closer it gets
-      const edgeK = O.hurry ? Math.max(0, 1 - room(O.th) / edgeLook()) : O.edgeK;
-      if (edgeK > 0) turnRate = Math.max(turnRate, 0.7 + 0.9 * edgeK);
       const spreadRate =
         O.mode === "swim"
           ? O.style === "web" && !O.hurry
@@ -1040,11 +1083,35 @@
       // turning, smoothed so the heading never snaps; while scrolling turns it, it barely steers
       // against that, and afterwards it eases back the ordinary way
       turnRate *= 1 - 0.75 * O.sk;
+      // nearing an edge it comes about smoothly, the more briskly the harder the walls press
+      // (see walls()); scrolling never holds that back
+      want = edgeWant(want);
+      if (O.edgeSide) turnRate = Math.max(turnRate, 0.5 + 1.1 * O.edgeK);
       let diff = wrapA(want - O.th);
       // unhurried, it comes about over the top, never rolling through mantle-down on the way
       const toDown = wrapA(Math.PI / 2 - O.th);
-      if (!O.hurry && toDown * diff > 0 && Math.abs(toDown) < Math.abs(diff))
+      // (not while the walls turn it, nor just after: they choose the way round)
+      if (
+        !O.hurry &&
+        !O.edgeSide &&
+        wall.hold <= 0 &&
+        toDown * diff > 0 &&
+        Math.abs(toDown) > 0.25 &&
+        Math.abs(toDown) < Math.abs(diff)
+      )
         diff -= Math.sign(diff) * 2 * Math.PI;
+      // while it still heads into the walls it simply keeps turning the way it chose, so two
+      // walls (or a wall and its wish to stay upright) never send it back and forth
+      // (as gently as the walls allow: a light press is a slow arc, a hard one a brisk turn)
+      if (O.edgeSide) diff = O.edgeSide * (0.2 + 3 * O.edgeK);
+      // An animal turns on its way, not on the spot: the turn it may make is bounded by how fast
+      // it is moving forward (a turning radius of TURN_R mantle lengths), with only a slow
+      // re-orienting by its arms while it hangs nearly still (a startled one a little quicker).
+      const vAhead = Math.max(0, O.vx * Math.cos(O.th) + O.vy * Math.sin(O.th));
+      // (facing an edge it pulls itself round with its arms more firmly, so it is never stuck
+      // there with no room to swim the turn)
+      const reorient = O.hurry || O.edgeSide || offside(O.th) > 0.25 ? 0.5 : 0.14;
+      turnRate = Math.min(turnRate, reorient + vAhead / (TURN_R * ML));
       O.w = approach(O.w, clamp(diff * 2, -turnRate, turnRate), 2.6, dt);
       O.th += (O.w + O.ws) * dt;
       // the bend follows the turn rate (steering, scrolling or fleeing alike), eased in and out;
@@ -1059,7 +1126,12 @@
       // the push fades (the arms still pulse; the stroke turns it rather than carries it)
       const vf0 = O.vx * f0 + O.vy * f1,
         roomAhead = room(O.th);
-      const gate = clamp((roomAhead - Math.max(0, vf0) / 1.25) / (1.5 * ML), 0, 1);
+      // (turning from an edge it still pushes a little while there is room, since it can only
+      // turn while it moves)
+      const gate = Math.max(
+        clamp((roomAhead - Math.max(0, vf0) / 1.25) / (1.5 * ML), 0, 1),
+        O.edgeSide && roomAhead > 0.6 * ML ? 0.3 : 0,
+      );
       const acc = power * 340 * S * O.thrust * (O.hurry ? 1 : tune.speed) * gate;
       O.vx += f0 * acc * dt;
       O.vy += f1 * acc * dt;
@@ -1195,11 +1267,12 @@
     // ordinary jet cycle quicker, pushing harder and gliding further the more pressure there is.
     const THRUST = 1,
       GLIDE = 0.4,
-      DRIFT = 0.75; // mantle lengths/s², the push of its breathing while it coasts
+      DRIFT = 1; // mantle lengths/s², the push of its breathing while it coasts
     let ptr = null,
       lastD = Infinity,
       closing = 0;
-    const NEAR = () => 230 * S * tune.react;
+    const NEAR = () => 300 * S * tune.react;
+    const TURN_R = 1.3;
 
     // how far the animal can swim at angle a before reaching the screen margin
     // (the margin at each edge is the whole body's reach toward it once headed this way, see
@@ -1215,29 +1288,49 @@
       return Math.max(0, r);
     }
 
-    // straight away from the pointer, unless a border is in the way: then whichever way along
-    // it leaves the most room. The text column is only a mild preference.
+    // Straight away from the pointer, but never into a wall: each wall it is near takes away
+    // the part of the escape that drives into it and adds a little inward, so it slides along
+    // the wall. Driven straight into a corner, it breaks out sideways, past the pointer, on the
+    // side with more room (and the side it chose before).
     function fleeHeading(px, py) {
-      const away = Math.atan2(O.y - py, O.x - px);
-      let best = -1e9,
-        bestA = away;
-      for (let k = -12; k <= 12; k++) {
-        const a = away + k * 0.2;
-        const r = room(a);
-        const ex = O.x + Math.cos(a) * r;
-        let sc = (r / (420 * S)) * 2 + Math.cos(a - away) - Math.max(0, 1 - r / (200 * S)) * 2.5;
-        if (band && ex > colL - 40 && ex < colR + 40) sc -= 0.25;
-        sc -= Math.abs(wrapA(a - O.fleeA)) * 0.1; // don't flicker between equal choices
-        if (sc > best) {
-          best = sc;
-          bestA = a;
+      let fx = O.x - px,
+        fy = O.y - py;
+      const fl = Math.hypot(fx, fy) || 1;
+      fx /= fl;
+      fy /= fl;
+      const ax = fx,
+        ay = fy;
+      const slide = (free, nx, ny) => {
+        const u = clamp(1 - free / (3 * ML), 0, 1),
+          dot = fx * nx + fy * ny;
+        if (dot < 0) {
+          fx -= nx * dot * u;
+          fy -= ny * dot * u;
         }
-      }
-      return bestA;
+        fx += nx * 0.35 * u;
+        fy += ny * 0.35 * u;
+      };
+      slide(O.x - reachTo(0, -1, 0, ext.l), 1, 0);
+      slide(W - O.x - reachTo(0, 1, 0, ext.r), -1, 0);
+      slide(O.y - reachTo(0, 0, -1, ext.t), 0, 1);
+      slide(H - O.y - reachTo(0, 0, 1, ext.b), 0, -1);
+      if (Math.hypot(fx, fy) > 0.3) return Math.atan2(fy, fx);
+      const a = Math.atan2(ay, ax),
+        sc = (g) => room(a + g * 1.4) - Math.abs(wrapA(a + g * 1.4 - O.fleeA)) * 40 * S;
+      return a + (sc(1) >= sc(-1) ? 1.4 : -1.4);
+    }
+
+    // how far the pointer is from the body: from the nearest point on its axis, between the
+    // crown of the head and the mantle's tip
+    function bodyDist(x, y) {
+      const f0 = Math.cos(O.th),
+        f1 = Math.sin(O.th);
+      const u = clamp((x - O.x) * f0 + (y - O.y) * f1, -0.5 * ML, 1.45 * ML);
+      return Math.hypot(x - O.x - f0 * u, y - O.y - f1 * u);
     }
 
     function pressure(dt) {
-      const d = ptr ? Math.hypot(ptr.x - O.x, ptr.y - O.y) : Infinity;
+      const d = ptr ? bodyDist(ptr.x, ptr.y) : Infinity;
       const R = NEAR();
       const rawClose = d < R && lastD < R ? clamp((lastD - d) / dt / (300 * S), -1, 1) : 0;
       closing = approach(closing, rawClose, 5, dt);
@@ -1247,7 +1340,9 @@
           1,
           O.fear + dt * (0.06 + 0.16 * (1 - d / R) + 0.3 * Math.max(0, closing)),
         );
-        if (!O.hurry && d < 140 * S * tune.react) startFlee(1.5);
+        // close, or closing in, or lingering near until the fear has built: it bolts
+        if (!O.hurry && (d < 0.6 * R || closing > 0.2 || (O.fear > 0.25 && d < R * 0.8)))
+          startFlee(1.5);
       } else O.fear = Math.max(0, O.fear - dt * 0.3);
 
       if (!O.hurry) return;
@@ -1264,7 +1359,7 @@
     }
 
     // a frightened stroke: the more fear, the longer, so strokes come no faster as it rises
-    const fleePeriod = () => 1.5 + 0.7 * O.fear;
+    const fleePeriod = () => 1.15 + 0.45 * O.fear;
 
     // the fright is over: one more stroke at ease, two to right itself on if it fled
     // mantle-down, then the ordinary rest
@@ -1284,7 +1379,8 @@
       O.hurry = true;
       O.style = "jet";
       O.period = fleePeriod();
-      O.fleeA = ptr ? Math.atan2(O.y - ptr.y, O.x - ptr.x) : O.th;
+      O.fleeA = O.th;
+      if (ptr) O.fleeA = fleeHeading(ptr.x, ptr.y);
       if (O.mode === "drift") O.rest = 0;
     }
 
@@ -1308,16 +1404,21 @@
     function drawArm(a, lvl, highlight) {
       const p = a.p;
       sx.lineCap = "round";
-      for (let j = 0; j < N; j++) {
-        // the root is skin like the head's, the arm darkening a little toward the tip
-        const u = j / N;
-        sx.strokeStyle = g(lvl + (0.74 - lvl) * Math.max(0, 1 - u / 0.4));
-        sx.lineWidth = armWidth(u);
-        sx.beginPath();
-        sx.moveTo(p[j * 2], p[j * 2 + 1]);
-        sx.lineTo(p[j * 2 + 2], p[j * 2 + 3]);
-        sx.stroke();
-      }
+      // the root is skin like the head's, the arm darkening a little toward the tip; it is
+      // round, so its sides are a shade darker than its middle
+      for (const [k, wk] of [
+        [0.8, 1],
+        [1, 0.62],
+      ])
+        for (let j = 0; j < N; j++) {
+          const u = j / N;
+          sx.strokeStyle = g(k * (lvl + (0.74 - lvl) * Math.max(0, 1 - u / 0.4)));
+          sx.lineWidth = armWidth(u) * wk;
+          sx.beginPath();
+          sx.moveTo(p[j * 2], p[j * 2 + 1]);
+          sx.lineTo(p[j * 2 + 2], p[j * 2 + 3]);
+          sx.stroke();
+        }
       // the rounded top of the arm catches the light; the suckers run down its inner side
       sx.strokeStyle = g(highlight);
       px.fillStyle = "#fff";
@@ -1384,6 +1485,13 @@
       0.15 + ((k * 0.43) % 0.2),
       k * 1.9,
     ]);
+    // a fine grain of lighter and darker flecks, fixed to the skin (s, l, radius, shade)
+    const GRAIN = Array.from({ length: 26 }, (_, k) => [
+      0.1 + ((k * 0.618) % 0.82),
+      (((k * 0.377) % 1) - 0.5) * 1.5,
+      0.1 + ((k * 0.23) % 0.08),
+      k % 2 ? 1 : 0.25,
+    ]);
     // pale papillae, fixed to the skin
     const PAPILLAE = [
       [0.3, -0.42, 2.6],
@@ -1430,7 +1538,7 @@
       }
 
       armK = 0.82;
-      for (const a of ARMS) if (a.far) drawArm(a, 0.46, 0.62);
+      for (const a of ARMS) if (a.far) drawArm(a, 0.4, 0.54);
       armK = 1;
 
       for (const a of ARMS) if (!a.far) drawArm(a, 0.6, 0.8);
@@ -1445,8 +1553,8 @@
         [, , hn0, hn1] = frame0(ht);
       const HL = ML * 0.42 * (1 - 0.06 * sq),
         Hw = MW * 0.33;
-      const Lm = ML * 1.1 * (1 + 0.08 * sq),
-        Wm = MW * 0.41 * (1 - 0.2 * sq);
+      const Lm = ML * 1.1 * (1 + 0.1 * sq),
+        Wm = MW * 0.41 * (1 - 0.28 * sq);
       const lean = O.arch + pose.tilt;
       const neckW = Hw * 0.86;
       // the axis, crown to tip: x, y, normal x, normal y, half width
@@ -1465,10 +1573,12 @@
           axis[o + 1] = ay;
           axis[o + 2] = -Math.sin(phi);
           axis[o + 3] = Math.cos(phi);
-          // broadest at the eyes, rounding off over the arm crown
+          // broadest at the eyes, which bulge out on either side, rounding off over the crown
           axis[o + 4] =
             Hw *
-            (0.86 + 0.24 * Math.sin(Math.PI * v * 0.95)) *
+            (0.86 +
+              0.24 * Math.sin(Math.PI * v * 0.95) +
+              0.38 * Math.exp(-(((v - 0.45) / 0.12) ** 2))) *
             (v > 0.7 ? Math.sqrt(1 - 0.6 * ((v - 0.7) / 0.3) ** 2) : 1);
           if (k === Math.round(KH * 0.45)) {
             hx = ax;
@@ -1503,13 +1613,25 @@
             my = ay + sag;
           }
         }
+        // the sac's outline is a little lumpy, each side its own way, the lumps fixed to the skin
+        const lump = (k, side) => {
+          const s = (k - KH) / KM;
+          if (s <= 0) return 1;
+          return (
+            1 +
+            Math.sin(Math.PI * s) *
+              (0.05 * Math.sin(s * 14 + side * 1.7) + 0.03 * Math.sin(s * 29 + side * 4 + t * 0.3))
+          );
+        };
         for (let k = 0; k < NB; k++) {
           const o = k * 5,
-            w = axis[o + 4];
-          mant[k * 2] = axis[o] + axis[o + 2] * w;
-          mant[k * 2 + 1] = axis[o + 1] + axis[o + 3] * w;
-          mant[(2 * NB - 1 - k) * 2] = axis[o] - axis[o + 2] * w;
-          mant[(2 * NB - 1 - k) * 2 + 1] = axis[o + 1] - axis[o + 3] * w;
+            w = axis[o + 4],
+            wa = w * lump(k, 1),
+            wb = w * lump(k, -1);
+          mant[k * 2] = axis[o] + axis[o + 2] * wa;
+          mant[k * 2 + 1] = axis[o + 1] + axis[o + 3] * wa;
+          mant[(2 * NB - 1 - k) * 2] = axis[o] - axis[o + 2] * wb;
+          mant[(2 * NB - 1 - k) * 2 + 1] = axis[o + 1] - axis[o + 3] * wb;
         }
       }
       const mt = O.th + lean;
@@ -1525,14 +1647,20 @@
           0,
           hx,
           hy,
-          Hw * 1.3,
+          Hw * 1.5,
         );
-        gr.addColorStop(0, g(0.95, 0.5));
+        gr.addColorStop(0, g(0.95, 0.9));
+        gr.addColorStop(0.55, g(0.95, 0.6));
         gr.addColorStop(1, g(0.95, 0));
         sx.save();
         sx.clip(mantPath());
         sx.fillStyle = gr;
         sx.fillRect(hx - Hw * 2, hy - Hw * 2, Hw * 4, Hw * 4);
+        // the skin darkens a little where it turns away at the outline, so the head and sac stand
+        // off the web and arms behind them
+        sx.strokeStyle = g(0.4, 0.5);
+        sx.lineWidth = 2.4 * S;
+        sx.stroke(mantPath());
         sx.restore();
       }
       // a faint crease at the neck, where the mantle opening runs round
@@ -1544,13 +1672,36 @@
           O.y + m1 * 0.14 * ML,
         );
         gr.addColorStop(0, g(0.35, 0));
-        gr.addColorStop(0.5, g(0.35, 0.3));
+        gr.addColorStop(0.5, g(0.35, 0.45));
         gr.addColorStop(1, g(0.35, 0));
         sx.save();
         sx.clip(mantPath());
         sx.fillStyle = gr;
         sx.fillRect(O.x - ML, O.y - ML, ML * 2, ML * 2);
         sx.restore();
+      }
+      // the siphon: a short tube out of the mantle opening on the near side, between the
+      // sac and an eye, standing out a little further as it fires
+      {
+        const [f0, f1, n0, n1] = frame0();
+        const out = 1 + 0.25 * clamp(sq, 0, 1);
+        const bx = O.x + n0 * neckW * 0.6,
+          by = O.y + n1 * neckW * 0.6;
+        const tx = O.x - f0 * 0.07 * ML * out + n0 * (neckW + 0.17 * MW * out),
+          ty = O.y - f1 * 0.07 * ML * out + n1 * (neckW + 0.17 * MW * out);
+        sx.lineCap = "round";
+        sx.strokeStyle = g(0.48);
+        sx.lineWidth = MW * 0.16;
+        sx.beginPath();
+        sx.moveTo(bx, by);
+        sx.lineTo(tx, ty);
+        sx.stroke();
+        sx.strokeStyle = g(0.8);
+        sx.lineWidth = MW * 0.1;
+        sx.beginPath();
+        sx.moveTo(bx, by);
+        sx.lineTo((bx + tx * 3) / 4, (by + ty * 3) / 4);
+        sx.stroke();
       }
       const hw = Hw;
       // in body coordinates: s along the mantle, l across it in half widths
@@ -1585,6 +1736,18 @@
         sx.arc(x, y, R, 0, 7);
         sx.fill();
       }
+      // a fine grain fixed to the skin: faint lighter and darker flecks
+      for (const [s, l, r, v] of GRAIN) {
+        const [x, y] = onMantle(s, l * mantleW(s));
+        const R = r * Wm;
+        const gr = sx.createRadialGradient(x, y, 0, x, y, R);
+        gr.addColorStop(0, g(v, 0.16));
+        gr.addColorStop(1, g(v, 0));
+        sx.fillStyle = gr;
+        sx.beginPath();
+        sx.arc(x, y, R, 0, 7);
+        sx.fill();
+      }
       px.fillStyle = "#fff";
       for (const [s, l, r] of PAPILLAE) {
         const [x, y] = onMantle(s, l * mantleW(s));
@@ -1602,8 +1765,8 @@
       for (const side of [-1, 1]) {
         const vis = clamp(0.12 + 0.6 * side * roll, 0, 0.72);
         if (vis < 0.05) continue;
-        const ex = hx + hn0 * side * hw * 0.97,
-          ey = hy + hn1 * side * hw * 0.97;
+        const ex = hx + hn0 * side * hw * 1.1,
+          ey = hy + hn1 * side * hw * 1.1;
         sx.fillStyle = g(0.78, 0.5 + 0.5 * vis);
         sx.beginPath();
         sx.ellipse(ex, ey, ML * 0.11, MW * 0.08 * (0.6 + 0.4 * vis), ht, 0, 7);
@@ -2036,7 +2199,7 @@
     // a click nearby is a fright on its own
     function fright(x, y) {
       ptr = { x, y };
-      if (Math.hypot(x - O.x, y - O.y) < 260 * S * tune.react) {
+      if (bodyDist(x, y) < 260 * S * tune.react) {
         O.fear = Math.min(1, O.fear + 0.15);
         startFlee(2.5);
       }
@@ -2145,6 +2308,7 @@
         Object.assign(pose, { spread: 0.6, curl: 1, relax: 1, wave: 0.6, squeeze: 0, tilt: 0 });
         for (const a of ARMS) Object.assign(a, { sp: 0.6, ex: 0, exT: -1 });
         Object.assign(O, { weave: 0, style: "jet", reach: REACH + 4, edgeSide: 0, edgeK: 0 });
+        Object.assign(wall, { x: 0, y: 0, k: 0, hR: 1, hold: 0, last: 0 });
         visits.fill(0);
         avoidAge = 1;
         exploreIn = 1;
@@ -2168,6 +2332,7 @@
         th: O.th,
         w: O.w + O.ws,
         arch: O.arch,
+        edge: O.edgeSide * O.edgeK,
         rest: O.rest,
         mode: O.mode,
         phase: O.phase,

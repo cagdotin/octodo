@@ -109,6 +109,17 @@
     // (2 x 12 / (1/30)^2 ~ 20000 ML/s^3), an outlier rather than an ordinary close (which runs
     // ~7000-17000 at p99 in v6). Body: the jet (up to ~19 ML/s^2 reached in ~0.15 s) gives the
     // body ~200 ML/s^3; flag ~3x that.
+    // "the octopus gets stuck on the corners, just tries to turn left/right/left/right": with the
+    // neck within cornerZone ML (at most 30% of the screen's width or height) of two edges, the turn (beyond cornerTurn rad/s) changes sign at
+    // most cornerFlips times in any cornerWindow s, and no stay there lasts over cornerEscape s
+    cornerZone: 4.5,
+    cornerTurn: 0.15,
+    cornerWindow: 1.5,
+    cornerFlips: 1,
+    cornerEscape: 3,
+    // "reliably notices a nearby or approaching pointer and a click": from a click within the
+    // click radius, or the pointer coming within the near radius of the neck, to fleeing (s)
+    fleeLatency: 0.3,
     jerkArm: 20000,
     jerkBody: 600,
     // a change of turn rate faster than this (rad/s^2): octopus.js eases its turn at 2.6/s
@@ -544,7 +555,7 @@
   // One run of a scenario: reset() starts over (seed, place), advance() is one fixed step.
   function session(sc) {
     const L = stage.sea.lab;
-    let st, i, snap;
+    let st, i, snap, prov, ptrIn;
     const self = {
       reset() {
         L.pause();
@@ -559,14 +570,34 @@
         L.pointer(null);
         st = {};
         i = 0;
+        prov = null;
+        ptrIn = false;
         snap = L.snapshot();
+        snap.prov = prov;
       },
       advance() {
+        // when the animal was last provoked: a click within the click radius, or the pointer
+        // coming within the near radius of the neck (for the fleeLatency check)
+        const s0 = snap,
+          t0 = i * DT;
+        const LP = {
+          ...L,
+          pointer(x, y) {
+            const inNow = x != null && Math.hypot(x - s0.x, y - s0.y) < stage.near;
+            if (inNow && !ptrIn) prov = t0;
+            ptrIn = inNow;
+            return L.pointer(x, y);
+          },
+          click(x, y) {
+            if (Math.hypot(x - s0.x, y - s0.y) < stage.click) prov = t0;
+            return L.click(x, y);
+          },
+        };
         sc.drive({
-          t: i * DT,
+          t: t0,
           i,
           s: snap,
-          L,
+          L: LP,
           st,
           W: stage.W,
           H: stage.H,
@@ -576,6 +607,7 @@
         L.step(DT, 1);
         i++;
         snap = L.snapshot();
+        snap.prov = prov;
         return snap;
       },
       get t() {
@@ -682,6 +714,17 @@
       outAt: null,
       bounces: 0,
       bounceAt: null,
+      flipTimes: [],
+      flipsMax: 0,
+      flipsAt: null,
+      lastTurn: 0,
+      cornerRun: 0,
+      cornerRunMax: 0,
+      cornerRunAt: null,
+      provSeen: null,
+      provPending: null,
+      fleeLatMax: null,
+      fleeLatAt: null,
       edgeAccMax: 0,
       edgeAccAt: null,
       walled0: s0.walled ?? 0,
@@ -1005,6 +1048,40 @@
           Math.min(GY - 1, Math.max(0, Math.floor((s.y / VH) * GY))) * GX +
             Math.min(GX - 1, Math.max(0, Math.floor((s.x / VW) * GX)))
         ]++;
+        // corners: turn-sign flips and how long a stay lasts
+        const corner =
+          Math.min(s.x, VW - s.x) < Math.min(T.cornerZone * ML, 0.3 * VW) &&
+          Math.min(s.y, VH - s.y) < Math.min(T.cornerZone * ML, 0.3 * VH);
+        const sg = Math.abs(s.w) > T.cornerTurn ? Math.sign(s.w) : 0;
+        if (corner && sg && m.lastTurn && sg !== m.lastTurn) {
+          m.flipTimes.push(t);
+          while (t - m.flipTimes[0] > T.cornerWindow) m.flipTimes.shift();
+          if (m.flipTimes.length > m.flipsMax)
+            [m.flipsMax, m.flipsAt] = [m.flipTimes.length, r3(t)];
+        }
+        if (sg) m.lastTurn = sg;
+        m.cornerRun = corner ? m.cornerRun + DT : 0;
+        if (m.cornerRun > m.cornerRunMax) [m.cornerRunMax, m.cornerRunAt] = [m.cornerRun, r3(t)];
+        // provoked (see session()): how long until it flees
+        if (s.prov != null && s.prov !== m.provSeen) {
+          m.provSeen = s.prov;
+          if (m.provPending == null) m.provPending = s.prov;
+        }
+        // (already fleeing before it was provoked counts as at once)
+        if (m.provPending != null && s.hurry) {
+          const lat = t - m.provPending;
+          if (m.fleeLatMax == null || lat > m.fleeLatMax)
+            [m.fleeLatMax, m.fleeLatAt] = [lat, r3(m.provPending)];
+          m.provPending = null;
+        }
+        m.tEnd = t;
+        // turning against floating: heading change while nearly still, and time spent turning
+        const spd = Math.hypot(s.vx, s.vy) / ML;
+        if (spd < 0.5) {
+          m.slowT = (m.slowT || 0) + DT;
+          m.slowTurn = (m.slowTurn || 0) + Math.abs(s.w) * DT;
+        }
+        if (Math.abs(s.w) > 0.25) m.turnT = (m.turnT || 0) + DT;
         if (s.behind) m.behind++;
         m.walled = (s.walled ?? 0) - m.walled0;
       }
@@ -1116,6 +1193,7 @@
           r3(nodeMax),
           Math.round(s.x),
           Math.round(s.y),
+          r3(s.edge ?? 0),
         ]);
 
       prevBody = prevBody || new Float64Array(body.length);
@@ -1193,6 +1271,18 @@
         outAt: m.outAt,
         bounces: m.bounces,
         bounceAt: m.bounceAt,
+        slowTurnRate: m.slowT ? fin(m.slowTurn / m.slowT) : null,
+        floatTurnRatio: fin((m.tEnd - (m.turnT || 0)) / Math.max(DT, m.turnT || 0)),
+        pushML: fin(mean(strokes.filter((k) => !k.partial).map((k) => k.dist))),
+        cornerFlips: m.flipsMax,
+        cornerFlipsAt: m.flipsAt,
+        cornerRunMax: fin(m.cornerRunMax),
+        cornerRunAt: m.cornerRunAt,
+        fleeLatency:
+          m.provPending != null
+            ? fin(Math.max(m.fleeLatMax ?? 0, m.tEnd - m.provPending))
+            : fin(m.fleeLatMax),
+        fleeLatencyAt: m.provPending != null ? r3(m.provPending) : m.fleeLatAt,
         edgeAccMax: fin(m.edgeAccMax),
         edgeAccAt: m.edgeAccAt,
         walled: m.walled,
@@ -1241,6 +1331,7 @@
           "nodeSpeed",
           "x",
           "y",
+          "edge",
         ],
         ML,
         REACH,
@@ -1500,6 +1591,36 @@
         M.bounces,
         "0",
         `${M.bounceAt != null ? `first at ${M.bounceAt} s; ` : ""}hardest inward push not from its heading within ${T.edgeBand} ML of an edge: ${M.edgeAccMax} ML/s² at ${M.edgeAccAt} s`,
+      ),
+    );
+    out.push(
+      check(
+        "cornerFlips",
+        "no left-right dithering near two edges",
+        M.cornerFlips <= T.cornerFlips ? "pass" : "fail",
+        M.cornerFlips,
+        `<= ${T.cornerFlips} turn reversals in ${T.cornerWindow} s`,
+        M.cornerFlipsAt != null ? `worst at ${M.cornerFlipsAt} s` : "",
+      ),
+    );
+    out.push(
+      check(
+        "cornerEscape",
+        "gets out of a corner quickly",
+        leq(M.cornerRunMax, T.cornerEscape),
+        M.cornerRunMax,
+        `<= ${T.cornerEscape} s within ${T.cornerZone} ML of two edges`,
+        M.cornerRunAt != null && M.cornerRunMax > 0 ? `longest ending ${M.cornerRunAt} s` : "",
+      ),
+    );
+    out.push(
+      check(
+        "fleeLatency",
+        "a click or close pointer starts a flee at once",
+        M.fleeLatency == null ? "n/a" : leq(M.fleeLatency, T.fleeLatency),
+        M.fleeLatency,
+        `<= ${T.fleeLatency} s`,
+        M.fleeLatencyAt != null ? `provoked at ${M.fleeLatencyAt} s` : "",
       ),
     );
     out.push(

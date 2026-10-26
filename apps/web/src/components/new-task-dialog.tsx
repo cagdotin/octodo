@@ -8,8 +8,18 @@ import {
   PaperclipIcon,
   type LucideIcon,
 } from "lucide-react";
-import { useRef, useState, type ComponentProps, type KeyboardEvent, type ReactNode } from "react";
+import {
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { DuePicker } from "@/components/due-picker";
+import { completing } from "@/components/quick-add/editor";
+import { QuickAddInput, type QuickAddInputHandle } from "@/components/quick-add/quick-add-input";
+import { suggestionsFor, useQuickAdd } from "@/components/quick-add/use-quick-add";
 import { ListGlyph, PriorityIcon, StatusIcon } from "@/components/task-bits";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,7 +43,7 @@ import {
 import { Kbd } from "@/components/ui/kbd";
 import { defaultStatus } from "@octodo/core/layout";
 import { useCreateTask } from "@/lib/api";
-import { parseQuickAdd, withoutRanges, type QuickAddToken } from "@/lib/quick-add";
+import { withoutRanges, type QuickAddToken } from "@/lib/quick-add";
 import { cn } from "@/lib/utils";
 import {
   allTags,
@@ -88,7 +98,10 @@ export function NewTaskDialog({ open, onOpenChange, ...props }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="top-[18%] translate-y-0 gap-0 overflow-hidden rounded-xl! p-0 shadow-2xl sm:max-w-xl"
+        className="top-[18%] translate-y-0 gap-0 rounded-xl! p-0 shadow-2xl sm:max-w-xl"
+        onEscapeKeyDown={(event) => {
+          if (completing(event.target)) event.preventDefault();
+        }}
       >
         <DialogHeader className="sr-only">
           <DialogTitle>New task</DialogTitle>
@@ -110,9 +123,9 @@ function NewTaskForm({
   onDone,
 }: Omit<Props, "open" | "onOpenChange"> & { onDone: () => void }) {
   const create = useCreateTask(workspace);
-  const titleInput = useRef<HTMLInputElement>(null);
-  const [text, setText] = useState(initialTitle);
-  const [now] = useState(() => new Date());
+  const titleInput = useRef<QuickAddInputHandle>(null);
+  const draft = useQuickAdd(snapshot.lists, initialTitle);
+  const suggestions = useMemo(() => suggestionsFor(snapshot), [snapshot]);
   const [notes, setNotes] = useState("");
   // Picks from the buttons; undefined means "whatever the tokens or the view say".
   const [pickedStatus, setPickedStatus] = useState<string>();
@@ -121,12 +134,12 @@ function NewTaskForm({
   const [pickedList, setPickedList] = useState<string | null>();
   const [pickedTags, setPickedTags] = useState<Array<string>>([]);
 
-  const parsed = parseQuickAdd(text, { lists: snapshot.lists, now });
+  const { parsed } = draft;
   // A pick from the buttons replaces what the tokens said, so the dialog shows one answer.
   const dropTokens = (drop: (token: QuickAddToken) => boolean) =>
-    setText(
+    draft.setText(
       withoutRanges(
-        text,
+        draft.text,
         parsed.ranges.filter((range) => drop(range.token)),
       ),
     );
@@ -185,26 +198,19 @@ function NewTaskForm({
   };
 
   return (
-    <div
-      className="flex flex-col"
-      onFocusCapture={(event) => {
-        // Radix focuses the first field on open; put the caret after a prefilled title.
-        if (event.target === titleInput.current && initialTitle !== "" && text === initialTitle) {
-          titleInput.current.setSelectionRange(text.length, text.length);
-        }
-      }}
-    >
+    <div className="flex flex-col">
       <div className="flex flex-col gap-1 px-4 pt-4 pb-2">
-        <input
+        <QuickAddInput
           ref={titleInput}
-          aria-label="Task title"
-          value={text}
-          autoComplete="off"
-          enterKeyHint="done"
+          // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens to type a title.
+          autoFocus
+          wrap
+          draft={draft}
+          suggestions={suggestions}
+          label="Task title"
           placeholder="Task title"
-          className="bg-transparent text-lg font-medium outline-none placeholder:text-muted-foreground/70"
-          onChange={(event) => setText(event.target.value)}
-          onKeyDown={(event) => onEnter(event, true)}
+          className="text-lg font-medium"
+          onSubmit={submit}
         />
         <textarea
           aria-label="Notes"

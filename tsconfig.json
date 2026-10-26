@@ -27,6 +27,7 @@
     "packages/*/test",
     "apps/*/src",
     "apps/*/*.config.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "brand"
   ]
 }

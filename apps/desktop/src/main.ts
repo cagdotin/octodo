@@ -41,6 +41,14 @@ const start = async (): Promise<RunningServer> => {
   }
 };
 
+/**
+ * Packaged builds take their icon from the app bundle (build/icon.icns); unpackaged runs would show
+ * Electron's, so point the dock and windows at the same artwork.
+ */
+const devIcon = app.isPackaged
+  ? undefined
+  : fileURLToPath(new URL("../build/icon.png", import.meta.url));
+
 /** In development the window loads Vite, which proxies to this server; wait until Vite is up. */
 const waitFor = async (url: string) => {
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -93,6 +101,7 @@ const createWindow = async (running: RunningServer) => {
     minWidth: 380,
     minHeight: 500,
     title: "octodo",
+    ...(devIcon !== undefined && !mac ? { icon: devIcon } : {}),
     ...(mac ? { titleBarStyle: "hidden" as const, trafficLightPosition } : {}),
     show: false,
     webPreferences: {
@@ -154,6 +163,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   void app.whenReady().then(async () => {
+    if (devIcon !== undefined) app.dock?.setIcon(devIcon);
     server = await start();
     console.log(`octodo server on ${server.url} (MCP at ${server.mcpUrl})`);
     await createWindow(server);

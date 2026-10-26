@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @octodo/web --filter @octodo/desktop dev",
     "dev:web": "pnpm --parallel --filter @octodo/server --filter @octodo/web dev",
+    "dev:site": "pnpm --filter @octodo/web exec vite ../site --port 5530 --strictPort",
     "build": "pnpm --filter @octodo/web build && pnpm --filter @octodo/desktop build",
     "octo": "node packages/cli/src/main.ts",
     "lint": "oxlint --deny-warnings",
@@ -17,16 +18,21 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
-    "prepare": "lefthook install"
+    "prepare": "lefthook install",
+    "brand": "node brand/build.ts"
   },
   "devDependencies": {
     "@effect/platform-node": "^4.0.6",
+    "@fontsource/geist": "^5.3.0",
     "@types/node": "^26.0.0",
+    "@types/opentype.js": "^1.3.10",
     "effect": "^4.0.6",
     "lefthook": "^2.2.2",
+    "opentype.js": "^2.0.0",
     "oxfmt": "^0.74.0",
     "oxlint": "^1.89.0",
     "oxlint-tsgolint": "^7.0.2001",
+    "sharp": "^0.34.5",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
   },

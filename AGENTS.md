@@ -7,7 +7,7 @@ Todoist and any.do first, then Linear.
 
 ## The on-disk model
 
-- `.octodo/config.json`: workspace `name`, id `key` (`CT` → ids `CT-1`, `CT-2`, ...) and `statuses`
+- `.octodo/config.json`: workspace `name`, id `key` (`HM` → ids `HM-1`, `HM-2`, ...) and `statuses`
   (id, display name, category). Categories have a fixed order (backlog, unstarted, started,
   completed, canceled, archived); the array only orders statuses within a category.
 - `s<NN>-<id>/` folders are statuses, numbered in that workflow order. Changing a task's status
@@ -34,6 +34,8 @@ Todoist and any.do first, then Linear.
 | `packages/cli`    | `octo` CLI on `effect/cli`; run it with `bin/octo`                                                                                     |
 | `apps/web`        | Vite + React, TanStack Router/Query, shadcn/ui, XState                                                                                 |
 | `apps/desktop`    | Electron shell: starts the server in the main process and opens the web app                                                            |
+| `apps/site`       | Static landing page (plain HTML, no build); icons come from `brand/`                                                                   |
+| `brand/`          | `glyph.svg` and `build.ts` (`pnpm brand`), which renders every icon, banner and social image                                           |
 
 Decisions: Hono is the HTTP layer and Effect holds all logic. Use Effect's built-in modules where
 they exist (`effect/ai` McpServer, `effect/cli`, `FileSystem`, `Schema`). The browser bundle imports
@@ -55,6 +57,7 @@ meant to be reachable from a phone over Tailscale.
   extensions.
 - `pnpm dev`: Vite on 5520 plus Electron, with the server (127.0.0.1:4520) inside Electron.
 - `pnpm dev:web`: API plus Vite, for the browser; open the pairing URL the API prints.
+- `pnpm dev:site`: the landing page on 5530.
 - `pnpm check`: format check, lint, typecheck, tests. Lefthook runs format, lint and typecheck on
   commit and `pnpm check` before push.
 - Test against scratch folders (`OCTODO_HOME=<tmp> bin/octo ...`), never a real project's

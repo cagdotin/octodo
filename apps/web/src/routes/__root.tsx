@@ -41,9 +41,9 @@ function Root() {
           <EmptyMedia variant="icon">
             <ServerOffIcon />
           </EmptyMedia>
-          <EmptyTitle>Can't reach tasksmd</EmptyTitle>
+          <EmptyTitle>Can't reach octodo</EmptyTitle>
           <EmptyDescription>
-            Make sure the tasksmd server is running, then try again.
+            Make sure the octodo server is running, then try again.
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>

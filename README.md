@@ -1,18 +1,19 @@
-# tasksmd
+# octodo
 
 Local-first task manager where every task is a markdown file. Works like Obsidian vaults: point it
-at a project folder and it manages `<project>/.tasks/`.
+at a project folder and it manages `<project>/.octodo/`.
 
 ```
-house-move/.tasks/
+house-move/.octodo/
 ├── config.json              # { "name": "House Move", "key": "CT", "statuses": [...] }
-├── s-backlog/
-├── s-todo/
+├── s00-backlog/             # statuses: s<NN>-<id>, numbered in workflow order
+├── s01-todo/
 │   └── CT-12-reconcile-kraken-trades.md
-├── s-in-progress/
-├── s-done/
-└── c-research/              # a list (c- category, p- project)
-    └── s-todo/
+├── s02-in-progress/
+├── s03-done/
+└── l00-research/            # a list: l<NN>-<name>, the number orders it among its siblings
+    ├── l00-sources/         # lists nest up to three levels
+    └── s01-todo/
         └── CT-14-read-bmf-guidance.md
 ```
 
@@ -35,31 +36,31 @@ Notes in markdown.
 
 ```sh
 mise run setup                       # Node 26 + pnpm 12 + dependencies
-bin/tasksmd init ~/code/my-project   # create .tasks/ and register the workspace
+bin/octo init ~/code/my-project      # create .octodo/ and register the workspace
 cd ~/code/my-project
-tasksmd create "First task" -p high -t setup
-tasksmd list
-tasksmd move MP-1 in-progress
-tasksmd skills export                # teach this project's agents about tasksmd
-tasksmd serve                        # web app + API + MCP on http://127.0.0.1:4520
+octo create "First task" -p high -t setup
+octo list
+octo move MP-1 in-progress
+octo skills export                   # teach this project's agents about octodo
+octo serve                           # web app + API + MCP on http://127.0.0.1:4520
 ```
 
-Run `bin/tasksmd` from the repository, or link it onto your PATH (`ln -s "$PWD/bin/tasksmd" ~/.local/bin/`).
+Run `bin/octo` from the repository, or link it onto your PATH (`ln -s "$PWD/bin/octo" ~/.local/bin/`).
 
 ### Agents (MCP)
 
 Over stdio, for agents that launch it themselves (Claude Code shown):
 
 ```sh
-claude mcp add tasksmd -- /path/to/tasksmd/bin/tasksmd mcp
+claude mcp add octodo -- /path/to/octodo/bin/octo mcp
 ```
 
-Over HTTP while the app or `tasksmd serve` runs: `http://127.0.0.1:4520/mcp` with
-`Authorization: Bearer <token>`, where the token is in `~/.config/tasksmd/server.json`.
+Over HTTP while the app or `octo serve` runs: `http://127.0.0.1:4520/mcp` with
+`Authorization: Bearer <token>`, where the token is in `~/.config/octodo/server.json`.
 
 ### From your phone
 
-`tasksmd serve --host <tailscale-ip>` (add `--allow-host <name>.ts.net` to use the MagicDNS name).
+`octo serve --host <tailscale-ip>` (add `--allow-host <name>.ts.net` to use the MagicDNS name).
 Open the URL on the phone and paste the token once, or open the pairing link.
 
 ## Develop

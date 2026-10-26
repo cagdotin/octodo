@@ -1,15 +1,17 @@
 import type {
   CreateListInput,
   CreateTaskInput,
+  MoveListInput,
   MoveTaskInput,
+  StatusCategory,
   Task,
   UpdateTaskInput,
   WorkspaceSnapshot,
-} from "@tasksmd/core";
-import { createClient } from "@tasksmd/server/client";
+} from "@octodo/core";
+import { createClient } from "@octodo/server/client";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { applyMove } from "@/lib/tasks";
+import { applyListMove, applyMove } from "@/lib/tasks";
 
 export const api = createClient(typeof window === "undefined" ? "" : window.location.origin);
 
@@ -58,6 +60,15 @@ export const workspacesQuery = queryOptions({
   queryKey: keys.workspaces,
   queryFn: () => unwrap(api.workspaces.$get()),
 });
+
+/** Folders on the server's machine, for choosing a workspace folder; no path means home. */
+export const foldersQuery = (path: string | undefined) =>
+  queryOptions({
+    queryKey: ["folders", path ?? ""] as const,
+    queryFn: () => unwrap(api.folders.$get({ query: path === undefined ? {} : { path } })),
+    retry: false,
+    staleTime: 10_000,
+  });
 
 export const snapshotQuery = (ws: string) =>
   queryOptions({
@@ -162,4 +173,37 @@ export const useDeleteTask = (ws: string) =>
 export const useCreateList = (ws: string) =>
   useSnapshotMutation(ws, (input: CreateListInput) =>
     unwrap(api.workspaces[":ws"].lists.$post({ param: { ws }, json: input })),
+  );
+
+const CATEGORY_RANK: ReadonlyArray<StatusCategory> = [
+  "backlog",
+  "unstarted",
+  "started",
+  "completed",
+  "canceled",
+  "archived",
+];
+
+export const useMoveList = (ws: string) =>
+  useSnapshotMutation(
+    ws,
+    ({ id, move }: { id: string; move: MoveListInput }) =>
+      unwrap(api.workspaces[":ws"].lists.move.$post({ param: { ws }, json: { id, ...move } })),
+    (snapshot, { id, move }) => applyListMove(snapshot, id, move),
+  );
+
+/** Saves the order of every status; the server keeps categories in their fixed order. */
+export const useReorderStatuses = (ws: string) =>
+  useSnapshotMutation(
+    ws,
+    (order: ReadonlyArray<string>) =>
+      unwrap(api.workspaces[":ws"].statuses.order.$put({ param: { ws }, json: { order } })),
+    (snapshot, order) => ({
+      ...snapshot,
+      statuses: snapshot.statuses.toSorted(
+        (a, b) =>
+          CATEGORY_RANK.indexOf(a.category) - CATEGORY_RANK.indexOf(b.category) ||
+          order.indexOf(a.id) - order.indexOf(b.id),
+      ),
+    }),
   );

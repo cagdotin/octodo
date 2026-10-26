@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { MiddlewareHandler } from "hono";
 import { getCookie } from "hono/cookie";
 
-export const SESSION_COOKIE = "tasksmd_session";
+export const SESSION_COOKIE = "octodo_session";
 
 /**
  * The server's access token, kept in `<home>/server.json` so it survives restarts and paired
@@ -72,5 +72,5 @@ export const requireToken =
       }
       return next();
     }
-    return c.json({ error: "Not paired: open the pairing link shown by tasksmd" }, 401);
+    return c.json({ error: "Not paired: open the pairing link shown by octodo" }, 401);
   };

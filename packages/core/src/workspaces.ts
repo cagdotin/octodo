@@ -10,7 +10,14 @@ import {
   Semaphore,
   Stream,
 } from "effect";
-import { StorageError, WorkspaceConfig, WorkspaceNotFound, type WorkspaceInfo } from "./domain.ts";
+import {
+  InvalidRequest,
+  StorageError,
+  WorkspaceConfig,
+  WorkspaceNotFound,
+  type FolderListing,
+  type WorkspaceInfo,
+} from "./domain.ts";
 import { CONFIG_FILE, TASKS_DIR, slugify } from "./layout.ts";
 import { initWorkspace, makeWorkspace, type Workspace } from "./workspace.ts";
 
@@ -40,11 +47,16 @@ export class Workspaces extends Context.Service<
     ) => Effect.Effect<WorkspaceInfo, StorageError>;
     readonly remove: (id: string) => Effect.Effect<void, WorkspaceNotFound | StorageError>;
     readonly get: (id: string) => Effect.Effect<Workspace, WorkspaceNotFound | StorageError>;
-    /** The workspace containing `dir`: the nearest ancestor with a `.tasks/` folder. */
+    /** The workspace containing `dir`: the nearest ancestor with a `.octodo/` folder. */
     readonly resolve: (dir: string) => Effect.Effect<Workspace, WorkspaceNotFound | StorageError>;
+    /**
+     * The folders inside `dir` (an absolute path), skipping hidden ones, so a client without a
+     * native folder picker (a browser, a phone) can choose a workspace folder on this machine.
+     */
+    readonly browse: (dir: string) => Effect.Effect<FolderListing, InvalidRequest | StorageError>;
     readonly changes: Stream.Stream<WorkspaceChange>;
   }
->()("@tasksmd/core/Workspaces") {
+>()("@octodo/core/Workspaces") {
   static readonly layer = (options: { readonly home: string; readonly watch: boolean }) =>
     Layer.effect(
       Workspaces,
@@ -173,6 +185,42 @@ export class Workspaces extends Context.Service<
             }
           });
 
+        const hasWorkspace = (dir: string) =>
+          fs.exists(path.join(dir, TASKS_DIR, CONFIG_FILE)).pipe(Effect.orElseSucceed(() => false));
+
+        const browse = (dir: string) =>
+          Effect.gen(function* () {
+            if (!path.isAbsolute(dir))
+              return yield* new InvalidRequest({ message: "Use an absolute folder path" });
+            const current = path.resolve(dir);
+            const info = yield* fs
+              .stat(current)
+              .pipe(
+                Effect.mapError(() => new InvalidRequest({ message: `No folder at ${current}` })),
+              );
+            if (info.type !== "Directory")
+              return yield* new InvalidRequest({ message: `${current} is not a folder` });
+            const names = yield* fs
+              .readDirectory(current)
+              .pipe(Effect.mapError(fail(`Could not read ${current}`)));
+            const folders: Array<FolderListing["folders"][number]> = [];
+            for (const name of names.toSorted((a, b) => a.localeCompare(b))) {
+              if (name.startsWith(".")) continue;
+              const child = path.join(current, name);
+              // Unreadable entries and broken links are simply left out.
+              const entry = yield* fs.stat(child).pipe(Effect.option);
+              if (entry._tag === "None" || entry.value.type !== "Directory") continue;
+              folders.push({ name, path: child, workspace: yield* hasWorkspace(child) });
+            }
+            const parent = path.dirname(current);
+            return {
+              path: current,
+              parent: parent === current ? null : parent,
+              workspace: yield* hasWorkspace(current),
+              folders,
+            } satisfies FolderListing;
+          });
+
         return Workspaces.of({
           home: options.home,
           list,
@@ -180,12 +228,13 @@ export class Workspaces extends Context.Service<
           remove,
           get,
           resolve,
+          browse,
           changes: Stream.fromPubSub(changes),
         });
       }),
     );
 }
 
-/** `$TASKSMD_HOME`, or `~/.config/tasksmd`. */
+/** `$OCTODO_HOME`, or `~/.config/octodo`. */
 export const defaultHome = (env: NodeJS.ProcessEnv, homedir: string): string =>
-  env["TASKSMD_HOME"] ?? `${env["XDG_CONFIG_HOME"] ?? `${homedir}/.config`}/tasksmd`;
+  env["OCTODO_HOME"] ?? `${env["XDG_CONFIG_HOME"] ?? `${homedir}/.config`}/octodo`;

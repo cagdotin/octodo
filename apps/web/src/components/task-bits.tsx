@@ -5,8 +5,8 @@ import type {
   StatusDefinition,
   Task,
   WorkspaceSnapshot,
-} from "@tasksmd/core";
-import { BoxIcon, HashIcon, LayersIcon } from "lucide-react";
+} from "@octodo/core";
+import { HashIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -139,17 +139,9 @@ export function PriorityIcon({ priority, className }: { priority: Priority; clas
   );
 }
 
-/** Icon for a list kind: projects get Linear's cube, categories a hash. */
-export function ListKindIcon({
-  kind,
-  className,
-}: {
-  kind: string | undefined;
-  className?: string;
-}) {
-  if (kind === "p") return <BoxIcon className={className} />;
-  if (kind === "c") return <HashIcon className={className} />;
-  return <LayersIcon className={className} />;
+/** The icon every list gets. */
+export function ListGlyph({ className }: { className?: string }) {
+  return <HashIcon className={className} />;
 }
 
 /* ---------------------------------------------------------------------------------------------- */
@@ -210,7 +202,7 @@ export function ListChip({ lists, list }: { lists: ReadonlyArray<List>; list: st
   if (list === null) return null;
   return (
     <Chip>
-      <ListKindIcon kind={lists.find((entry) => entry.id === list)?.kind} />
+      <ListGlyph />
       <span className="truncate">{listLabel(lists, list)}</span>
     </Chip>
   );

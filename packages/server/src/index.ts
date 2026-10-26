@@ -1,8 +1,8 @@
 import { NodeServices } from "@effect/platform-node";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import { Workspaces } from "@tasksmd/core";
-import { httpLayer } from "@tasksmd/mcp";
+import { Workspaces } from "@octodo/core";
+import { httpLayer } from "@octodo/mcp";
 import { Layer, ManagedRuntime } from "effect";
 import { HttpRouter, HttpServer } from "effect/http";
 import { Hono } from "hono";

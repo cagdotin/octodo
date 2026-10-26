@@ -1,16 +1,16 @@
 /**
- * The desktop app: starts the tasksmd server (API, MCP endpoint and web app) inside the Electron
+ * The desktop app: starts the octodo server (API, MCP endpoint and web app) inside the Electron
  * main process and shows the web app in a window. The same server stays reachable from a browser,
  * so a phone on the tailnet can use it while the app is open.
  */
-import { defaultHome } from "@tasksmd/core";
-import { DEFAULT_PORT, startServer, type RunningServer } from "@tasksmd/server";
-import { BrowserWindow, app, ipcMain, shell } from "electron";
+import { defaultHome } from "@octodo/core";
+import { DEFAULT_PORT, startServer, type RunningServer } from "@octodo/server";
+import { BrowserWindow, app, dialog, ipcMain, shell } from "electron";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const devUrl = process.env["TASKSMD_DEV_URL"];
+const devUrl = process.env["OCTODO_DEV_URL"];
 const home = defaultHome(process.env, homedir());
 
 let server: RunningServer | undefined;
@@ -23,19 +23,19 @@ const webDir = () =>
 const start = async (): Promise<RunningServer> => {
   const options = {
     home,
-    host: process.env["TASKSMD_HOST"] ?? "127.0.0.1",
+    host: process.env["OCTODO_HOST"] ?? "127.0.0.1",
     webDir: webDir(),
-    allowedHosts: (process.env["TASKSMD_ALLOW_HOSTS"] ?? "")
+    allowedHosts: (process.env["OCTODO_ALLOW_HOSTS"] ?? "")
       .split(",")
       .filter((host) => host.length > 0),
   };
   try {
     return await startServer({
       ...options,
-      port: Number(process.env["TASKSMD_PORT"] ?? DEFAULT_PORT),
+      port: Number(process.env["OCTODO_PORT"] ?? DEFAULT_PORT),
     });
   } catch (error) {
-    // Another tasksmd (e.g. `tasksmd serve`) may hold the usual port; any free port will do then.
+    // Another octodo (e.g. `octo serve`) may hold the usual port; any free port will do then.
     if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE" || devUrl !== undefined) throw error;
     return await startServer({ ...options, port: 0 });
   }
@@ -60,9 +60,30 @@ const waitFor = async (url: string) => {
  */
 const trafficLightPosition = { x: 16, y: 18 };
 
-ipcMain.handle("tasksmd:is-full-screen", (event) =>
+ipcMain.handle("octodo:is-full-screen", (event) =>
   Boolean(BrowserWindow.fromWebContents(event.sender)?.isFullScreen()),
 );
+
+/** The native folder picker, as a sheet on the asking window; null when cancelled. */
+ipcMain.handle("octodo:pick-folder", async (event, defaultPath: unknown) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  const options = {
+    title: "Choose a workspace folder",
+    buttonLabel: "Choose",
+    properties: ["openDirectory", "createDirectory"] as Array<"openDirectory" | "createDirectory">,
+    ...(typeof defaultPath === "string" ? { defaultPath } : {}),
+  };
+  const result = window
+    ? await dialog.showOpenDialog(window, options)
+    : await dialog.showOpenDialog(options);
+  return result.canceled ? null : (result.filePaths[0] ?? null);
+});
+
+/** Shows a folder in Finder (Explorer, the file manager). Only absolute paths are accepted. */
+ipcMain.handle("octodo:show-folder", async (_event, folder: unknown) => {
+  if (typeof folder !== "string" || !folder.startsWith("/")) return;
+  await shell.openPath(folder);
+});
 
 const createWindow = async (running: RunningServer) => {
   const mac = process.platform === "darwin";
@@ -71,7 +92,7 @@ const createWindow = async (running: RunningServer) => {
     height: 820,
     minWidth: 380,
     minHeight: 500,
-    title: "tasksmd",
+    title: "octodo",
     ...(mac ? { titleBarStyle: "hidden" as const, trafficLightPosition } : {}),
     show: false,
     webPreferences: {
@@ -84,8 +105,8 @@ const createWindow = async (running: RunningServer) => {
   window.once("ready-to-show", () => window.show());
 
   // The traffic lights disappear in full screen, so the web app drops the room it keeps for them.
-  window.on("enter-full-screen", () => window.webContents.send("tasksmd:full-screen", true));
-  window.on("leave-full-screen", () => window.webContents.send("tasksmd:full-screen", false));
+  window.on("enter-full-screen", () => window.webContents.send("octodo:full-screen", true));
+  window.on("leave-full-screen", () => window.webContents.send("octodo:full-screen", false));
 
   // Links to other sites open in the default browser, never inside the app window.
   const origin = new URL(devUrl ?? running.url).origin;
@@ -134,7 +155,7 @@ if (!app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(async () => {
     server = await start();
-    console.log(`tasksmd server on ${server.url} (MCP at ${server.mcpUrl})`);
+    console.log(`octodo server on ${server.url} (MCP at ${server.mcpUrl})`);
     await createWindow(server);
   });
 }

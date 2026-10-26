@@ -1,16 +1,16 @@
 {
-  "name": "@tasksmd/cli",
+  "name": "@octodo/cli",
   "version": "0.0.0",
   "private": true,
   "bin": {
-    "tasksmd": "../../bin/tasksmd"
+    "octo": "../../bin/octo"
   },
   "type": "module",
   "dependencies": {
     "@effect/platform-node": "^4.0.6",
-    "@tasksmd/core": "workspace:*",
-    "@tasksmd/mcp": "workspace:*",
-    "@tasksmd/server": "workspace:*",
+    "@octodo/core": "workspace:*",
+    "@octodo/mcp": "workspace:*",
+    "@octodo/server": "workspace:*",
     "effect": "^4.0.6"
   }
 }

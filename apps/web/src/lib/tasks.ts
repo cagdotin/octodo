@@ -1,12 +1,14 @@
 import type {
   List,
+  MoveListInput,
   MoveTaskInput,
   Priority,
   StatusCategory,
   StatusDefinition,
   Task,
   WorkspaceSnapshot,
-} from "@tasksmd/core";
+} from "@octodo/core";
+import { MAX_LIST_DEPTH } from "@octodo/core/layout";
 import {
   addDays,
   format,
@@ -40,6 +42,25 @@ const CLOSED: ReadonlySet<StatusCategory> = new Set(["completed", "canceled", "a
 
 export const isClosedCategory = (category: StatusCategory | undefined) =>
   category !== undefined && CLOSED.has(category);
+
+/**
+ * The list view's group order, Linear's: the work closest to done first. Started, unstarted and
+ * backlog come before the closed categories, and within a category the later status leads (In
+ * Review above In Progress). Snapshots, the board and settings use the workflow order instead.
+ */
+const LIST_VIEW_CATEGORIES: ReadonlyArray<StatusCategory> = [
+  "started",
+  "unstarted",
+  "backlog",
+  "completed",
+  "canceled",
+  "archived",
+];
+
+export const listViewOrder = (statuses: ReadonlyArray<StatusDefinition>) =>
+  LIST_VIEW_CATEGORIES.flatMap((category) =>
+    statuses.filter((status) => status.category === category).reverse(),
+  );
 
 export const statusMap = (statuses: ReadonlyArray<StatusDefinition>) =>
   new Map(statuses.map((status) => [status.id, status]));
@@ -221,11 +242,85 @@ export const listCounts = (snapshot: WorkspaceSnapshot) => {
   return { counts, none, open };
 };
 
+export { MAX_LIST_DEPTH };
+
+export const listDepth = (id: string) => id.split("/").length;
+
+const lastSegment = (id: string) => id.slice(id.lastIndexOf("/") + 1);
+
+const inSubtree = (id: string, root: string) => id === root || id.startsWith(`${root}/`);
+
+/** How many levels a list and its descendants take up: 1 for a list without sublists. */
+export const subtreeHeight = (lists: ReadonlyArray<List>, id: string) =>
+  Math.max(
+    1,
+    ...lists
+      .filter((list) => inSubtree(list.id, id))
+      .map((list) => listDepth(list.id) - listDepth(id) + 1),
+  );
+
+/** Whether `id` may move under `parent` (null for the top level) without breaking the rules. */
+export const canNest = (lists: ReadonlyArray<List>, id: string, parent: string | null) => {
+  if (parent !== null && inSubtree(parent, id)) return false;
+  const depth = parent === null ? 0 : listDepth(parent);
+  if (depth + subtreeHeight(lists, id) > MAX_LIST_DEPTH) return false;
+  const current = lists.find((list) => list.id === id)?.parent ?? null;
+  // Another sibling with the same name would take the same folder.
+  const moved = parent === null ? lastSegment(id) : `${parent}/${lastSegment(id)}`;
+  return current === parent || !lists.some((list) => list.id === moved);
+};
+
+/** The id a list gets under a new parent. */
+export const movedListId = (id: string, parent: string | null) =>
+  parent === null ? lastSegment(id) : `${parent}/${lastSegment(id)}`;
+
+/**
+ * Mirrors a list move in a cached snapshot. Lists stay depth first, so the moved list and its
+ * descendants travel as one block; a new parent renames the block's ids and its tasks' lists.
+ */
+export const applyListMove = (
+  snapshot: WorkspaceSnapshot,
+  id: string,
+  move: MoveListInput,
+): WorkspaceSnapshot => {
+  const list = snapshot.lists.find((entry) => entry.id === id);
+  if (!list) return snapshot;
+  const parent = move.parent === undefined ? list.parent : move.parent;
+  const target = movedListId(id, parent);
+  const rename = (value: string) =>
+    inSubtree(value, id) ? target + value.slice(id.length) : value;
+  const block = snapshot.lists
+    .filter((entry) => inSubtree(entry.id, id))
+    .map((entry) => ({
+      ...entry,
+      id: rename(entry.id),
+      parent: entry.id === id ? parent : entry.parent === null ? null : rename(entry.parent),
+    }));
+  const rest = snapshot.lists.filter((entry) => !inSubtree(entry.id, id));
+  // Where the block goes: before a sibling, after a sibling's whole subtree, or at the end of the
+  // parent's subtree (the end of everything for the top level).
+  const endOf = (root: string) => rest.findLastIndex((entry) => inSubtree(entry.id, root)) + 1;
+  let index = parent === null ? rest.length : endOf(parent);
+  if (move.before !== undefined && rest.some((entry) => entry.id === move.before)) {
+    index = rest.findIndex((entry) => entry.id === move.before);
+  } else if (move.after !== undefined && rest.some((entry) => entry.id === move.after)) {
+    index = endOf(move.after);
+  }
+  return {
+    ...snapshot,
+    lists: [...rest.slice(0, index), ...block, ...rest.slice(index)],
+    tasks: snapshot.tasks.map((task) =>
+      task.list !== null && inSubtree(task.list, id) ? { ...task, list: rename(task.list) } : task,
+    ),
+  };
+};
+
 export interface ListNode {
   list: List;
   children: Array<ListNode>;
 }
 
+/** Lists as a tree, in the order the snapshot gives them (folder order). */
 export const listTree = (lists: ReadonlyArray<List>): Array<ListNode> => {
   const nodes = new Map<string, ListNode>(lists.map((list) => [list.id, { list, children: [] }]));
   const roots: Array<ListNode> = [];
@@ -234,12 +329,7 @@ export const listTree = (lists: ReadonlyArray<List>): Array<ListNode> => {
     if (parent) parent.children.push(node);
     else roots.push(node);
   }
-  const sort = (items: Array<ListNode>) => {
-    items.sort((a, b) => a.list.name.localeCompare(b.list.name));
-    for (const item of items) sort(item.children);
-    return items;
-  };
-  return sort(roots);
+  return roots;
 };
 
 /** Label of a list including its parents, e.g. "Garden / Seeds". */

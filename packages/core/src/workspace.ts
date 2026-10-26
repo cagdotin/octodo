@@ -13,9 +13,9 @@ import {
 } from "effect";
 import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
 import {
-  DEFAULT_LIST_KINDS,
   DEFAULT_STATUSES,
   InvalidRequest,
+  STATUS_CATEGORIES,
   Priority,
   StorageError,
   TaskNotFound,
@@ -24,7 +24,9 @@ import {
   type CreateTaskInput,
   type Diagnostic,
   type List,
+  type MoveListInput,
   type MoveTaskInput,
+  type ReorderStatusesInput,
   type StatusDefinition,
   type Task,
   type UpdateTaskInput,
@@ -33,18 +35,21 @@ import {
 } from "./domain.ts";
 import {
   CONFIG_FILE,
+  MAX_LIST_DEPTH,
   TASKS_DIR,
   classifyFolder,
+  compareFolders,
   deriveKey,
   humanize,
   idNumber,
+  listFolder,
   slugify,
   statusFolder,
   taskFileName,
 } from "./layout.ts";
 import { parseTaskFile, writeTaskFile } from "./markdown.ts";
 
-/** One workspace on disk: a folder with a `.tasks/` directory. The files are the source of truth. */
+/** One workspace on disk: a folder with a `.octodo/` directory. The files are the source of truth. */
 export interface Workspace {
   readonly id: string;
   readonly root: string;
@@ -65,7 +70,14 @@ export interface Workspace {
   readonly createList: (
     input: CreateListInput,
   ) => Effect.Effect<List, InvalidRequest | StorageError>;
-  /** Emits after files under `.tasks/` change, whoever changed them. Empty unless watching. */
+  readonly moveList: (
+    id: string,
+    input: MoveListInput,
+  ) => Effect.Effect<List, InvalidRequest | StorageError>;
+  readonly reorderStatuses: (
+    input: ReorderStatusesInput,
+  ) => Effect.Effect<ReadonlyArray<StatusDefinition>, InvalidRequest | StorageError>;
+  /** Emits after files under `.octodo/` change, whoever changed them. Empty unless watching. */
   readonly changes: Stream.Stream<void>;
 }
 
@@ -104,7 +116,35 @@ const compareTasks =
     return (idNumber(a.id, key) ?? Infinity) - (idNumber(b.id, key) ?? Infinity);
   };
 
-/** Creates `.tasks/` with a config and the default status folders. Leaves an existing one alone. */
+const categoryIndex = (status: StatusDefinition) => STATUS_CATEGORIES.indexOf(status.category);
+
+/** Statuses in workflow order: by category, keeping the given order within each category. */
+export const sortStatuses = (statuses: ReadonlyArray<StatusDefinition>): Array<StatusDefinition> =>
+  statuses.toSorted((a, b) => categoryIndex(a) - categoryIndex(b));
+
+const lastSegment = (id: string) => id.slice(id.lastIndexOf("/") + 1);
+
+/** How many levels down a list sits: 1 for a top-level list, 0 for the workspace itself. */
+const depthOf = (list: string | null) => (list === null ? 0 : list.split("/").length);
+
+/**
+ * Where folders are on disk, which the snapshot leaves out because it is nobody else's business.
+ * Status folders are keyed by `<list id>/<status id>`, or just the status id outside any list.
+ */
+interface Layout {
+  readonly lists: ReadonlyMap<string, string>;
+  readonly statusDirs: ReadonlyMap<string, string>;
+}
+
+interface State {
+  readonly snapshot: WorkspaceSnapshot;
+  readonly layout: Layout;
+}
+
+const statusKey = (list: string | null, status: string) =>
+  list === null ? status : `${list}/${status}`;
+
+/** Creates `.octodo/` with a config and the default status folders. Leaves an existing one alone. */
 export const initWorkspace = Effect.fnUntraced(function* (
   root: string,
   options: { readonly name?: string | undefined; readonly key?: string | undefined } = {},
@@ -121,8 +161,10 @@ export const initWorkspace = Effect.fnUntraced(function* (
     statuses: DEFAULT_STATUSES,
   };
   yield* Effect.gen(function* () {
-    for (const status of DEFAULT_STATUSES) {
-      yield* fs.makeDirectory(path.join(tasksDir, statusFolder(status.id)), { recursive: true });
+    for (const [index, status] of DEFAULT_STATUSES.entries()) {
+      yield* fs.makeDirectory(path.join(tasksDir, statusFolder(index, status.id)), {
+        recursive: true,
+      });
     }
     yield* fs.writeFileString(configPath, `${JSON.stringify(config, null, 2)}\n`);
   }).pipe(storage("Could not create the workspace"));
@@ -137,7 +179,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   const path = yield* Path.Path;
   const tasksDir = path.join(root, TASKS_DIR);
   const lock = yield* Semaphore.make(1);
-  const cache = yield* Ref.make(Option.none<WorkspaceSnapshot>());
+  const cache = yield* Ref.make(Option.none<State>());
   const changes = yield* PubSub.sliding<void>(16);
 
   const rel = (absolute: string) => path.relative(root, absolute);
@@ -167,51 +209,87 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         return Effect.succeed<WorkspaceConfig>({ name, key: deriveKey(name) });
       }),
     );
-    const listKinds = config.listKinds ?? DEFAULT_LIST_KINDS;
     const lists: Array<List> = [];
+    const listDirs = new Map<string, string>();
+    const statusDirs = new Map<string, string>();
     const seenStatuses = new Set<string>();
     const files: Array<{ file: string; status: string; list: string | null }> = [];
 
-    const walk = (
-      dir: string,
-      list: string | null,
-      status: string | null,
-    ): Effect.Effect<void, unknown> =>
+    const readStatus = (dir: string, status: string, list: string | null) =>
       Effect.gen(function* () {
         for (const name of (yield* fs.readDirectory(dir)).toSorted()) {
+          if (name.startsWith(".")) continue;
           const child = path.join(dir, name);
           const info = yield* fs.stat(child);
-          const listId = path.relative(tasksDir, child);
-          if (info.type === "File") {
-            if (!name.endsWith(".md") || name.startsWith(".")) continue;
-            if (status === null)
-              diagnostics.push({
-                path: rel(child),
-                message: "Task file is not inside a status folder",
-              });
-            else files.push({ file: child, status, list });
-            continue;
-          }
-          if (info.type !== "Directory") continue;
-          const kind = classifyFolder(name, listKinds);
-          if (kind.type === "ignored") continue;
-          if (kind.type === "unknown") {
-            diagnostics.push({ path: rel(child), message: "Folder name has no known prefix" });
-          } else if (status !== null) {
+          if (info.type === "File" && name.endsWith(".md"))
+            files.push({ file: child, status, list });
+          else if (info.type === "Directory")
             diagnostics.push({
               path: rel(child),
               message: "Folders inside a status folder are not read",
             });
-          } else if (kind.type === "status") {
-            seenStatuses.add(kind.id);
-            yield* walk(child, list, kind.id);
+        }
+      });
+
+    const walk = (dir: string, list: string | null): Effect.Effect<void, unknown> =>
+      Effect.gen(function* () {
+        const children: Array<{ name: string; slug: string; position: number | null }> = [];
+        for (const name of (yield* fs.readDirectory(dir)).toSorted()) {
+          const child = path.join(dir, name);
+          const info = yield* fs.stat(child);
+          if (info.type === "File") {
+            if (name.endsWith(".md") && !name.startsWith("."))
+              diagnostics.push({
+                path: rel(child),
+                message: "Task file is not inside a status folder",
+              });
+            continue;
+          }
+          if (info.type !== "Directory") continue;
+          const kind = classifyFolder(name);
+          if (kind.type === "ignored") continue;
+          if (kind.type === "unknown") {
+            diagnostics.push({ path: rel(child), message: "Folder name has no known prefix" });
+          } else if (kind.type === "list") {
+            children.push({ name, slug: kind.slug, position: kind.position });
+          } else if (statusDirs.has(statusKey(list, kind.slug))) {
+            diagnostics.push({
+              path: rel(child),
+              message: `Another folder is already status "${kind.slug}"; this one is not read`,
+            });
           } else {
-            lists.push({ id: listId, name: humanize(kind.slug), kind: kind.kind, parent: list });
-            yield* walk(child, listId, null);
+            statusDirs.set(statusKey(list, kind.slug), child);
+            seenStatuses.add(kind.slug);
+            yield* readStatus(child, kind.slug, list);
+          }
+        }
+        // Lists recurse in folder order, so the snapshot lists them depth first and in order.
+        for (const { name, slug } of children.toSorted(compareFolders)) {
+          const child = path.join(dir, name);
+          const listId = list === null ? slug : `${list}/${slug}`;
+          if (listDirs.has(listId)) {
+            diagnostics.push({
+              path: rel(child),
+              message: `Another folder is already list "${slug}"; this one is not read`,
+            });
+          } else if (depthOf(list) >= MAX_LIST_DEPTH) {
+            diagnostics.push({
+              path: rel(child),
+              message: `Lists nest at most ${MAX_LIST_DEPTH} levels deep; this one is not read`,
+            });
+          } else {
+            listDirs.set(listId, child);
+            lists.push({
+              id: listId,
+              name: humanize(slug),
+              parent: list,
+              folder: path.relative(tasksDir, child),
+            });
+            yield* walk(child, listId);
           }
         }
       });
-    yield* walk(tasksDir, null, null);
+    yield* walk(tasksDir, null);
 
     const statuses: Array<StatusDefinition> = [...(config.statuses ?? DEFAULT_STATUSES)];
     for (const status of seenStatuses) {
@@ -275,18 +353,26 @@ export const makeWorkspace = Effect.fnUntraced(function* (
 
     tasks.sort(compareTasks(config.key));
     const workspace: WorkspaceInfo = { id, name: config.name, key: config.key, root };
-    return { workspace, statuses, lists, tasks, diagnostics } satisfies WorkspaceSnapshot;
+    const snapshot: WorkspaceSnapshot = {
+      workspace,
+      statuses: sortStatuses(statuses),
+      lists,
+      tasks,
+      diagnostics,
+    };
+    return { snapshot, layout: { lists: listDirs, statusDirs } } satisfies State;
   });
   // Assigning ids rewrites files, so the scan repeats once to read them back.
-  const scanOnce: Effect.Effect<WorkspaceSnapshot, unknown> = Effect.suspend(() => scan);
+  const scanOnce: Effect.Effect<State, unknown> = Effect.suspend(() => scan);
 
-  const current = Effect.gen(function* () {
+  const state = Effect.gen(function* () {
     const cached = yield* Ref.get(cache);
     if (Option.isSome(cached)) return cached.value;
     const fresh = yield* storage("Could not read the workspace")(scan);
     yield* Ref.set(cache, Option.some(fresh));
     return fresh;
   });
+  const current = Effect.map(state, ({ snapshot }) => snapshot);
 
   const invalidate = Ref.set(cache, Option.none());
 
@@ -307,10 +393,16 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       }
     });
 
-  const statusDir = (status: string, list: string | null) =>
-    list === null
-      ? path.join(tasksDir, statusFolder(status))
-      : path.join(tasksDir, list, statusFolder(status));
+  /** The folder a status already has in a list, or the one to create, numbered by its position. */
+  const statusDir = ({ snapshot, layout }: State, status: string, list: string | null) =>
+    layout.statusDirs.get(statusKey(list, status)) ??
+    path.join(
+      list === null ? tasksDir : layout.lists.get(list)!,
+      statusFolder(
+        snapshot.statuses.findIndex((known) => known.id === status),
+        status,
+      ),
+    );
 
   const tasksIn = (
     snapshot: WorkspaceSnapshot,
@@ -373,7 +465,8 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   const createTask = (input: CreateTaskInput) =>
     write(
       Effect.gen(function* () {
-        const snapshot = yield* current;
+        const placed = yield* state;
+        const { snapshot } = placed;
         const list = input.list ?? null;
         const status =
           input.status ??
@@ -404,7 +497,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           },
           input.body ?? "",
         );
-        const dir = statusDir(status, list);
+        const dir = statusDir(placed, status, list);
         yield* Effect.gen(function* () {
           yield* fs.makeDirectory(dir, { recursive: true });
           yield* writeAtomic(yield* uniqueFile(dir, taskFileName(taskId, input.title)), content);
@@ -436,7 +529,8 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   const moveTask = (taskId: string, input: MoveTaskInput) =>
     write(
       Effect.gen(function* () {
-        const snapshot = yield* current;
+        const placed = yield* state;
+        const { snapshot } = placed;
         const task = yield* findTask(snapshot, taskId);
         const status = input.status ?? task.status;
         const list = input.list === undefined ? task.list : input.list;
@@ -445,7 +539,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           const column = yield* ensureOrdered(tasksIn(snapshot, status, list, taskId));
           const order = orderBetween(column, input);
           let file = path.join(root, task.path);
-          const dir = statusDir(status, list);
+          const dir = statusDir(placed, status, list);
           if (dir !== path.dirname(file)) {
             yield* fs.makeDirectory(dir, { recursive: true });
             const target = yield* uniqueFile(dir, path.basename(file));
@@ -468,27 +562,185 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       }),
     );
 
+  /** The list folders directly in `dir`, by slug, first in folder order where slugs repeat. */
+  const listFoldersIn = (dir: string) =>
+    Effect.gen(function* () {
+      const found = new Map<string, string>();
+      const children = (yield* fs.readDirectory(dir)).flatMap((name) => {
+        const kind = classifyFolder(name);
+        return kind.type === "list" ? [{ name, ...kind }] : [];
+      });
+      for (const child of children.toSorted(compareFolders)) {
+        if (!found.has(child.slug)) found.set(child.slug, child.name);
+      }
+      return found;
+    });
+
+  /**
+   * Finds a list's folder by walking its slugs from `.octodo/`. Moves rename folders part-way
+   * through, so this looks at the disk rather than at a snapshot taken before them.
+   */
+  const findListDir = (list: string | null) =>
+    Effect.gen(function* () {
+      let dir = tasksDir;
+      if (list === null) return dir;
+      for (const slug of list.split("/")) {
+        const name = (yield* listFoldersIn(dir)).get(slug);
+        if (name === undefined) return yield* Effect.fail(new Error(`No folder for list ${list}`));
+        dir = path.join(dir, name);
+      }
+      return dir;
+    });
+
+  const renameFolder = (from: string, to: string) =>
+    Effect.gen(function* () {
+      if (from === to) return;
+      if (yield* fs.exists(to)) return yield* Effect.fail(new Error(`${rel(to)} already exists`));
+      yield* fs.rename(from, to);
+    });
+
+  /** Renames the lists under `parent` to `l00-`, `l01-`, ... in the given order of slugs. */
+  const renumberLists = (parent: string | null, slugs: ReadonlyArray<string>) =>
+    Effect.gen(function* () {
+      const dir = yield* findListDir(parent);
+      const folders = yield* listFoldersIn(dir);
+      for (const [index, slug] of slugs.entries()) {
+        const name = folders.get(slug);
+        if (name !== undefined)
+          yield* renameFolder(path.join(dir, name), path.join(dir, listFolder(index, slug)));
+      }
+    });
+
+  const listNotFound = (list: string) => new InvalidRequest({ message: `Unknown list "${list}"` });
+
+  const findList = (snapshot: WorkspaceSnapshot, list: string) => {
+    const found = snapshot.lists.find((known) => known.id === list);
+    return found === undefined ? Effect.fail(listNotFound(list)) : Effect.succeed(found);
+  };
+
+  const rereadList = (list: string) =>
+    Effect.flatMap(current, (snapshot) => findList(snapshot, list));
+
   const createList = (input: CreateListInput) =>
     write(
       Effect.gen(function* () {
         const snapshot = yield* current;
         const parent = input.parent ?? null;
-        const config = yield* storage("Could not read the workspace config")(readConfig);
-        if (!(input.kind in (config.listKinds ?? DEFAULT_LIST_KINDS))) {
-          return yield* new InvalidRequest({ message: `Unknown list kind "${input.kind}"` });
-        }
-        if (parent !== null && !snapshot.lists.some((known) => known.id === parent)) {
-          return yield* new InvalidRequest({ message: `Unknown list "${parent}"` });
+        if (parent !== null) yield* findList(snapshot, parent);
+        if (depthOf(parent) >= MAX_LIST_DEPTH) {
+          return yield* new InvalidRequest({
+            message: `Lists nest at most ${MAX_LIST_DEPTH} levels deep`,
+          });
         }
         const slug = slugify(input.name);
         if (slug.length === 0)
           return yield* new InvalidRequest({ message: "The list name needs a letter or digit" });
-        const folder = `${input.kind}-${slug}`;
-        const listId = parent === null ? folder : path.join(parent, folder);
-        yield* storage("Could not create the list")(
-          fs.makeDirectory(path.join(tasksDir, listId), { recursive: true }),
+        const listId = parent === null ? slug : `${parent}/${slug}`;
+        if (snapshot.lists.some((known) => known.id === listId)) {
+          return yield* new InvalidRequest({ message: `There is already a list "${listId}"` });
+        }
+        // New lists go last: after the highest number, so hand-named siblings are not renamed.
+        const last = Math.max(
+          -1,
+          ...snapshot.lists
+            .filter((known) => known.parent === parent)
+            .map((known) => classifyFolder(path.basename(known.folder)))
+            .map((kind) => (kind.type === "list" ? (kind.position ?? -1) : -1)),
         );
-        return { id: listId, name: humanize(slug), kind: input.kind, parent } satisfies List;
+        yield* storage("Could not create the list")(
+          Effect.gen(function* () {
+            const dir = path.join(yield* findListDir(parent), listFolder(last + 1, slug));
+            yield* fs.makeDirectory(dir, { recursive: true });
+          }),
+        );
+        yield* invalidate;
+        return yield* rereadList(listId).pipe(Effect.orDie);
+      }),
+    );
+
+  const moveList = (listId: string, input: MoveListInput) =>
+    write(
+      Effect.gen(function* () {
+        const snapshot = yield* current;
+        const list = yield* findList(snapshot, listId);
+        const parent = input.parent === undefined ? list.parent : input.parent;
+        if (parent !== null) {
+          yield* findList(snapshot, parent);
+          if (parent === listId || parent.startsWith(`${listId}/`)) {
+            return yield* new InvalidRequest({ message: "A list cannot move inside itself" });
+          }
+        }
+        const height = Math.max(
+          ...snapshot.lists
+            .filter((known) => known.id === listId || known.id.startsWith(`${listId}/`))
+            .map((known) => depthOf(known.id) - depthOf(listId) + 1),
+        );
+        if (depthOf(parent) + height > MAX_LIST_DEPTH) {
+          return yield* new InvalidRequest({
+            message: `Lists nest at most ${MAX_LIST_DEPTH} levels deep`,
+          });
+        }
+        const slug = lastSegment(listId);
+        const movedId = parent === null ? slug : `${parent}/${slug}`;
+        const siblings = snapshot.lists
+          .filter((known) => known.parent === parent && known.id !== listId)
+          .map((known) => lastSegment(known.id));
+        if (parent !== list.parent && siblings.includes(slug)) {
+          return yield* new InvalidRequest({ message: `There is already a list "${movedId}"` });
+        }
+        const before =
+          input.before === undefined ? -1 : siblings.indexOf(lastSegment(input.before));
+        const after = input.after === undefined ? -1 : siblings.indexOf(lastSegment(input.after));
+        const index = before !== -1 ? before : after !== -1 ? after + 1 : siblings.length;
+        const ordered = siblings.toSpliced(index, 0, slug);
+        yield* Effect.gen(function* () {
+          if (parent !== list.parent) {
+            yield* renameFolder(
+              yield* findListDir(listId),
+              path.join(yield* findListDir(parent), listFolder(index, slug)),
+            );
+          }
+          yield* renumberLists(parent, ordered);
+          if (parent !== list.parent) {
+            const left = snapshot.lists
+              .filter((known) => known.parent === list.parent && known.id !== listId)
+              .map((known) => lastSegment(known.id));
+            yield* renumberLists(list.parent, left);
+          }
+        }).pipe(storage("Could not move the list"));
+        yield* invalidate;
+        return yield* rereadList(movedId).pipe(Effect.orDie);
+      }),
+    );
+
+  const reorderStatuses = (input: ReorderStatusesInput) =>
+    write(
+      Effect.gen(function* () {
+        const { snapshot, layout } = yield* state;
+        const known = new Map(snapshot.statuses.map((status) => [status.id, status]));
+        if (
+          input.order.length !== known.size ||
+          new Set(input.order).size !== known.size ||
+          input.order.some((status) => !known.has(status))
+        ) {
+          return yield* new InvalidRequest({
+            message: `The order must list every status once: ${[...known.keys()].join(", ")}`,
+          });
+        }
+        const statuses = sortStatuses(input.order.map((status) => known.get(status)!));
+        yield* Effect.gen(function* () {
+          const configPath = path.join(tasksDir, CONFIG_FILE);
+          const text = yield* fs.readFileString(configPath);
+          const raw = yield* Effect.try(() => JSON.parse(text) as Record<string, unknown>);
+          yield* writeAtomic(configPath, `${JSON.stringify({ ...raw, statuses }, null, 2)}\n`);
+          for (const [key, dir] of layout.statusDirs) {
+            const status = lastSegment(key);
+            const position = statuses.findIndex((known) => known.id === status);
+            yield* renameFolder(dir, path.join(path.dirname(dir), statusFolder(position, status)));
+          }
+        }).pipe(storage("Could not reorder the statuses"));
+        yield* invalidate;
+        return (yield* current).statuses;
       }),
     );
 
@@ -513,6 +765,8 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     moveTask,
     deleteTask,
     createList,
+    moveList,
+    reorderStatuses,
     changes: Stream.fromPubSub(changes),
   } satisfies Workspace;
 });

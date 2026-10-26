@@ -1,4 +1,4 @@
-import type { CreateTaskInput, WorkspaceSnapshot } from "@tasksmd/core";
+import type { CreateTaskInput, WorkspaceSnapshot } from "@octodo/core";
 import { useState, type FormEvent } from "react";
 import { PriorityIcon, StatusIcon, TagChip } from "@/components/task-bits";
 import { Kbd } from "@/components/ui/kbd";

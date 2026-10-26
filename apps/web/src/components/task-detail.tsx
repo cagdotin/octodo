@@ -1,4 +1,4 @@
-import type { Task, WorkspaceSnapshot } from "@tasksmd/core";
+import type { Task, WorkspaceSnapshot } from "@octodo/core";
 import { useActorRef, useSelector } from "@xstate/react";
 import { format, parseISO } from "date-fns";
 import {
@@ -16,7 +16,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { fromPromise } from "xstate";
 import {
-  ListKindIcon,
+  ListGlyph,
   PriorityIcon,
   PriorityMenu,
   StatusIcon,
@@ -117,7 +117,6 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
   const due = dueInfo(task.due);
 
   const currentStatus = snapshot.statuses.find((status) => status.id === task.status);
-  const currentList = snapshot.lists.find((list) => list.id === task.list);
   const priorityLabel = PRIORITIES.find((entry) => entry.value === task.priority)?.label;
 
   return (
@@ -257,7 +256,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
                       size="sm"
                       className={cn(PROPERTY, task.list === null && "text-muted-foreground")}
                     >
-                      <ListKindIcon kind={currentList?.kind} />
+                      <ListGlyph />
                       <span className="truncate">{listLabel(snapshot.lists, task.list)}</span>
                     </Button>
                   </DropdownMenuTrigger>
@@ -278,7 +277,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
                       {snapshot.lists.map((list) => {
                         return (
                           <DropdownMenuRadioItem key={list.id} value={list.id}>
-                            <ListKindIcon kind={list.kind} />
+                            <ListGlyph />
                             {listLabel(snapshot.lists, list.id)}
                           </DropdownMenuRadioItem>
                         );

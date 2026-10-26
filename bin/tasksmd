@@ -1,3 +1,0 @@
-#!/bin/sh
-# Runs the tasksmd CLI from source; Node strips the TypeScript types itself.
-exec node "$(dirname "$(realpath "$0")")/../packages/cli/src/main.ts" "$@"

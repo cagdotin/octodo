@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { BoardView } from "@/components/board-view";
 import { CommandPalette } from "@/components/command-palette";
+import { DragAndDrop } from "@/components/drag-and-drop";
 import { ListView } from "@/components/list-view";
 import { TaskDetail } from "@/components/task-detail";
 import { ViewBar, WorkspaceHeader } from "@/components/workspace-header";
@@ -141,6 +142,7 @@ function WorkspacePage() {
 
   useHotkeys({
     "mod+k": () => setPaletteOpen((open) => !open),
+    "mod+,": () => void navigate({ to: "/w/$workspace/settings", params: { workspace } }),
     n: compose,
     c: compose,
     escape: () => {
@@ -190,45 +192,47 @@ function WorkspacePage() {
 
   return (
     <SidebarProvider className="h-svh overflow-hidden">
-      {/* The gap above the inset card belongs to the title bar too. */}
-      <WindowDragArea className="h-2" />
-      <AppSidebar
-        snapshot={snapshot}
-        activeList={search.list}
-        onSearch={() => setPaletteOpen(true)}
-        onNewTask={compose}
-      />
-      <SidebarInset className="min-w-0 overflow-hidden">
-        <WorkspaceHeader
-          title={title}
+      <DragAndDrop>
+        {/* The gap above the inset card belongs to the title bar too. */}
+        <WindowDragArea className="h-2" />
+        <AppSidebar
+          snapshot={snapshot}
+          activeList={search.list}
+          onSearch={() => setPaletteOpen(true)}
           onNewTask={compose}
-          onOpenPalette={() => setPaletteOpen(true)}
         />
-        <div className="flex min-h-0 flex-1">
-          <div className="flex min-w-0 flex-1 flex-col">
-            <ViewBar
-              snapshot={snapshot}
-              tasks={inList}
-              tab={tab}
-              onTabChange={setTab}
-              view={view}
-              onViewChange={setView}
-              filter={filter}
-              onFilterChange={setFilter}
-              display={display}
-              onDisplayChange={setDisplay}
-              panelOpen={selected !== undefined}
-              onTogglePanel={togglePanel}
-            />
-            {view === "list" ? <ListView {...viewProps} /> : <BoardView {...viewProps} />}
+        <SidebarInset className="min-w-0 overflow-hidden">
+          <WorkspaceHeader
+            title={title}
+            onNewTask={compose}
+            onOpenPalette={() => setPaletteOpen(true)}
+          />
+          <div className="flex min-h-0 flex-1">
+            <div className="flex min-w-0 flex-1 flex-col">
+              <ViewBar
+                snapshot={snapshot}
+                tasks={inList}
+                tab={tab}
+                onTabChange={setTab}
+                view={view}
+                onViewChange={setView}
+                filter={filter}
+                onFilterChange={setFilter}
+                display={display}
+                onDisplayChange={setDisplay}
+                panelOpen={selected !== undefined}
+                onTogglePanel={togglePanel}
+              />
+              {view === "list" ? <ListView {...viewProps} /> : <BoardView {...viewProps} />}
+            </div>
+            {!isMobile && detail && (
+              <aside className="flex w-[400px] shrink-0 flex-col border-l bg-background lg:w-[440px]">
+                {detail}
+              </aside>
+            )}
           </div>
-          {!isMobile && detail && (
-            <aside className="flex w-[400px] shrink-0 flex-col border-l bg-background lg:w-[440px]">
-              {detail}
-            </aside>
-          )}
-        </div>
-      </SidebarInset>
+        </SidebarInset>
+      </DragAndDrop>
       {isMobile && (
         <Sheet open={detail !== null} onOpenChange={(open) => !open && closeTask()}>
           <SheetContent

@@ -1,4 +1,4 @@
-import type { Priority, Task, WorkspaceSnapshot } from "@tasksmd/core";
+import type { Priority, Task, WorkspaceSnapshot } from "@octodo/core";
 import {
   CommandIcon,
   KanbanIcon,
@@ -10,7 +10,7 @@ import {
   XIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { ListKindIcon, PriorityIcon, tagDot } from "@/components/task-bits";
+import { ListGlyph, PriorityIcon, tagDot } from "@/components/task-bits";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -47,19 +47,11 @@ import {
 } from "@/lib/tasks";
 
 /**
- * The main card's header. In the macOS desktop app it is part of the title bar (a drag region whose
- * middle lines up with the traffic lights), and the sidebar's title bar holds the sidebar toggle;
- * while the sidebar is out of sight the toggle comes here, after the traffic lights.
+ * The header of the main card. In the macOS desktop app it is part of the title bar (a drag region
+ * whose middle lines up with the traffic lights), and the sidebar's title bar holds the sidebar
+ * toggle; while the sidebar is out of sight the toggle comes here, after the traffic lights.
  */
-export function WorkspaceHeader({
-  title,
-  onNewTask,
-  onOpenPalette,
-}: {
-  title: string;
-  onNewTask: () => void;
-  onOpenPalette: () => void;
-}) {
+export function PageHeader({ title, children }: { title: ReactNode; children?: ReactNode }) {
   const { state, isMobile } = useSidebar();
   const chrome = useDesktopChrome();
   const sidebarHidden = isMobile || state === "collapsed";
@@ -74,37 +66,52 @@ export function WorkspaceHeader({
       )}
     >
       {showTrigger && <SidebarTrigger className="-ml-1 text-muted-foreground" />}
-      <h1 className="truncate px-1 font-medium">{title}</h1>
-      <div className="ml-auto flex items-center gap-0.5">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground"
-              onClick={onOpenPalette}
-              aria-label="Command palette"
-            >
-              <CommandIcon />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            Command palette <Kbd>⌘K</Kbd>
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="sm" onClick={onNewTask}>
-              <PlusIcon data-icon="inline-start" />
-              New task
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            New task <Kbd>N</Kbd>
-          </TooltipContent>
-        </Tooltip>
-      </div>
+      <h1 className="flex min-w-0 items-center gap-1 truncate px-1 font-medium">{title}</h1>
+      {children && <div className="ml-auto flex items-center gap-0.5">{children}</div>}
     </header>
+  );
+}
+
+/** The task views' header: the view's title, the command palette and New task. */
+export function WorkspaceHeader({
+  title,
+  onNewTask,
+  onOpenPalette,
+}: {
+  title: string;
+  onNewTask: () => void;
+  onOpenPalette: () => void;
+}) {
+  return (
+    <PageHeader title={title}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground"
+            onClick={onOpenPalette}
+            aria-label="Command palette"
+          >
+            <CommandIcon />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          Command palette <Kbd>⌘K</Kbd>
+        </TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="sm" onClick={onNewTask}>
+            <PlusIcon data-icon="inline-start" />
+            New task
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          New task <Kbd>N</Kbd>
+        </TooltipContent>
+      </Tooltip>
+    </PageHeader>
   );
 }
 
@@ -379,7 +386,7 @@ function FilterMenu({
                       onChange({ ...filter, lists: toggle(filter.lists, list.id, on) })
                     }
                   >
-                    <ListKindIcon kind={list.kind} />
+                    <ListGlyph />
                     <span className="truncate">{listLabel(snapshot.lists, list.id)}</span>
                   </DropdownMenuCheckboxItem>
                 );

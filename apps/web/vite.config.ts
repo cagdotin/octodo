@@ -4,8 +4,8 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type ProxyOptions } from "vite";
 
-// TASKSMD_API_PORT points the dev proxy at a server on another port, e.g. a second instance.
-const api = `http://127.0.0.1:${process.env["TASKSMD_API_PORT"] ?? "4520"}`;
+// OCTODO_API_PORT points the dev proxy at a server on another port, e.g. a second instance.
+const api = `http://127.0.0.1:${process.env["OCTODO_API_PORT"] ?? "4520"}`;
 
 const proxy: ProxyOptions = {
   target: api,

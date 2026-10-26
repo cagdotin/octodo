@@ -1,0 +1,31 @@
+{
+  "name": "octodo",
+  "key": "OCT",
+  "statuses": [
+    {
+      "id": "backlog",
+      "name": "Backlog",
+      "category": "backlog"
+    },
+    {
+      "id": "todo",
+      "name": "Todo",
+      "category": "unstarted"
+    },
+    {
+      "id": "in-progress",
+      "name": "In Progress",
+      "category": "started"
+    },
+    {
+      "id": "done",
+      "name": "Done",
+      "category": "completed"
+    },
+    {
+      "id": "archived",
+      "name": "Archived",
+      "category": "archived"
+    }
+  ]
+}

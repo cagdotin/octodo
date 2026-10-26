@@ -1,7 +1,7 @@
 {
   "mcpServers": {
-    "tasksmd": {
-      "command": "bin/tasksmd",
+    "octodo": {
+      "command": "bin/octo",
       "args": ["mcp"]
     }
   }

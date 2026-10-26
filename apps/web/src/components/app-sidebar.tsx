@@ -1,4 +1,4 @@
-import type { WorkspaceSnapshot } from "@tasksmd/core";
+import type { WorkspaceSnapshot } from "@octodo/core";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -6,20 +6,24 @@ import {
   CalendarRangeIcon,
   CheckIcon,
   ChevronDownIcon,
+  CopyIcon,
+  FolderOpenIcon,
   InboxIcon,
   LayersIcon,
   type LucideIcon,
   PlusIcon,
   SearchIcon,
+  SettingsIcon,
   SquarePenIcon,
   TriangleAlertIcon,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import { AddWorkspaceDialog } from "@/components/add-workspace-dialog";
 import { DiagnosticsDialog } from "@/components/diagnostics-dialog";
 import { Disclosure } from "@/components/list-view";
-import { ListKindIcon } from "@/components/task-bits";
 import { NewListDialog } from "@/components/new-list-dialog";
+import { ITEM, SidebarLists } from "@/components/sidebar-lists";
 import { SyncIndicator } from "@/components/sync-indicator";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -31,6 +35,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -45,32 +50,14 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { workspacesQuery } from "@/lib/api";
-import { isDesktopMac } from "@/lib/desktop";
+import { desktop, isDesktopMac } from "@/lib/desktop";
 import { cn } from "@/lib/utils";
-import {
-  filterTasks,
-  isClosedCategory,
-  listCounts,
-  listTree,
-  SMART,
-  statusMap,
-  type ListNode,
-} from "@/lib/tasks";
-
-/** Kinds without a configured label fall back to their folder prefix. */
-const KIND_LABELS: Record<string, string> = { p: "Projects", c: "Categories" };
-const KIND_ORDER = ["p", "c"];
-
-/** Linear-sized nav rows: 28px tall, 13px text. */
-const ITEM = "h-7 gap-2.5 px-2 text-sidebar-foreground/90 data-active:font-medium";
+import { filterTasks, isClosedCategory, listCounts, SMART, statusMap } from "@/lib/tasks";
 
 export function AppSidebar({
   snapshot,
@@ -95,11 +82,6 @@ export function AppSidebar({
   // Picking an entry on a phone should reveal the list behind the sheet.
   const close = () => isMobile && setOpenMobile(false);
 
-  const tree = listTree(snapshot.lists);
-  const kinds = [...new Set(tree.map((node) => node.list.kind))].sort(
-    (a, b) => (KIND_ORDER.indexOf(a) + 1 || 99) - (KIND_ORDER.indexOf(b) + 1 || 99),
-  );
-
   const entry = (
     list: string | undefined,
     label: string,
@@ -115,6 +97,7 @@ export function AppSidebar({
             params={{ workspace: ws }}
             search={(prev) => ({ ...prev, list, task: undefined })}
             onClick={close}
+            draggable={false}
           >
             <Icon />
             <span>{label}</span>
@@ -122,55 +105,6 @@ export function AppSidebar({
         </SidebarMenuButton>
         {count > 0 && <Count value={count} />}
       </SidebarMenuItem>
-    );
-  };
-
-  const renderNode = (node: ListNode, depth: number): ReactNode => {
-    const count = counts.get(node.list.id) ?? 0;
-    const link = (
-      <Link
-        to="/w/$workspace"
-        params={{ workspace: ws }}
-        search={(prev) => ({ ...prev, list: node.list.id, task: undefined })}
-        onClick={close}
-      >
-        <ListKindIcon kind={node.list.kind} />
-        <span>{node.list.name}</span>
-      </Link>
-    );
-    const children =
-      node.children.length > 0 ? (
-        <SidebarMenuSub>
-          {node.children.map((child) => renderNode(child, depth + 1))}
-        </SidebarMenuSub>
-      ) : null;
-    if (depth === 0) {
-      return (
-        <SidebarMenuItem key={node.list.id}>
-          <SidebarMenuButton asChild isActive={activeList === node.list.id} className={ITEM}>
-            {link}
-          </SidebarMenuButton>
-          {count > 0 && <Count value={count} />}
-          {children}
-        </SidebarMenuItem>
-      );
-    }
-    return (
-      <SidebarMenuSubItem key={node.list.id}>
-        <SidebarMenuSubButton
-          asChild
-          isActive={activeList === node.list.id}
-          className="h-7 text-sidebar-foreground/90 [&>svg]:text-sidebar-foreground/70"
-        >
-          {link}
-        </SidebarMenuSubButton>
-        {count > 0 && (
-          <span className="pointer-events-none absolute top-1.5 right-2 text-xs text-sidebar-foreground/50 tabular-nums">
-            {count}
-          </span>
-        )}
-        {children}
-      </SidebarMenuSubItem>
     );
   };
 
@@ -226,12 +160,13 @@ export function AppSidebar({
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        {kinds.map((kind) => (
-          <Section key={kind} label={KIND_LABELS[kind] ?? kind}>
-            {tree.filter((node) => node.list.kind === kind).map((node) => renderNode(node, 0))}
-          </Section>
-        ))}
-        <Section label={kinds.length === 0 ? "Lists" : undefined}>
+        <Section label="Lists">
+          <SidebarLists
+            snapshot={snapshot}
+            activeList={activeList}
+            counts={counts}
+            onNavigate={close}
+          />
           <SidebarMenuItem>
             <SidebarMenuButton
               className={cn(ITEM, "text-sidebar-foreground/60")}
@@ -268,15 +203,8 @@ function Count({ value }: { value: number }) {
   );
 }
 
-/** A sidebar section whose header ("Projects ▾") folds it, like Linear's. */
-function Section({ label, children }: { label: string | undefined; children: ReactNode }) {
-  if (label === undefined) {
-    return (
-      <SidebarGroup className="py-0">
-        <SidebarMenu className="gap-px">{children}</SidebarMenu>
-      </SidebarGroup>
-    );
-  }
+/** A sidebar section whose header ("Lists ▾") folds it, like Linear's. */
+function Section({ label, children }: { label: string; children: ReactNode }) {
   return (
     <Collapsible defaultOpen className="group/section">
       <SidebarGroup className="py-1">
@@ -301,7 +229,7 @@ function Section({ label, children }: { label: string | undefined; children: Rea
  * lights at its left (positioned by Electron to match its 52px height) and the sidebar toggle
  * after them. The room for the traffic lights goes away in full screen, where they are hidden.
  */
-function TitleBar() {
+export function TitleBar() {
   return (
     <div
       data-slot="title-bar"
@@ -312,14 +240,19 @@ function TitleBar() {
   );
 }
 
+/**
+ * The workspace menu: settings and the folder for this workspace, then every workspace, one
+ * click away.
+ */
 function WorkspaceSwitcher({ current }: { current: WorkspaceSnapshot["workspace"] }) {
   const { data: workspaces = [] } = useQuery(workspacesQuery);
   const navigate = useNavigate();
   const [addOpen, setAddOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="sm" className="min-w-0 gap-2 px-1.5 font-medium">
             <Avatar label={current.key} />
@@ -327,19 +260,34 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceSnapshot["workspace"
             <ChevronDownIcon data-icon="inline-end" className="text-sidebar-foreground/60" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-64" align="start">
+        <DropdownMenuContent className="w-60" align="start">
           <DropdownMenuGroup>
-            <DropdownMenuLabel className="flex flex-col gap-0.5">
-              <span className="truncate">{current.name}</span>
-              <span className="truncate font-mono text-xs font-normal text-muted-foreground">
-                {current.root}
-              </span>
-            </DropdownMenuLabel>
+            <DropdownMenuItem asChild>
+              <Link to="/w/$workspace/settings" params={{ workspace: current.id }}>
+                <SettingsIcon />
+                Settings
+                <DropdownMenuShortcut>⌘,</DropdownMenuShortcut>
+              </Link>
+            </DropdownMenuItem>
+            <RevealFolderItem root={current.root} />
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
+            {/* Arrow keys skip this button; the command palette's "Add workspace" covers the keyboard. */}
+            <DropdownMenuLabel className="flex items-center justify-between py-0 pr-0.5 text-xs text-muted-foreground">
               Workspaces
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                tabIndex={-1}
+                aria-label="Add workspace"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setAddOpen(true);
+                }}
+              >
+                <PlusIcon />
+              </Button>
             </DropdownMenuLabel>
             {workspaces.map((ws) => (
               <DropdownMenuItem
@@ -355,13 +303,6 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceSnapshot["workspace"
               </DropdownMenuItem>
             ))}
           </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <DropdownMenuItem onSelect={() => setAddOpen(true)}>
-              <PlusIcon />
-              Add workspace
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
       <AddWorkspaceDialog open={addOpen} onOpenChange={setAddOpen} />
@@ -369,8 +310,30 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceSnapshot["workspace"
   );
 }
 
+/** Opens the workspace folder in the desktop app; a browser can only copy its path. */
+export function RevealFolderItem({ root }: { root: string }) {
+  if (desktop) {
+    return (
+      <DropdownMenuItem onSelect={() => void desktop?.showFolder(root)}>
+        <FolderOpenIcon />
+        {desktop.platform === "darwin" ? "Show in Finder" : "Show in folder"}
+      </DropdownMenuItem>
+    );
+  }
+  return (
+    <DropdownMenuItem
+      onSelect={() =>
+        void navigator.clipboard.writeText(root).then(() => toast.success("Folder path copied"))
+      }
+    >
+      <CopyIcon />
+      Copy folder path
+    </DropdownMenuItem>
+  );
+}
+
 /** A workspace's little square avatar: the first letters of its id key. */
-function Avatar({ label }: { label: string }) {
+export function Avatar({ label }: { label: string }) {
   return (
     <span className="flex size-5 shrink-0 items-center justify-center rounded-[5px] bg-primary text-[10px] leading-none font-semibold text-primary-foreground">
       {label.slice(0, 2)}

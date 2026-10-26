@@ -1,6 +1,5 @@
-import type { List } from "@tasksmd/core";
+import type { List } from "@octodo/core";
 import { useNavigate } from "@tanstack/react-router";
-import { FolderIcon, HashIcon } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,9 +21,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useCreateList } from "@/lib/api";
-import { listLabel } from "@/lib/tasks";
+import { listLabel, MAX_LIST_DEPTH } from "@/lib/tasks";
 
 const TOP_LEVEL = "__top__";
 
@@ -40,7 +38,6 @@ export function NewListDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const [name, setName] = useState("");
-  const [kind, setKind] = useState<"c" | "p">("p");
   const [parent, setParent] = useState(TOP_LEVEL);
   const create = useCreateList(workspace);
   const navigate = useNavigate();
@@ -48,7 +45,7 @@ export function NewListDialog({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     create.mutate(
-      { name: name.trim(), kind, parent: parent === TOP_LEVEL ? null : parent },
+      { name: name.trim(), parent: parent === TOP_LEVEL ? null : parent },
       {
         onSuccess: (list) => {
           onOpenChange(false);
@@ -71,7 +68,7 @@ export function NewListDialog({
           <DialogHeader>
             <DialogTitle>New list</DialogTitle>
             <DialogDescription>
-              Lists are folders under .tasks/. Projects and categories can nest.
+              Lists are folders under .octodo/ and nest up to {MAX_LIST_DEPTH} levels deep.
             </DialogDescription>
           </DialogHeader>
           <FieldGroup>
@@ -86,36 +83,8 @@ export function NewListDialog({
                 onChange={(event) => setName(event.target.value)}
               />
               {create.isError && <FieldError>{create.error.message}</FieldError>}
-            </Field>
-            <Field>
-              <FieldLabel>Kind</FieldLabel>
-              <ToggleGroup
-                type="single"
-                variant="outline"
-                value={kind}
-                onValueChange={(value) => {
-                  if (value === "c" || value === "p") setKind(value);
-                }}
-              >
-                <ToggleGroupItem value="p">
-                  <FolderIcon />
-                  Project
-                </ToggleGroupItem>
-                <ToggleGroupItem value="c">
-                  <HashIcon />
-                  Category
-                </ToggleGroupItem>
-              </ToggleGroup>
               <FieldDescription>
-                Stored as{" "}
-                <code>
-                  {kind}-
-                  {name
-                    .trim()
-                    .toLowerCase()
-                    .replace(/[^a-z0-9]+/g, "-")
-                    .replace(/^-|-$/g, "") || "name"}
-                </code>
+                New lists go last; drag them in the sidebar to reorder.
               </FieldDescription>
             </Field>
             <Field>
@@ -127,11 +96,13 @@ export function NewListDialog({
                 <SelectContent>
                   <SelectGroup>
                     <SelectItem value={TOP_LEVEL}>Top level</SelectItem>
-                    {lists.map((list) => (
-                      <SelectItem key={list.id} value={list.id}>
-                        {listLabel(lists, list.id)}
-                      </SelectItem>
-                    ))}
+                    {lists
+                      .filter((list) => list.id.split("/").length < MAX_LIST_DEPTH)
+                      .map((list) => (
+                        <SelectItem key={list.id} value={list.id}>
+                          {listLabel(lists, list.id)}
+                        </SelectItem>
+                      ))}
                   </SelectGroup>
                 </SelectContent>
               </Select>

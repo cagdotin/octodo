@@ -1,4 +1,4 @@
-import type { Diagnostic } from "@tasksmd/core";
+import type { Diagnostic } from "@octodo/core";
 import { CircleCheckIcon } from "lucide-react";
 import {
   Dialog,
@@ -25,7 +25,7 @@ export function DiagnosticsDialog({
         <DialogHeader>
           <DialogTitle>File problems</DialogTitle>
           <DialogDescription>
-            Files under .tasks/ that tasksmd couldn't read. Fix them in your editor; this updates
+            Files under .octodo/ that octodo couldn't read. Fix them in your editor; this updates
             live.
           </DialogDescription>
         </DialogHeader>

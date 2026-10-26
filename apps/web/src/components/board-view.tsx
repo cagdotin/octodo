@@ -1,32 +1,16 @@
-import {
-  closestCorners,
-  DndContext,
-  pointerWithin,
-  type CollisionDetection,
-  DragOverlay,
-  KeyboardSensor,
-  MouseSensor,
-  TouchSensor,
-  useDroppable,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragOverEvent,
-  type DragStartEvent,
-  type UniqueIdentifier,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import { useDroppable } from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { StatusDefinition, Task, WorkspaceSnapshot } from "@tasksmd/core";
+import type { StatusDefinition, Task, WorkspaceSnapshot } from "@octodo/core";
 import { useNavigate } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import {
+  COLUMN_PREFIX,
+  useTaskColumns,
+  type DragData,
+  type DropData,
+} from "@/components/drag-and-drop";
 import {
   ListChip,
   PriorityMenu,
@@ -37,9 +21,7 @@ import {
 } from "@/components/task-bits";
 import { TaskComposer } from "@/components/task-composer";
 import { Button } from "@/components/ui/button";
-import { useMoveTask } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { neighbours } from "@/lib/tasks";
 
 interface Props {
   workspace: string;
@@ -53,23 +35,6 @@ interface Props {
   onCompose: (status: string | null) => void;
 }
 
-type Columns = Record<string, Array<string>>;
-
-const COLUMN_PREFIX = "column:";
-
-/**
- * Whatever is under the pointer wins, preferring cards over their column; closest corners only
- * as a fallback (keyboard dragging, pointer outside every column). Corners alone pick cards in
- * the neighbouring column when the dragged card is wide.
- */
-const collision: CollisionDetection = (args) => {
-  const hits = pointerWithin(args);
-  const cards = hits.filter((hit) => !String(hit.id).startsWith(COLUMN_PREFIX));
-  if (cards.length > 0) return cards;
-  if (hits.length > 0) return hits;
-  return closestCorners(args);
-};
-
 export function BoardView({
   workspace,
   snapshot,
@@ -80,126 +45,40 @@ export function BoardView({
   composing,
   onCompose,
 }: Props) {
-  const byId = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
-  const derived = useMemo(() => {
-    const columns: Columns = {};
-    for (const status of snapshot.statuses) columns[status.id] = [];
-    for (const task of tasks) columns[task.status]?.push(task.id);
-    return columns;
-  }, [snapshot.statuses, tasks]);
-
-  // While dragging, a local copy of the columns gives live feedback across columns.
-  const [dragColumns, setDragColumns] = useState<Columns | null>(null);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const columns = dragColumns ?? derived;
-  const move = useMoveTask(workspace);
-
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  const containerOf = (cols: Columns, id: UniqueIdentifier): string | undefined => {
-    const key = String(id);
-    if (key.startsWith(COLUMN_PREFIX)) return key.slice(COLUMN_PREFIX.length);
-    return Object.keys(cols).find((status) => cols[status]!.includes(key));
-  };
-
-  const onDragStart = ({ active }: DragStartEvent) => {
-    setActiveId(String(active.id));
-    setDragColumns(derived);
-  };
-
-  const onDragOver = ({ active, over }: DragOverEvent) => {
-    if (!over) return;
-    setDragColumns((cols) => {
-      if (!cols) return cols;
-      const from = containerOf(cols, active.id);
-      const to = containerOf(cols, over.id);
-      if (from === undefined || to === undefined || from === to) return cols;
-      const target = cols[to]!;
-      const overIndex = target.indexOf(String(over.id));
-      const index = overIndex === -1 ? target.length : overIndex;
-      return {
-        ...cols,
-        [from]: cols[from]!.filter((id) => id !== active.id),
-        [to]: [...target.slice(0, index), String(active.id), ...target.slice(index)],
-      };
-    });
-  };
-
-  const onDragEnd = ({ active, over }: DragEndEvent) => {
-    const cols = dragColumns;
-    setActiveId(null);
-    setDragColumns(null);
-    const task = byId.get(String(active.id));
-    if (!cols || !over || !task) return;
-    const status = containerOf(cols, active.id);
-    if (status === undefined) return;
-    let column = cols[status]!;
-    const overIndex = column.indexOf(String(over.id));
-    const activeIndex = column.indexOf(task.id);
-    if (overIndex !== -1 && overIndex !== activeIndex)
-      column = arrayMove(column, activeIndex, overIndex);
-
-    const index = column.indexOf(task.id);
-    const unchanged = status === task.status && derived[status]!.indexOf(task.id) === index;
-    if (unchanged) return;
-    const others = column.filter((id) => id !== task.id).flatMap((id) => byId.get(id) ?? []);
-    const place = neighbours(others, index, task.list);
-    // Reordering next to tasks from other lists has no meaning on disk; let it snap back.
-    if (status === task.status && Object.keys(place).length === 0) return;
-    move.mutate({ id: task.id, move: { ...(status !== task.status ? { status } : {}), ...place } });
-  };
-
-  const activeTask = activeId === null ? undefined : byId.get(activeId);
+  const { columns, byId } = useTaskColumns({
+    workspace,
+    statuses: snapshot.statuses,
+    tasks,
+  });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <DndContext
-        sensors={sensors}
-        collisionDetection={collision}
-        onDragStart={onDragStart}
-        onDragOver={onDragOver}
-        onDragEnd={onDragEnd}
-        onDragCancel={() => {
-          setActiveId(null);
-          setDragColumns(null);
-        }}
-      >
-        <div className="flex min-h-0 flex-1 gap-2 overflow-x-auto px-2 pt-1 pb-3 md:px-3">
-          {statuses.map((status) => (
-            <BoardColumn
-              key={status.id}
-              status={status}
-              ids={columns[status.id] ?? []}
-              byId={byId}
-              workspace={workspace}
-              snapshot={snapshot}
-              selected={selected}
-              composer={
-                status.id === composing ? (
-                  <TaskComposer
-                    workspace={workspace}
-                    snapshot={snapshot}
-                    status={status.id}
-                    list={list}
-                    onClose={() => onCompose(null)}
-                    variant="card"
-                  />
-                ) : null
-              }
-              onCompose={() => onCompose(status.id)}
-            />
-          ))}
-        </div>
-        <DragOverlay>
-          {activeTask ? (
-            <TaskCard workspace={workspace} snapshot={snapshot} task={activeTask} overlay />
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+      <div className="flex min-h-0 flex-1 gap-2 overflow-x-auto px-2 pt-1 pb-3 md:px-3">
+        {statuses.map((status) => (
+          <BoardColumn
+            key={status.id}
+            status={status}
+            ids={columns[status.id] ?? []}
+            byId={byId}
+            workspace={workspace}
+            snapshot={snapshot}
+            selected={selected}
+            composer={
+              status.id === composing ? (
+                <TaskComposer
+                  workspace={workspace}
+                  snapshot={snapshot}
+                  status={status.id}
+                  list={list}
+                  onClose={() => onCompose(null)}
+                  variant="card"
+                />
+              ) : null
+            }
+            onCompose={() => onCompose(status.id)}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -223,7 +102,10 @@ function BoardColumn({
   composer: ReactNode;
   onCompose: () => void;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `${COLUMN_PREFIX}${status.id}` });
+  const { setNodeRef, isOver } = useDroppable({
+    id: `${COLUMN_PREFIX}${status.id}`,
+    data: { accepts: ["task"], column: status.id } satisfies DropData,
+  });
   return (
     <section className="flex w-[300px] shrink-0 flex-col rounded-lg bg-band/60">
       <header className="flex h-10 shrink-0 items-center gap-2 pr-1.5 pl-3">
@@ -275,6 +157,12 @@ function SortableCard(props: {
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: props.task.id,
+    data: {
+      type: "task",
+      task: props.task,
+      overlay: () => <TaskCard {...props} active={false} overlay />,
+      accepts: ["task"],
+    } satisfies DragData & DropData,
   });
   return (
     <div

@@ -5,16 +5,18 @@ export type Priority = typeof Priority.Type;
 
 /**
  * What a status means, independent of its name. Views use it to decide what counts as open,
- * finished or hidden; the folder name only says which bucket a task is in.
+ * finished or hidden, and statuses are ordered by it: categories always come in this order, and
+ * only the statuses inside one category are ordered by the user.
  */
-export const StatusCategory = Schema.Literals([
+export const STATUS_CATEGORIES = [
   "backlog",
   "unstarted",
   "started",
   "completed",
   "canceled",
   "archived",
-]);
+] as const;
+export const StatusCategory = Schema.Literals(STATUS_CATEGORIES);
 export type StatusCategory = typeof StatusCategory.Type;
 
 export const StatusDefinition = Schema.Struct({
@@ -24,13 +26,14 @@ export const StatusDefinition = Schema.Struct({
 });
 export type StatusDefinition = typeof StatusDefinition.Type;
 
-/** `.tasks/config.json`. Unknown keys are kept when the app rewrites it. */
+/**
+ * `.octodo/config.json`. Unknown keys are kept when the app rewrites it. The order of `statuses`
+ * within each category is the workflow order; the `s<NN>-` folder numbers mirror it.
+ */
 export const WorkspaceConfig = Schema.Struct({
   name: Schema.String,
   key: Schema.String,
   statuses: Schema.optionalKey(Schema.Array(StatusDefinition)),
-  /** Folder prefixes that mark a list, mapped to the label shown for that kind of list. */
-  listKinds: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
 });
 export type WorkspaceConfig = typeof WorkspaceConfig.Type;
 
@@ -42,17 +45,17 @@ export const DEFAULT_STATUSES: ReadonlyArray<StatusDefinition> = [
   { id: "archived", name: "Archived", category: "archived" },
 ];
 
-export const DEFAULT_LIST_KINDS: Readonly<Record<string, string>> = {
-  c: "Category",
-  p: "Project",
-};
-
+/**
+ * A list folder. Snapshots give lists depth first, each among its siblings in folder order, so a
+ * tree can be built by walking the array once.
+ */
 export const List = Schema.Struct({
-  /** Path of the list folder relative to `.tasks/`, e.g. `c-groceries` or `p-garden/c-seeds`. */
+  /** The slugs from `.octodo/` down to the list, without folder numbers: `garden/seeds`. */
   id: Schema.String,
   name: Schema.String,
-  kind: Schema.String,
   parent: Schema.NullOr(Schema.String),
+  /** Path of the folder relative to `.octodo/`, e.g. `l01-garden/l00-seeds`. */
+  folder: Schema.String,
 });
 export type List = typeof List.Type;
 
@@ -60,7 +63,7 @@ export const Task = Schema.Struct({
   id: Schema.String,
   title: Schema.String,
   status: Schema.String,
-  /** The list the task belongs to, or null when its status folder sits directly in `.tasks/`. */
+  /** The list the task belongs to, or null when its status folder sits directly in `.octodo/`. */
   list: Schema.NullOr(Schema.String),
   priority: Priority,
   tags: Schema.Array(Schema.String),
@@ -131,12 +134,45 @@ export const MoveTaskInput = Schema.Struct({
 });
 export type MoveTaskInput = typeof MoveTaskInput.Type;
 
+/** A folder and the folders directly inside it, for picking a workspace folder remotely. */
+export const FolderListing = Schema.Struct({
+  path: Schema.String,
+  /** The folder above, or null at the filesystem root. */
+  parent: Schema.NullOr(Schema.String),
+  /** Whether this folder already has a `.octodo/` workspace. */
+  workspace: Schema.Boolean,
+  folders: Schema.Array(
+    Schema.Struct({ name: Schema.String, path: Schema.String, workspace: Schema.Boolean }),
+  ),
+});
+export type FolderListing = typeof FolderListing.Type;
+
 export const CreateListInput = Schema.Struct({
   name: Schema.NonEmptyString,
-  kind: Schema.String,
   parent: Schema.optionalKey(Schema.NullOr(Schema.String)),
 });
 export type CreateListInput = typeof CreateListInput.Type;
+
+/**
+ * Moves a list under another parent (null for the top level) and/or places it between two
+ * siblings. `before` and `after` are list ids among the destination's children; omitting both
+ * puts it last. Moving renames folders, so a list moved to another parent gets a new id.
+ */
+export const MoveListInput = Schema.Struct({
+  parent: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  before: Schema.optionalKey(Schema.String),
+  after: Schema.optionalKey(Schema.String),
+});
+export type MoveListInput = typeof MoveListInput.Type;
+
+/**
+ * The new order of every status, by id. Categories keep their fixed order whatever is sent, so
+ * only the order within a category takes effect.
+ */
+export const ReorderStatusesInput = Schema.Struct({
+  order: Schema.Array(Schema.String),
+});
+export type ReorderStatusesInput = typeof ReorderStatusesInput.Type;
 
 export class WorkspaceNotFound extends Schema.TaggedError<WorkspaceNotFound>()(
   "WorkspaceNotFound",

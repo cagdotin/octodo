@@ -1,4 +1,4 @@
-import type { WorkspaceSnapshot } from "@tasksmd/core";
+import type { WorkspaceSnapshot } from "@octodo/core";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -10,8 +10,9 @@ import {
   ListIcon,
   MoonIcon,
   PlusIcon,
+  SettingsIcon,
 } from "lucide-react";
-import { ListKindIcon, StatusIcon } from "@/components/task-bits";
+import { ListGlyph, StatusIcon } from "@/components/task-bits";
 import { useTheme } from "@/components/theme-provider";
 import { useState } from "react";
 import { AddWorkspaceDialog } from "@/components/add-workspace-dialog";
@@ -106,6 +107,14 @@ export function CommandPalette({
                 <CalendarRangeIcon />
                 Next 7 days
               </CommandItem>
+              <CommandItem
+                onSelect={run(
+                  () => void navigate({ to: "/w/$workspace/settings", params: { workspace } }),
+                )}
+              >
+                <SettingsIcon />
+                Workspace settings
+              </CommandItem>
               {snapshot.lists.map((list) => {
                 return (
                   <CommandItem
@@ -113,7 +122,7 @@ export function CommandPalette({
                     value={`list ${listLabel(snapshot.lists, list.id)}`}
                     onSelect={goList(list.id)}
                   >
-                    <ListKindIcon kind={list.kind} />
+                    <ListGlyph />
                     {listLabel(snapshot.lists, list.id)}
                   </CommandItem>
                 );

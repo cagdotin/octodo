@@ -1,7 +1,7 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Priority, Workspaces, defaultHome, type Task } from "@tasksmd/core";
-import { stdioLayer } from "@tasksmd/mcp";
-import { DEFAULT_PORT, startServer } from "@tasksmd/server";
+import { Priority, Workspaces, defaultHome, type Task } from "@octodo/core";
+import { stdioLayer } from "@octodo/mcp";
+import { DEFAULT_PORT, startServer } from "@octodo/server";
 import { Console, Effect, FileSystem, Layer, Option, Path } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { homedir } from "node:os";
@@ -10,7 +10,7 @@ import { SKILL } from "./skill.ts";
 
 const home = defaultHome(process.env, homedir());
 
-const tasksmd = Command.make("tasksmd").pipe(
+const octo = Command.make("octo").pipe(
   Command.withSharedFlags({
     workspace: Flag.String("workspace").pipe(
       Flag.withAlias("w"),
@@ -40,14 +40,14 @@ const due = Flag.String("due").pipe(
 const body = Flag.String("body").pipe(Flag.withDescription("Markdown body"), Flag.optional);
 const list = Flag.String("list").pipe(
   Flag.withAlias("l"),
-  Flag.withDescription("List id, e.g. c-groceries"),
+  Flag.withDescription("List id, e.g. groceries or garden/seeds"),
   Flag.optional,
 );
 const taskId = Argument.String("id").pipe(Argument.withDescription("Task id, e.g. CT-42"));
 
 /** The workspace named by `--workspace`, or the one containing the current directory. */
 const workspace = Effect.gen(function* () {
-  const root = yield* tasksmd;
+  const root = yield* octo;
   const workspaces = yield* Workspaces;
   return yield* Option.match(root.workspace, {
     onNone: () => workspaces.resolve(process.cwd()),
@@ -163,7 +163,7 @@ const createCommand = Command.make(
   Command.withAlias("add"),
   Command.withExamples([
     {
-      command: 'tasksmd create "Reconcile Kraken trades" -p high -t exchange',
+      command: 'octo create "Reconcile Kraken trades" -p high -t exchange',
       description: "A high-priority task",
     },
   ]),
@@ -242,7 +242,7 @@ const initCommand = Command.make(
       `Workspace "${info.name}" (${info.key}) at ${info.root}, registered as ${info.id}`,
     );
   }),
-).pipe(Command.withDescription("Create .tasks/ in a folder and register it"));
+).pipe(Command.withDescription("Create .octodo/ in a folder and register it"));
 
 const workspaceCommand = Command.make("workspace").pipe(
   Command.withDescription("Manage registered workspaces"),
@@ -275,22 +275,44 @@ const listsCommand = Command.make("lists").pipe(
       "create",
       {
         name: Argument.String("name"),
-        kind: Flag.String("kind").pipe(
-          Flag.withAlias("k"),
-          Flag.withDescription("Prefix: c (category) or p (project)"),
-          Flag.withDefault("c"),
-        ),
         parent: Flag.String("parent").pipe(Flag.optional),
       },
-      Effect.fn(function* ({ name, kind, parent }) {
+      Effect.fn(function* ({ name, parent }) {
         const created = yield* (yield* workspace).createList({
           name,
-          kind,
           parent: optional(parent) ?? null,
         });
-        yield* Console.log(`Created list ${created.id}`);
+        yield* Console.log(`Created list ${created.id} in ${created.folder}`);
       }),
-    ).pipe(Command.withDescription("Create a list folder")),
+    ).pipe(Command.withDescription("Create a list folder, last among its siblings")),
+    Command.make(
+      "move",
+      {
+        id: Argument.String("id").pipe(Argument.withDescription("List id, e.g. garden/seeds")),
+        parent: Flag.String("parent").pipe(
+          Flag.withDescription("List to nest it under"),
+          Flag.optional,
+        ),
+        topLevel: Flag.Boolean("top-level").pipe(
+          Flag.withDescription("Move it out of its parent list"),
+          Flag.withDefault(false),
+        ),
+        before: Flag.String("before").pipe(Flag.optional),
+        after: Flag.String("after").pipe(Flag.optional),
+      },
+      Effect.fn(function* (options) {
+        const moved = yield* (yield* workspace).moveList(options.id, {
+          ...(options.topLevel
+            ? { parent: null }
+            : Option.isSome(options.parent)
+              ? { parent: options.parent.value }
+              : {}),
+          ...(Option.isSome(options.before) ? { before: options.before.value } : {}),
+          ...(Option.isSome(options.after) ? { after: options.after.value } : {}),
+        });
+        yield* Console.log(`Moved list ${moved.id} to ${moved.folder}`);
+      }),
+    ).pipe(Command.withDescription("Reorder a list or move it under another list")),
   ]),
 );
 
@@ -327,7 +349,7 @@ const serveCommand = Command.make(
       ),
       (running) => Effect.promise(() => running.close()),
     );
-    yield* Console.log(`tasksmd on ${server.url}`);
+    yield* Console.log(`octodo on ${server.url}`);
     yield* Console.log(`Open and pair: ${server.pairUrl}`);
     yield* Console.log(
       `MCP: ${server.mcpUrl} (Authorization: Bearer <token from ${home}/server.json>)`,
@@ -340,7 +362,7 @@ const mcpCommand = Command.make(
   "mcp",
   {},
   Effect.fn(function* () {
-    const root = yield* tasksmd;
+    const root = yield* octo;
     const defaultDir = Option.getOrElse(root.workspace, () => process.cwd());
     return yield* Layer.launch(
       stdioLayer({ defaultDir }).pipe(Layer.provide(Workspaces.layer({ home, watch: true }))),
@@ -362,20 +384,20 @@ const skillsCommand = Command.make("skills").pipe(
       Effect.fn(function* ({ dir }) {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const target = path.join(dir, "tasksmd");
+        const target = path.join(dir, "octodo");
         yield* fs.makeDirectory(target, { recursive: true });
         yield* fs.writeFileString(path.join(target, "SKILL.md"), SKILL);
         yield* Console.log(`Wrote ${path.join(target, "SKILL.md")}`);
       }),
     ).pipe(
       Command.withDescription(
-        "Write the tasksmd skill so agents in this project know how to use it",
+        "Write the octodo skill so agents in this project know how to use it",
       ),
     ),
   ]),
 );
 
-tasksmd.pipe(
+octo.pipe(
   Command.withSubcommands([
     listCommand,
     showCommand,
@@ -400,7 +422,7 @@ tasksmd.pipe(
     WorkspaceNotFound: (error) =>
       Effect.andThen(
         Console.error(
-          `No workspace for ${error.workspace}. Run \`tasksmd init\` or pass --workspace.`,
+          `No workspace for ${error.workspace}. Run \`octo init\` or pass --workspace.`,
         ),
         Effect.sync(() => (process.exitCode = 1)),
       ),

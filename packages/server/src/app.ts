@@ -2,16 +2,19 @@ import { sValidator } from "@hono/standard-validator";
 import {
   CreateListInput,
   CreateTaskInput,
+  MoveListInput,
   MoveTaskInput,
+  ReorderStatusesInput,
   UpdateTaskInput,
   Workspaces,
   type InvalidRequest,
   type StorageError,
   type TaskNotFound,
   type WorkspaceNotFound,
-} from "@tasksmd/core";
+} from "@octodo/core";
 import { Cause, Effect, Exit, Fiber, Option, Schema, Stream, type ManagedRuntime } from "effect";
 import { Hono, type Context } from "hono";
+import { homedir } from "node:os";
 import { setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import { SESSION_COOKIE, requireToken, tokenMatches } from "./auth.ts";
@@ -24,6 +27,8 @@ const STATUS = {
   InvalidRequest: 400,
   StorageError: 500,
 } as const;
+
+const MoveListBody = Schema.Struct({ id: Schema.String, ...MoveListInput.fields });
 
 const body = <S extends Schema.ConstraintDecoder<unknown>>(schema: S) =>
   sValidator("json", Schema.toStandardSchemaV1(schema), (result, c) => {
@@ -108,6 +113,13 @@ export const createApi = ({ runtime, token }: AppOptions) => {
       })
       .use(requireToken(token))
       .get("/session", (c) => c.json({ ok: true }))
+      // A folder browser for adding workspaces from a client without a native picker.
+      .get("/folders", (c) =>
+        run(
+          c,
+          Workspaces.use((w) => w.browse(c.req.query("path") || homedir())),
+        ),
+      )
       .get("/workspaces", (c) =>
         run(
           c,
@@ -176,6 +188,24 @@ export const createApi = ({ runtime, token }: AppOptions) => {
           c,
           Effect.flatMap(withWorkspace(c.req.param("ws")), (ws) =>
             ws.createList(c.req.valid("json")),
+          ),
+        ),
+      )
+      // List ids contain slashes, so the id travels in the body rather than the path.
+      .post("/workspaces/:ws/lists/move", body(MoveListBody), (c) =>
+        run(
+          c,
+          Effect.flatMap(withWorkspace(c.req.param("ws")), (ws) => {
+            const { id, ...input } = c.req.valid("json");
+            return ws.moveList(id, input);
+          }),
+        ),
+      )
+      .put("/workspaces/:ws/statuses/order", body(ReorderStatusesInput), (c) =>
+        run(
+          c,
+          Effect.flatMap(withWorkspace(c.req.param("ws")), (ws) =>
+            ws.reorderStatuses(c.req.valid("json")),
           ),
         ),
       )

@@ -1,7 +1,16 @@
-import type { StatusDefinition, Task, WorkspaceSnapshot } from "@tasksmd/core";
+import { useDroppable } from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import type { StatusDefinition, Task, WorkspaceSnapshot } from "@octodo/core";
 import { Link } from "@tanstack/react-router";
 import { InboxIcon, PlusIcon } from "lucide-react";
-import { useState } from "react";
+import { useState, type ComponentProps, type ReactNode } from "react";
+import {
+  COLUMN_PREFIX,
+  useTaskColumns,
+  type DragData,
+  type DropData,
+} from "@/components/drag-and-drop";
 import {
   ListChip,
   PriorityMenu,
@@ -22,12 +31,12 @@ import {
 } from "@/components/ui/empty";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { isClosedCategory } from "@/lib/tasks";
+import { isClosedCategory, listViewOrder } from "@/lib/tasks";
 
 interface Props {
   workspace: string;
   snapshot: WorkspaceSnapshot;
-  /** The statuses the current tab and display options show, in workspace order. */
+  /** The statuses the current tab and display options show, in workflow order. */
   statuses: ReadonlyArray<StatusDefinition>;
   tasks: ReadonlyArray<Task>;
   selected: string | undefined;
@@ -65,9 +74,11 @@ export function ListView({
 }: Props) {
   // Remember toggles per status id; untouched groups use the category default.
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  const groups = statuses
-    .map((status) => ({ status, tasks: tasks.filter((task) => task.status === status.id) }))
-    .filter((group) => group.tasks.length > 0 || group.status.id === composing);
+  const { columns, byId } = useTaskColumns({ workspace, statuses: snapshot.statuses, tasks });
+  // Groups come from the saved tasks, so one emptied mid-drag stays until the drop lands.
+  const groups = listViewOrder(statuses).filter(
+    (status) => tasks.some((task) => task.status === status.id) || status.id === composing,
+  );
   // Ids line up in a column as wide as the longest one.
   const idWidth = `${Math.max(4, ...tasks.map((task) => task.id.length))}ch`;
 
@@ -90,22 +101,23 @@ export function ListView({
   return (
     <ScrollArea className="min-h-0 flex-1">
       <div className="@container flex flex-col gap-0.5 px-2 pt-1 pb-24 md:px-3">
-        {groups.map(({ status, tasks: items }) => {
+        {groups.map((status) => {
+          const ids = columns[status.id] ?? [];
           const isOpen =
             status.id === composing || (open[status.id] ?? !isClosedCategory(status.category));
           return (
-            <Collapsible
+            <StatusGroup
               key={status.id}
+              status={status}
               open={isOpen}
               onOpenChange={(value) => setOpen((prev) => ({ ...prev, [status.id]: value }))}
-              className="flex flex-col gap-0.5"
             >
               <div className="flex h-9 items-center rounded-md bg-band pr-1.5">
                 <CollapsibleTrigger className="group flex h-full flex-1 items-center gap-2.5 rounded-md pl-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
                   <Disclosure className="group-data-[state=open]:rotate-90" />
                   <StatusIcon category={status.category} />
                   <span className="font-medium">{status.name}</span>
-                  <span className="text-muted-foreground tabular-nums">{items.length}</span>
+                  <span className="text-muted-foreground tabular-nums">{ids.length}</span>
                 </CollapsibleTrigger>
                 <Button
                   variant="ghost"
@@ -127,24 +139,93 @@ export function ListView({
                     idWidth={idWidth}
                   />
                 )}
-                <ul className="flex flex-col">
-                  {items.map((task) => (
-                    <TaskRow
-                      key={task.id}
-                      workspace={workspace}
-                      snapshot={snapshot}
-                      task={task}
-                      active={task.id === selected}
-                      idWidth={idWidth}
-                    />
-                  ))}
-                </ul>
+                <SortableContext id={status.id} items={ids} strategy={verticalListSortingStrategy}>
+                  <ul className="flex flex-col">
+                    {ids.map((id) => {
+                      const task = byId.get(id);
+                      return task ? (
+                        <SortableRow
+                          key={id}
+                          workspace={workspace}
+                          snapshot={snapshot}
+                          task={task}
+                          active={id === selected}
+                          idWidth={idWidth}
+                        />
+                      ) : null;
+                    })}
+                  </ul>
+                </SortableContext>
               </CollapsibleContent>
-            </Collapsible>
+            </StatusGroup>
           );
         })}
       </div>
     </ScrollArea>
+  );
+}
+
+/** A status group, which also takes tasks dropped on its header or below its last row. */
+function StatusGroup({
+  status,
+  open,
+  onOpenChange,
+  children,
+}: {
+  status: StatusDefinition;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `${COLUMN_PREFIX}${status.id}`,
+    data: { accepts: ["task"], column: status.id } satisfies DropData,
+  });
+  return (
+    <Collapsible
+      ref={setNodeRef}
+      open={open}
+      onOpenChange={onOpenChange}
+      className={cn("flex flex-col gap-0.5 rounded-md", isOver && "bg-row-hover/60")}
+    >
+      {children}
+    </Collapsible>
+  );
+}
+
+function SortableRow(props: {
+  workspace: string;
+  snapshot: WorkspaceSnapshot;
+  task: Task;
+  active: boolean;
+  idWidth: string;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: props.task.id,
+    data: {
+      type: "task",
+      task: props.task,
+      overlay: () => (
+        <div className="flex h-7 w-fit max-w-80 items-center gap-2 rounded-md border bg-popover px-2.5 text-sm text-popover-foreground shadow-lg">
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+            {props.task.id}
+          </span>
+          <span className="truncate">{props.task.title}</span>
+        </div>
+      ),
+      atPointer: true,
+      accepts: ["task"],
+    } satisfies DragData & DropData,
+  });
+  return (
+    <TaskRow
+      {...props}
+      ref={setNodeRef}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      className={cn(isDragging && "opacity-40")}
+      {...attributes}
+      {...listeners}
+    />
   );
 }
 
@@ -154,17 +235,23 @@ function TaskRow({
   task,
   active,
   idWidth,
+  className,
+  ...props
 }: {
   workspace: string;
   snapshot: WorkspaceSnapshot;
   task: Task;
   active: boolean;
   idWidth: string;
-}) {
+} & ComponentProps<"li">) {
   return (
     <li
       data-active={active || undefined}
-      className="group/row relative flex h-9 items-center gap-1.5 rounded-md pr-3 pl-1.5 transition-colors hover:bg-row-hover data-active:bg-accent md:pl-[18px]"
+      className={cn(
+        "group/row relative flex h-9 items-center gap-1.5 rounded-md pr-3 pl-1.5 transition-colors hover:bg-row-hover data-active:bg-accent md:pl-[18px]",
+        className,
+      )}
+      {...props}
     >
       <PriorityMenu workspace={workspace} task={task} />
       <span
@@ -178,6 +265,7 @@ function TaskRow({
         to="/w/$workspace"
         params={{ workspace }}
         search={(prev) => ({ ...prev, task: task.id })}
+        draggable={false}
         className="min-w-0 flex-1 truncate pl-0.5 outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:ring-2 focus-visible:after:ring-ring/50"
       >
         {task.title}

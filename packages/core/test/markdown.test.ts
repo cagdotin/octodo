@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { parseTaskFile, writeTaskFile } from "../src/markdown.ts";
-import { classifyFolder, deriveKey, taskFileName } from "../src/layout.ts";
+import {
+  classifyFolder,
+  compareFolders,
+  deriveKey,
+  listFolder,
+  statusFolder,
+  taskFileName,
+} from "../src/layout.ts";
 
 describe("markdown", () => {
   it("parses frontmatter and body", () => {
@@ -29,16 +36,42 @@ describe("markdown", () => {
 });
 
 describe("layout", () => {
-  it("classifies folders by prefix", () => {
-    const kinds = { c: "Category", p: "Project" };
-    expect(classifyFolder("s-in-progress", kinds)).toEqual({ type: "status", id: "in-progress" });
-    expect(classifyFolder("c-groceries", kinds)).toEqual({
-      type: "list",
-      kind: "c",
-      slug: "groceries",
+  it("classifies folders by prefix and reads their number", () => {
+    expect(classifyFolder("s02-in-progress")).toEqual({
+      type: "status",
+      slug: "in-progress",
+      position: 2,
     });
-    expect(classifyFolder("x-thing", kinds)).toEqual({ type: "unknown" });
-    expect(classifyFolder(".git", kinds)).toEqual({ type: "ignored" });
+    expect(classifyFolder("l00-groceries")).toEqual({
+      type: "list",
+      slug: "groceries",
+      position: 0,
+    });
+    expect(classifyFolder("l-groceries")).toEqual({
+      type: "list",
+      slug: "groceries",
+      position: null,
+    });
+    expect(classifyFolder("p-thing")).toEqual({ type: "unknown" });
+    expect(classifyFolder("notes")).toEqual({ type: "unknown" });
+    expect(classifyFolder(".git")).toEqual({ type: "ignored" });
+  });
+
+  it("sorts numbered folders first, then by slug", () => {
+    const folders = [
+      { slug: "b", position: null },
+      { slug: "c", position: 1 },
+      { slug: "a", position: null },
+      { slug: "d", position: 0 },
+    ];
+    expect(folders.toSorted(compareFolders).map((folder) => folder.slug)).toEqual([
+      "d",
+      "c",
+      "a",
+      "b",
+    ]);
+    expect(listFolder(3, "garden")).toBe("l03-garden");
+    expect(statusFolder(12, "done")).toBe("s12-done");
   });
 
   it("derives Linear-style keys", () => {

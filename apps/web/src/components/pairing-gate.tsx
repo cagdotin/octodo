@@ -24,9 +24,9 @@ export function PairingGate() {
           <div className="mb-2 flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <CheckSquareIcon />
           </div>
-          <CardTitle>Connect to tasksmd</CardTitle>
+          <CardTitle>Connect to octodo</CardTitle>
           <CardDescription>
-            Open the pairing link printed by tasksmd, or paste the token from it here.
+            Open the pairing link printed by octodo, or paste the token from it here.
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -1,6 +1,8 @@
 import {
+  CreateListInput,
   CreateTaskInput,
   List,
+  MoveListInput,
   MoveTaskInput,
   Priority,
   StatusDefinition,
@@ -9,15 +11,16 @@ import {
   WorkspaceInfo,
   Workspaces,
   type Workspace,
-} from "@tasksmd/core";
+} from "@octodo/core";
 import { Effect, Layer, Schema } from "effect";
 import { McpProtocol, McpServer, Tool, Toolkit } from "effect/ai";
 
-export const SERVER_NAME = "tasksmd";
+export const SERVER_NAME = "octodo";
 
-export const INSTRUCTIONS = `tasksmd manages tasks stored as markdown files with YAML frontmatter under a project's .tasks/ folder.
-- A folder named s-<status> holds the tasks in that status; moving a task between statuses moves its file.
-- Folders named c-<name> (category) or p-<name> (project) are lists; their status folders hold their tasks.
+export const INSTRUCTIONS = `octodo manages tasks stored as markdown files with YAML frontmatter under a project's .octodo/ folder.
+- A folder named s<NN>-<status> (s01-todo) holds the tasks in that status; moving a task between statuses moves its file.
+- Folders named l<NN>-<name> (l00-groceries) are lists, nested up to 3 levels; their status folders hold their tasks. The number only orders siblings.
+- List ids are the folder names without numbers, joined by slashes: garden/seeds.
 - Every task has a stable id like CT-42 (the workspace key plus a number). Refer to tasks by id, never by path.
 - Call get_workspace first to learn the statuses and lists before creating or moving tasks.
 - The workspace parameter takes a registered workspace id or an absolute folder path; omit it to use the workspace containing the server's working directory.`;
@@ -70,7 +73,7 @@ const ListTasks = Tool.make("list_tasks", {
     workspace: WorkspaceParam,
     status: Schema.optionalKey(Schema.String),
     list: Schema.optionalKey(Schema.NullOr(Schema.String)).annotate({
-      description: "List id such as c-groceries; null for tasks outside any list.",
+      description: "List id such as groceries or garden/seeds; null for tasks outside any list.",
     }),
     tag: Schema.optionalKey(Schema.String),
     query: Schema.optionalKey(Schema.String).annotate({
@@ -141,13 +144,20 @@ const DeleteTask = Tool.make("delete_task", {
 }).annotate(Tool.Destructive, true);
 
 const CreateList = Tool.make("create_list", {
+  description: "Create a list, last among its siblings. parent is a list id to nest it under.",
+  parameters: Schema.Struct({ workspace: WorkspaceParam, ...CreateListInput.fields }),
+  success: List,
+  failure: ToolFailure,
+  failureMode: "return",
+}).annotate(Tool.Destructive, false);
+
+const MoveList = Tool.make("move_list", {
   description:
-    "Create a list folder. kind is the folder prefix: c for a category, p for a project.",
+    "Reorder a list among its siblings (before/after another list id) and/or move it under another parent (null for the top level). Moving to another parent changes its id.",
   parameters: Schema.Struct({
     workspace: WorkspaceParam,
-    name: Schema.NonEmptyString,
-    kind: Schema.String,
-    parent: Schema.optionalKey(Schema.NullOr(Schema.String)),
+    id: Schema.String,
+    ...MoveListInput.fields,
   }),
   success: List,
   failure: ToolFailure,
@@ -164,6 +174,7 @@ export const TasksToolkit = Toolkit.make(
   MoveTask,
   DeleteTask,
   CreateList,
+  MoveList,
 );
 
 const toFailure = (error: { readonly _tag: string; readonly message?: string }) => {
@@ -259,6 +270,10 @@ export const toolkitLayer = (options: { readonly defaultDir?: string | undefined
           ),
         create_list: ({ workspace, ...input }) =>
           Effect.flatMap(open(workspace), (ws) => Effect.mapError(ws.createList(input), toFailure)),
+        move_list: ({ workspace, id, ...input }) =>
+          Effect.flatMap(open(workspace), (ws) =>
+            Effect.mapError(ws.moveList(id, input), toFailure),
+          ),
       });
     }),
   );
@@ -273,7 +288,7 @@ const serverOptions = {
 const registerTools = (options: { readonly defaultDir?: string | undefined }) =>
   McpServer.toolkit(TasksToolkit).pipe(Layer.provide(toolkitLayer(options)));
 
-/** MCP over stdio, for agents that launch `tasksmd mcp` as a subprocess. Requires `Stdio` and `Workspaces`. */
+/** MCP over stdio, for agents that launch `octo mcp` as a subprocess. Requires `Stdio` and `Workspaces`. */
 export const stdioLayer = (options: { readonly defaultDir?: string | undefined }) =>
   registerTools(options).pipe(Layer.provide(McpServer.layerStdio(serverOptions)));
 

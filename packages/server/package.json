@@ -1,5 +1,5 @@
 {
-  "name": "@tasksmd/server",
+  "name": "@octodo/server",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,8 +14,8 @@
     "@effect/platform-node": "^4.0.6",
     "@hono/node-server": "^2.1.5",
     "@hono/standard-validator": "^0.4.0",
-    "@tasksmd/core": "workspace:*",
-    "@tasksmd/mcp": "workspace:*",
+    "@octodo/core": "workspace:*",
+    "@octodo/mcp": "workspace:*",
     "effect": "^4.0.6",
     "hono": "^4.13.14"
   }

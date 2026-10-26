@@ -196,10 +196,10 @@ importers:
 
   apps/desktop:
     dependencies:
-      '@tasksmd/core':
+      '@octodo/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@tasksmd/server':
+      '@octodo/server':
         specifier: workspace:*
         version: link:../../packages/server
     devDependencies:
@@ -230,10 +230,10 @@ importers:
       '@tanstack/react-router':
         specifier: ^1.170.46
         version: 1.170.46(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
-      '@tasksmd/core':
+      '@octodo/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@tasksmd/server':
+      '@octodo/server':
         specifier: workspace:*
         version: link:../../packages/server
       '@xstate/react':
@@ -318,13 +318,13 @@ importers:
       '@effect/platform-node':
         specifier: ^4.0.6
         version: 4.0.6(effect@4.0.6)(redis@6.3.0)
-      '@tasksmd/core':
+      '@octodo/core':
         specifier: workspace:*
         version: link:../core
-      '@tasksmd/mcp':
+      '@octodo/mcp':
         specifier: workspace:*
         version: link:../mcp
-      '@tasksmd/server':
+      '@octodo/server':
         specifier: workspace:*
         version: link:../server
       effect:
@@ -345,7 +345,7 @@ importers:
 
   packages/mcp:
     dependencies:
-      '@tasksmd/core':
+      '@octodo/core':
         specifier: workspace:*
         version: link:../core
       effect:
@@ -363,10 +363,10 @@ importers:
       '@hono/standard-validator':
         specifier: ^0.4.0
         version: 0.4.0(@standard-schema/spec@1.1.0)(hono@4.13.14)
-      '@tasksmd/core':
+      '@octodo/core':
         specifier: workspace:*
         version: link:../core
-      '@tasksmd/mcp':
+      '@octodo/mcp':
         specifier: workspace:*
         version: link:../mcp
       effect:

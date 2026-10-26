@@ -18,7 +18,7 @@ const write = (key: string, value: string) => {
 
 const pref = (key: string) => ({ get: () => read(key), set: (value: string) => write(key, value) });
 
-export const lastWorkspace = pref("tasksmd:last-workspace");
-export const theme = pref("tasksmd:theme");
-export const showCompleted = pref("tasksmd:show-completed");
-export const showArchived = pref("tasksmd:show-archived");
+export const lastWorkspace = pref("octodo:last-workspace");
+export const theme = pref("octodo:theme");
+export const showCompleted = pref("octodo:show-completed");
+export const showArchived = pref("octodo:show-archived");

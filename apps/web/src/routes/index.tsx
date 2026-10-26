@@ -46,8 +46,8 @@ function Home() {
         </EmptyMedia>
         <EmptyTitle>No workspaces yet</EmptyTitle>
         <EmptyDescription>
-          A workspace is any folder; tasksmd keeps its tasks as markdown files in a{" "}
-          <code>.tasks/</code> folder inside it.
+          A workspace is any folder; octodo keeps its tasks as markdown files in a{" "}
+          <code>.octodo/</code> folder inside it.
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>

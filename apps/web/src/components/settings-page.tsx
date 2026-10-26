@@ -43,11 +43,11 @@ function SettingsHeader({ title }: { title: string }) {
   return (
     <PageHeader
       title={
-        <>
+        <span className="flex min-w-0 items-center gap-1.5 font-mono text-xs text-muted-foreground">
           <span>Settings</span>
           <ChevronRightIcon className="size-3 shrink-0" />
           <span className="truncate text-foreground">{title}</span>
-        </>
+        </span>
       }
     />
   );

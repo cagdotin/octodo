@@ -50,7 +50,6 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -228,19 +227,11 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /**
- * The macOS desktop app's title bar: a drag strip across the sidebar column with the traffic
- * lights at its left (positioned by Electron to match its 52px height) and the sidebar toggle
- * after them. The room for the traffic lights goes away in full screen, where they are hidden.
+ * The macOS desktop app's title bar: an empty drag strip across the sidebar column with the
+ * traffic lights at its left (positioned by Electron to match its 52px height).
  */
 export function TitleBar() {
-  return (
-    <div
-      data-slot="title-bar"
-      className="flex h-13 shrink-0 items-center px-2 app-drag windowed-mac:pl-[78px] md:windowed-mac:pl-[70px]"
-    >
-      <SidebarTrigger />
-    </div>
-  );
+  return <div data-slot="title-bar" className="h-13 shrink-0 app-drag" />;
 }
 
 /**

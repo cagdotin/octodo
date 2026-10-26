@@ -1,12 +1,9 @@
 import type { Priority, Task, WorkspaceSnapshot } from "@octodo/core";
 import {
-  CommandIcon,
   KanbanIcon,
   ListFilterIcon,
   ListIcon,
-  PanelRightIcon,
-  PlusIcon,
-  SlidersHorizontalIcon,
+  MoreHorizontalIcon,
   TagIcon,
   XIcon,
 } from "lucide-react";
@@ -26,320 +23,162 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Kbd } from "@/components/ui/kbd";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { Switch } from "@/components/ui/switch";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDesktopChrome } from "@/lib/desktop";
 import { cn } from "@/lib/utils";
 import {
   allTags,
   type DisplayOptions,
-  dueInfo,
   EMPTY_FILTER,
   filterCount,
-  isClosedCategory,
   listLabel,
   PRIORITIES,
-  type Tab,
-  TABS,
   type TaskFilter,
 } from "@/lib/tasks";
 
 /**
- * The header of the main card. In the macOS desktop app it is part of the title bar (a drag region
- * whose middle lines up with the traffic lights), and the sidebar's title bar holds the sidebar
- * toggle; while the sidebar is out of sight the toggle comes here, after the traffic lights.
+ * The top row of the main area. In the macOS desktop app it is part of the title bar (a drag region
+ * whose middle lines up with the traffic lights); while the sidebar is out of sight it makes room
+ * for the traffic lights and shows the toggle that brings the sidebar back.
  */
 export function PageHeader({ title, children }: { title: ReactNode; children?: ReactNode }) {
   const { state, isMobile } = useSidebar();
   const chrome = useDesktopChrome();
   const sidebarHidden = isMobile || state === "collapsed";
-  const showTrigger = !chrome.mac || sidebarHidden;
 
   return (
     <header
       className={cn(
-        "flex h-12 shrink-0 items-center gap-1 pr-2 pl-3 select-none md:pl-4",
-        "desktop-mac:h-13 desktop-mac:app-drag",
-        chrome.windowed && sidebarHidden && "pl-[78px] md:pl-[70px]",
+        "flex h-13 shrink-0 items-center gap-1 pr-3 pl-4 select-none md:pl-6",
+        "desktop-mac:app-drag",
+        chrome.windowed && sidebarHidden && "pl-[84px] md:pl-[84px]",
       )}
     >
-      {showTrigger && <SidebarTrigger className="-ml-1 text-muted-foreground" />}
-      <div className="flex min-w-0 items-center gap-1.5 truncate px-1 font-mono text-xs text-muted-foreground">
-        {title}
-      </div>
+      {sidebarHidden && <SidebarTrigger className="-ml-1 text-muted-foreground" />}
+      <div className="flex min-w-0 items-center gap-1.5 truncate">{title}</div>
       {children && <div className="ml-auto flex items-center gap-0.5">{children}</div>}
     </header>
-  );
-}
-
-/** The task views' header: where you are, the command palette and New task. */
-export function WorkspaceHeader({
-  workspace,
-  title,
-  onNewTask,
-  onOpenPalette,
-}: {
-  workspace: string;
-  title: string;
-  onNewTask: () => void;
-  onOpenPalette: () => void;
-}) {
-  return (
-    <PageHeader
-      title={
-        <>
-          <span className="truncate">{workspace}</span>
-          <span aria-hidden>·</span>
-          <span className="truncate text-foreground">{title}</span>
-        </>
-      }
-    >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground"
-            onClick={onOpenPalette}
-            aria-label="Command palette"
-          >
-            <CommandIcon />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          Command palette <Kbd>⌘K</Kbd>
-        </TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button size="sm" className="ml-1" onClick={onNewTask}>
-            <PlusIcon data-icon="inline-start" />
-            New task
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          New task <Kbd>N</Kbd>
-        </TooltipContent>
-      </Tooltip>
-    </PageHeader>
-  );
-}
-
-/** The view's name set large, with a one-line count of what is open and late. */
-export function ViewTitle({
-  title,
-  snapshot,
-  tasks,
-}: {
-  title: string;
-  snapshot: WorkspaceSnapshot;
-  /** Tasks in the current list, before tab and filters. */
-  tasks: ReadonlyArray<Task>;
-}) {
-  const categories = new Map(snapshot.statuses.map((status) => [status.id, status.category]));
-  const open = tasks.filter((task) => !isClosedCategory(categories.get(task.status)));
-  const overdue = open.filter((task) => dueInfo(task.due)?.overdue).length;
-  return (
-    <div className="flex flex-col gap-1.5 px-4 pt-7 pb-2 md:px-[30px]">
-      <h1 className="truncate text-[1.75rem] leading-tight font-semibold tracking-[-0.03em]">
-        {title}
-      </h1>
-      <p className="font-mono text-xs text-muted-foreground">
-        {open.length} open
-        {overdue > 0 && <span className="text-destructive"> · {overdue} overdue</span>}
-      </p>
-    </div>
   );
 }
 
 const ROUND =
   "rounded-lg text-muted-foreground aria-expanded:bg-accent aria-expanded:text-foreground";
 
-/** The row under the header: filter tabs on the left, filter / display / panel buttons right. */
-export function ViewBar({
+/**
+ * The view's header, TickTick style: its name, then a filter button and a "…" menu with the view
+ * (list or board) and what to show.
+ */
+export function ViewHeader({
+  title,
   snapshot,
   tasks,
-  tab,
-  onTabChange,
   view,
   onViewChange,
   filter,
   onFilterChange,
   display,
   onDisplayChange,
-  panelOpen,
-  onTogglePanel,
 }: {
+  title: string;
   snapshot: WorkspaceSnapshot;
-  /** Tasks in the current list, before tab and filters, to offer their tags. */
+  /** Tasks in the current list, before display options and filters, to offer their tags. */
   tasks: ReadonlyArray<Task>;
-  tab: Tab;
-  onTabChange: (tab: Tab) => void;
   view: "list" | "board";
   onViewChange: (view: "list" | "board") => void;
   filter: TaskFilter;
   onFilterChange: (filter: TaskFilter) => void;
   display: DisplayOptions;
   onDisplayChange: (display: DisplayOptions) => void;
-  panelOpen: boolean;
-  onTogglePanel: () => void;
 }) {
   const count = filterCount(filter);
   return (
-    <div className="flex h-12 shrink-0 items-center gap-2 px-3 md:px-[26px]">
-      <ToggleGroup
-        type="single"
-        size="sm"
-        spacing={0}
-        value={tab}
-        onValueChange={(value) => {
-          if (value === "active" || value === "backlog" || value === "all") onTabChange(value);
-        }}
-        aria-label="Filter tabs"
-        className="-ml-2 gap-0.5"
-      >
-        {TABS.map((entry) => (
-          <ToggleGroupItem
-            key={entry.value}
-            value={entry.value}
-            className="h-6 rounded-md px-2 font-mono text-xs text-muted-foreground lowercase hover:bg-transparent hover:text-foreground data-[state=on]:bg-accent data-[state=on]:text-foreground"
-          >
-            {entry.label}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
-
-      <div className="ml-auto flex items-center gap-1.5">
-        {count > 0 && (
-          <Button
-            variant="ghost"
-            size="xs"
-            className="text-muted-foreground"
-            onClick={() => onFilterChange(EMPTY_FILTER)}
-          >
-            <XIcon data-icon="inline-start" />
-            Clear
+    <PageHeader
+      title={
+        <h1 className="truncate text-lg font-semibold tracking-[-0.02em] text-foreground">
+          {title}
+        </h1>
+      }
+    >
+      {count > 0 && (
+        <Button
+          variant="ghost"
+          size="xs"
+          className="text-muted-foreground"
+          onClick={() => onFilterChange(EMPTY_FILTER)}
+        >
+          <XIcon data-icon="inline-start" />
+          Clear
+        </Button>
+      )}
+      <FilterMenu snapshot={snapshot} tasks={tasks} filter={filter} onChange={onFilterChange}>
+        {count > 0 ? (
+          <Button variant="ghost" size="sm" className={cn(ROUND, "bg-accent text-foreground")}>
+            <ListFilterIcon data-icon="inline-start" />
+            {count}
+          </Button>
+        ) : (
+          <Button variant="ghost" size="icon-sm" className={ROUND} aria-label="Filter">
+            <ListFilterIcon />
           </Button>
         )}
-        <FilterMenu snapshot={snapshot} tasks={tasks} filter={filter} onChange={onFilterChange}>
-          {count > 0 ? (
-            <Button variant="ghost" size="sm" className={cn(ROUND, "bg-accent text-foreground")}>
-              <ListFilterIcon data-icon="inline-start" />
-              {count}
-            </Button>
-          ) : (
-            <Button variant="ghost" size="icon-sm" className={ROUND} aria-label="Filter">
-              <ListFilterIcon />
-            </Button>
-          )}
-        </FilterMenu>
+      </FilterMenu>
 
-        <Popover>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className={ROUND}
-                  aria-label="Display options"
-                >
-                  <SlidersHorizontalIcon />
-                </Button>
-              </PopoverTrigger>
-            </TooltipTrigger>
-            <TooltipContent>Display options</TooltipContent>
-          </Tooltip>
-          <PopoverContent align="end" className="w-64 gap-3 p-3">
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              spacing={0}
-              value={view}
-              onValueChange={(value) => {
-                if (value === "list" || value === "board") onViewChange(value);
-              }}
-              className="w-full"
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-sm" className={ROUND} aria-label="View options">
+            <MoreHorizontalIcon />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuLabel className="text-xs text-muted-foreground">View</DropdownMenuLabel>
+          <div className="flex gap-1 px-1 pb-1">
+            {(
+              [
+                ["list", "List", ListIcon],
+                ["board", "Board", KanbanIcon],
+              ] as const
+            ).map(([value, label, Icon]) => (
+              <DropdownMenuItem
+                key={value}
+                onSelect={() => onViewChange(value)}
+                aria-label={`${label} view`}
+                className={cn(
+                  "flex-1 justify-center text-muted-foreground",
+                  view === value && "bg-accent text-foreground",
+                )}
+              >
+                <Icon />
+                {label}
+              </DropdownMenuItem>
+            ))}
+          </div>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuCheckboxItem
+              checked={display.showBacklog}
+              onSelect={(event) => event.preventDefault()}
+              onCheckedChange={(on) => onDisplayChange({ ...display, showBacklog: on })}
             >
-              <ToggleGroupItem value="list" className="flex-1" aria-label="List view">
-                <ListIcon />
-                List
-              </ToggleGroupItem>
-              <ToggleGroupItem value="board" className="flex-1" aria-label="Board view">
-                <KanbanIcon />
-                Board
-              </ToggleGroupItem>
-            </ToggleGroup>
-            <Separator />
-            <div className="flex flex-col gap-2.5">
-              <DisplayRow label="Show completed" htmlFor="display-completed">
-                <Switch
-                  id="display-completed"
-                  size="sm"
-                  checked={display.showCompleted}
-                  onCheckedChange={(checked) =>
-                    onDisplayChange({ ...display, showCompleted: checked })
-                  }
-                />
-              </DisplayRow>
-              <DisplayRow label="Show archived" htmlFor="display-archived">
-                <Switch
-                  id="display-archived"
-                  size="sm"
-                  checked={display.showArchived}
-                  onCheckedChange={(checked) =>
-                    onDisplayChange({ ...display, showArchived: checked })
-                  }
-                />
-              </DisplayRow>
-              <p className="text-xs text-muted-foreground">
-                Completed and archived tasks show on the All tab.
-              </p>
-            </div>
-          </PopoverContent>
-        </Popover>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className={cn(ROUND, panelOpen && "bg-accent text-foreground")}
-              aria-label="Details panel"
-              aria-pressed={panelOpen}
-              onClick={onTogglePanel}
+              Show backlog
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              checked={display.showCompleted}
+              onSelect={(event) => event.preventDefault()}
+              onCheckedChange={(on) => onDisplayChange({ ...display, showCompleted: on })}
             >
-              <PanelRightIcon />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{panelOpen ? "Close details" : "Open details"}</TooltipContent>
-        </Tooltip>
-      </div>
-    </div>
-  );
-}
-
-function DisplayRow({
-  label,
-  htmlFor,
-  children,
-}: {
-  label: string;
-  htmlFor?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <label htmlFor={htmlFor} className="text-sm">
-        {label}
-      </label>
-      {children}
-    </div>
+              Show completed
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              checked={display.showArchived}
+              onSelect={(event) => event.preventDefault()}
+              onCheckedChange={(on) => onDisplayChange({ ...display, showArchived: on })}
+            >
+              Show archived
+            </DropdownMenuCheckboxItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </PageHeader>
   );
 }
 

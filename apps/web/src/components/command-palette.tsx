@@ -19,7 +19,6 @@ import { AddWorkspaceDialog } from "@/components/add-workspace-dialog";
 import {
   Command,
   CommandDialog,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -37,7 +36,8 @@ interface Props {
   snapshot: WorkspaceSnapshot;
   view: "list" | "board";
   onToggleView: () => void;
-  onNewTask: () => void;
+  /** Opens the new-task dialog, prefilled with `title` when given. */
+  onNewTask: (title?: string) => void;
 }
 
 export function CommandPalette({
@@ -53,10 +53,12 @@ export function CommandPalette({
   const { data: workspaces = [] } = useQuery(workspacesQuery);
   const { resolvedTheme, setTheme } = useTheme();
   const [addOpen, setAddOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const categories = new Map(snapshot.statuses.map((status) => [status.id, status.category]));
 
   const run = (action: () => void) => () => {
     onOpenChange(false);
+    setQuery("");
     action();
   };
   const goList = (list: string | undefined) =>
@@ -71,13 +73,22 @@ export function CommandPalette({
 
   return (
     <>
-      <CommandDialog open={open} onOpenChange={onOpenChange}>
+      <CommandDialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) setQuery("");
+          onOpenChange(next);
+        }}
+      >
         <Command>
-          <CommandInput placeholder="Type a command or search tasks…" />
+          <CommandInput
+            placeholder="Type a command or search tasks…"
+            value={query}
+            onValueChange={setQuery}
+          />
           <CommandList>
-            <CommandEmpty>No results.</CommandEmpty>
             <CommandGroup heading="Actions">
-              <CommandItem onSelect={run(() => requestAnimationFrame(onNewTask))}>
+              <CommandItem onSelect={run(() => requestAnimationFrame(() => onNewTask()))}>
                 <PlusIcon />
                 New task
                 <CommandShortcut>N</CommandShortcut>
@@ -174,6 +185,23 @@ export function CommandPalette({
                 </CommandItem>
               ))}
             </CommandGroup>
+            {query.trim() !== "" && (
+              // Always matches, so a query that finds nothing still has somewhere to go (and no
+              // "No results" is needed: an empty query lists everything).
+              <CommandGroup heading="New task" forceMount>
+                <CommandItem
+                  forceMount
+                  value={`create task ${query}`}
+                  onSelect={run(() => {
+                    const title = query.trim();
+                    requestAnimationFrame(() => onNewTask(title));
+                  })}
+                >
+                  <PlusIcon />
+                  <span className="truncate">Create task "{query.trim()}"</span>
+                </CommandItem>
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </CommandDialog>

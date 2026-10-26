@@ -7,8 +7,9 @@ import { BoardView } from "@/components/board-view";
 import { CommandPalette } from "@/components/command-palette";
 import { DragAndDrop } from "@/components/drag-and-drop";
 import { ListView } from "@/components/list-view";
+import { NewTaskDialog } from "@/components/new-task-dialog";
 import { TaskDetail } from "@/components/task-detail";
-import { ViewBar, ViewTitle, WorkspaceHeader } from "@/components/workspace-header";
+import { ViewHeader } from "@/components/workspace-header";
 import {
   Empty,
   EmptyDescription,
@@ -32,15 +33,14 @@ import { useHotkeys } from "@/lib/hotkeys";
 import {
   lastWorkspace,
   showArchived as showArchivedPref,
+  showBacklog as showBacklogPref,
   showCompleted as showCompletedPref,
 } from "@/lib/prefs";
 import {
-  composeStatus,
   EMPTY_FILTER,
   filterTasks,
   matchesFilter,
   type DisplayOptions,
-  type Tab,
   type TaskFilter,
   viewTitle,
   visibleCategory,
@@ -52,8 +52,6 @@ export type View = "list" | "board";
 export interface WorkspaceSearch {
   list?: string | undefined;
   view?: View | undefined;
-  /** The filter tab; absent means All. */
-  tab?: Exclude<Tab, "all"> | undefined;
   task?: string | undefined;
 }
 
@@ -63,11 +61,9 @@ export const Route = createFileRoute("/w/$workspace")({
   validateSearch: (search: Record<string, unknown>): WorkspaceSearch => {
     const list = str(search["list"]);
     const task = str(search["task"]);
-    const tab = search["tab"];
     return {
       ...(list !== undefined ? { list } : {}),
       ...(search["view"] === "board" ? { view: "board" as const } : {}),
-      ...(tab === "active" || tab === "backlog" ? { tab } : {}),
       ...(task !== undefined ? { task } : {}),
     };
   },
@@ -108,43 +104,43 @@ function WorkspacePage() {
   const isMobile = useIsMobile();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [composing, setComposing] = useState<string | null>(null);
+  // The new-task dialog, with its prefilled title; null while closed.
+  const [newTask, setNewTask] = useState<{ title: string } | null>(null);
   // A filter on lists or tags from another workspace means nothing here, so it is per workspace.
   const [filterState, setFilterState] = useState({ workspace, filter: EMPTY_FILTER });
   const filter = filterState.workspace === workspace ? filterState.filter : EMPTY_FILTER;
   const setFilter = (next: TaskFilter) => setFilterState({ workspace, filter: next });
   const [display, setDisplayState] = useState<DisplayOptions>(() => ({
+    showBacklog: showBacklogPref.get() !== "false",
     showCompleted: showCompletedPref.get() !== "false",
     showArchived: showArchivedPref.get() === "true",
   }));
   const view: View = search.view ?? "list";
-  const tab: Tab = search.tab ?? "all";
 
   useEffect(() => lastWorkspace.set(workspace), [workspace]);
 
   const closeTask = () => void navigate({ search: (prev) => ({ ...prev, task: undefined }) });
-  const openTask = (id: string) => void navigate({ search: (prev) => ({ ...prev, task: id }) });
   const setView = (next: View) =>
     void navigate({
       search: (prev) => ({ ...prev, view: next === "board" ? "board" : undefined }),
     });
-  const setTab = (next: Tab) => {
-    setComposing(null);
-    void navigate({ search: (prev) => ({ ...prev, tab: next === "all" ? undefined : next }) });
-  };
   const setDisplay = (next: DisplayOptions) => {
     setDisplayState(next);
+    showBacklogPref.set(String(next.showBacklog));
     showCompletedPref.set(String(next.showCompleted));
     showArchivedPref.set(String(next.showArchived));
   };
-  const compose = () => {
-    if (snapshot) setComposing(composeStatus(snapshot.statuses, tab)?.id ?? null);
+  // New task (N, C, the sidebar button, the palette) opens the new-task dialog.
+  const compose = (title = "") => {
+    setComposing(null);
+    setNewTask({ title });
   };
 
   useHotkeys({
     "mod+k": () => setPaletteOpen((open) => !open),
     "mod+,": () => void navigate({ to: "/w/$workspace/settings", params: { workspace } }),
-    n: compose,
-    c: compose,
+    n: () => compose(),
+    c: () => compose(),
     escape: () => {
       if (composing !== null) setComposing(null);
       else if (search.task !== undefined) closeTask();
@@ -153,9 +149,7 @@ function WorkspacePage() {
 
   if (!snapshot) return <PendingWorkspace />;
 
-  const statuses = snapshot.statuses.filter((status) =>
-    visibleCategory(status.category, tab, display),
-  );
+  const statuses = snapshot.statuses.filter((status) => visibleCategory(status.category, display));
   const shown = new Set(statuses.map((status) => status.id));
   const inList = filterTasks(snapshot.tasks, search.list);
   const tasks = inList.filter((task) => shown.has(task.status) && matchesFilter(task, filter));
@@ -171,14 +165,6 @@ function WorkspacePage() {
       onClose={closeTask}
     />
   ) : null;
-  // The panel button opens the first task in view when nothing is open.
-  const togglePanel = () => {
-    if (selected) closeTask();
-    else {
-      const first = statuses.flatMap((status) => tasks.filter((t) => t.status === status.id))[0];
-      if (first) openTask(first.id);
-    }
-  };
   const viewProps = {
     workspace,
     snapshot,
@@ -193,37 +179,25 @@ function WorkspacePage() {
   return (
     <SidebarProvider className="h-svh overflow-hidden">
       <DragAndDrop>
-        {/* The gap above the inset card belongs to the title bar too. */}
-        <WindowDragArea className="h-2" />
         <AppSidebar
           snapshot={snapshot}
           activeList={search.list}
           onSearch={() => setPaletteOpen(true)}
-          onNewTask={compose}
+          onNewTask={() => compose()}
         />
         <SidebarInset className="min-w-0 overflow-hidden">
-          <WorkspaceHeader
-            workspace={snapshot.workspace.name}
-            title={title}
-            onNewTask={compose}
-            onOpenPalette={() => setPaletteOpen(true)}
-          />
           <div className="flex min-h-0 flex-1">
             <div className="flex min-w-0 flex-1 flex-col">
-              <ViewTitle title={title} snapshot={snapshot} tasks={inList} />
-              <ViewBar
+              <ViewHeader
+                title={title}
                 snapshot={snapshot}
                 tasks={inList}
-                tab={tab}
-                onTabChange={setTab}
                 view={view}
                 onViewChange={setView}
                 filter={filter}
                 onFilterChange={setFilter}
                 display={display}
                 onDisplayChange={setDisplay}
-                panelOpen={selected !== undefined}
-                onTogglePanel={togglePanel}
               />
               {view === "list" ? <ListView {...viewProps} /> : <BoardView {...viewProps} />}
             </div>
@@ -257,6 +231,15 @@ function WorkspacePage() {
         view={view}
         onToggleView={() => setView(view === "list" ? "board" : "list")}
         onNewTask={compose}
+      />
+      <NewTaskDialog
+        open={newTask !== null}
+        onOpenChange={(open) => !open && setNewTask(null)}
+        workspace={workspace}
+        snapshot={snapshot}
+        list={search.list}
+        title={newTask?.title ?? ""}
+        onOpenTask={(id) => void navigate({ search: (prev) => ({ ...prev, task: id }) })}
       />
     </SidebarProvider>
   );

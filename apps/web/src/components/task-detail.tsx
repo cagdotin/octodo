@@ -4,17 +4,20 @@ import { format, parseISO } from "date-fns";
 import {
   AlertCircleIcon,
   CalendarIcon,
-  CheckIcon,
+  CopyIcon,
+  FlagIcon,
   LayersIcon,
   MoreHorizontalIcon,
+  PanelRightCloseIcon,
   PencilIcon,
   Trash2Icon,
-  XIcon,
 } from "lucide-react";
 import { useEffect, useState, type KeyboardEvent } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { toast } from "sonner";
 import { fromPromise } from "xstate";
+import { DuePicker } from "@/components/due-picker";
 import {
   ListGlyph,
   PriorityIcon,
@@ -34,7 +37,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,16 +44,16 @@ import {
   DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useDeleteTask, useMoveTask, useUpdateTask } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { dueInfo, formatTimestamp, listLabel, PRIORITIES, todayKey } from "@/lib/tasks";
+import { dueInfo, formatTimestamp, listLabel, PRIORITIES } from "@/lib/tasks";
 import { changes, editorMachine } from "@/machines/editor";
 
 interface Props {
@@ -62,9 +64,6 @@ interface Props {
 }
 
 const NO_LIST = "__none__";
-
-/** A property value: a quiet full-width button, Linear style. */
-const PROPERTY = "w-full justify-start px-2 font-normal";
 
 const blurOnEscape = (event: KeyboardEvent<HTMLElement>) => {
   if (event.key === "Escape") {
@@ -121,250 +120,224 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b pr-2 pl-4">
-        <span className="font-mono text-xs text-muted-foreground">{task.id}</span>
-        <SaveState
-          phase={String(phase)}
-          error={error}
-          onRetry={() => editor.send({ type: "RETRY" })}
-        />
-        <div className="ml-auto flex items-center gap-0.5">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label="More actions">
-                <MoreHorizontalIcon />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuGroup>
-                <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(true)}>
-                  <Trash2Icon />
-                  Delete task
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close">
-            <XIcon />
+      {/* TickTick-style header: done-ness and when on the left, priority on the right. */}
+      <div className="flex h-13 shrink-0 items-center gap-1 border-b px-3 desktop-mac:app-drag">
+        <StatusMenu workspace={workspace} snapshot={snapshot} task={task}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Status: ${currentStatus?.name ?? task.status}`}
+            title={currentStatus?.name ?? task.status}
+          >
+            <StatusIcon category={currentStatus?.category} className="size-4" />
           </Button>
+        </StatusMenu>
+        <Separator
+          orientation="vertical"
+          className="mx-1 data-vertical:h-4 data-vertical:self-center"
+        />
+        <DuePicker value={task.due} onChange={setDue}>
+          <Button
+            variant="ghost"
+            size="sm"
+            title={task.due ? `Due ${format(parseISO(task.due), "EEE, MMM d, yyyy")}` : undefined}
+            className={cn(
+              "px-2 font-mono text-xs font-normal",
+              due === null && "text-muted-foreground",
+              due?.overdue && "text-destructive hover:text-destructive",
+            )}
+          >
+            <CalendarIcon data-icon="inline-start" />
+            {due ? due.label : "Due date"}
+          </Button>
+        </DuePicker>
+        <div className="ml-auto flex items-center gap-1">
+          <SaveState
+            phase={String(phase)}
+            error={error}
+            onRetry={() => editor.send({ type: "RETRY" })}
+          />
+          <PriorityMenu workspace={workspace} task={task}>
+            <Button variant="ghost" size="icon-sm" aria-label={`Priority: ${priorityLabel}`}>
+              {/* The "none" glyph reads as a "…" button up here, so an unset priority is a flag. */}
+              {task.priority === "none" ? (
+                <FlagIcon className="text-muted-foreground" />
+              ) : (
+                <PriorityIcon priority={task.priority} />
+              )}
+            </Button>
+          </PriorityMenu>
         </div>
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-4 px-3 pt-4 pb-16">
-          <div className="flex flex-col gap-1">
-            <Textarea
-              aria-label="Title"
-              value={draft.title}
-              rows={1}
-              onChange={(event) =>
-                editor.send({
-                  type: "EDIT",
-                  field: "title",
-                  value: event.target.value.replace(/\n/g, " "),
-                })
+        <div className="flex flex-col gap-1 px-3 pt-3 pb-16">
+          <Textarea
+            aria-label="Title"
+            value={draft.title}
+            rows={1}
+            onChange={(event) =>
+              editor.send({
+                type: "EDIT",
+                field: "title",
+                value: event.target.value.replace(/\n/g, " "),
+              })
+            }
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                editor.send({ type: "FLUSH" });
               }
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  editor.send({ type: "FLUSH" });
+              blurOnEscape(event);
+            }}
+            onBlur={() => editor.send({ type: "FLUSH" })}
+            className="min-h-0 resize-none border-transparent bg-transparent px-2 py-1 text-xl leading-snug font-semibold tracking-[-0.02em] shadow-none focus-visible:border-transparent focus-visible:ring-0 md:text-xl dark:bg-transparent"
+          />
+
+          <TagsEditor
+            tags={task.tags}
+            onChange={(tags) => update.mutate({ id: task.id, patch: { tags } })}
+          />
+
+          <div className="group/notes relative mt-1">
+            {mode === "write" ? (
+              <Textarea
+                aria-label="Notes"
+                placeholder="Add notes in markdown…"
+                value={draft.body}
+                // oxlint-disable-next-line jsx-a11y/no-autofocus -- follows a click on the preview.
+                autoFocus={draft.body.trim() !== ""}
+                onChange={(event) =>
+                  editor.send({ type: "EDIT", field: "body", value: event.target.value })
                 }
-                blurOnEscape(event);
-              }}
-              onBlur={() => editor.send({ type: "FLUSH" })}
-              className="min-h-0 resize-none border-transparent bg-transparent px-2 py-1 text-xl leading-snug font-semibold tracking-[-0.02em] shadow-none focus-visible:border-transparent focus-visible:ring-0 md:text-xl dark:bg-transparent"
-            />
-
-            <div className="group/notes relative">
-              {mode === "write" ? (
-                <Textarea
-                  aria-label="Notes"
-                  placeholder="Add notes in markdown…"
-                  value={draft.body}
-                  // oxlint-disable-next-line jsx-a11y/no-autofocus -- follows a click on the preview.
-                  autoFocus={draft.body.trim() !== ""}
-                  onChange={(event) =>
-                    editor.send({ type: "EDIT", field: "body", value: event.target.value })
-                  }
-                  onBlur={() => {
-                    editor.send({ type: "FLUSH" });
-                    if (draft.body.trim() !== "") setMode("preview");
+                onBlur={() => {
+                  editor.send({ type: "FLUSH" });
+                  if (draft.body.trim() !== "") setMode("preview");
+                }}
+                onKeyDown={blurOnEscape}
+                className="min-h-32 resize-none border-transparent bg-transparent px-2 text-[13px] leading-relaxed shadow-none focus-visible:border-transparent focus-visible:ring-0 md:text-[13px] dark:bg-transparent"
+              />
+            ) : (
+              <>
+                {/* Clicking the rendered notes edits them; links and checkboxes still work. */}
+                {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- the Edit button below is the keyboard path. */}
+                <div
+                  className="min-h-16 cursor-text rounded-lg px-2 py-2"
+                  onClick={(event) => {
+                    if ((event.target as HTMLElement).closest("a, input")) return;
+                    setMode("write");
                   }}
-                  onKeyDown={blurOnEscape}
-                  className="min-h-32 resize-none border-transparent bg-transparent px-2 text-[13px] leading-relaxed shadow-none focus-visible:border-transparent focus-visible:ring-0 md:text-[13px] dark:bg-transparent"
-                />
-              ) : (
-                <>
-                  {/* Clicking the rendered notes edits them; links and checkboxes still work. */}
-                  {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- the Edit button below is the keyboard path. */}
-                  <div
-                    className="min-h-16 cursor-text rounded-lg px-2 py-2"
-                    onClick={(event) => {
-                      if ((event.target as HTMLElement).closest("a, input")) return;
-                      setMode("write");
-                    }}
-                  >
-                    <div className="prose prose-sm max-w-none text-foreground dark:prose-invert prose-headings:font-semibold prose-a:text-primary [&_.contains-task-list]:list-none [&_.contains-task-list]:pl-1">
-                      <Markdown remarkPlugins={[remarkGfm]}>{draft.body}</Markdown>
-                    </div>
+                >
+                  <div className="prose prose-sm max-w-none text-foreground dark:prose-invert prose-headings:font-semibold prose-a:text-primary [&_.contains-task-list]:list-none [&_.contains-task-list]:pl-1">
+                    <Markdown remarkPlugins={[remarkGfm]}>{draft.body}</Markdown>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    className="absolute top-1 right-1 opacity-0 group-hover/notes:opacity-100 focus-visible:opacity-100"
-                    onClick={() => setMode("write")}
-                  >
-                    <PencilIcon data-icon="inline-start" />
-                    Edit
-                  </Button>
-                </>
-              )}
-            </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="absolute top-1 right-1 opacity-0 group-hover/notes:opacity-100 focus-visible:opacity-100"
+                  onClick={() => setMode("write")}
+                >
+                  <PencilIcon data-icon="inline-start" />
+                  Edit
+                </Button>
+              </>
+            )}
           </div>
-
-          <section className="rounded-lg border bg-card p-1.5 pb-2">
-            <h2 className="flex h-8 items-center px-2 font-mono text-[11px] tracking-[0.08em] text-muted-foreground uppercase">
-              Properties
-            </h2>
-            <dl className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-y-0.5">
-              <dt className="px-2 text-muted-foreground">Status</dt>
-              <dd>
-                <StatusMenu workspace={workspace} snapshot={snapshot} task={task}>
-                  <Button variant="ghost" size="sm" className={PROPERTY}>
-                    <StatusIcon category={currentStatus?.category} />
-                    <span className="truncate">{currentStatus?.name ?? task.status}</span>
-                  </Button>
-                </StatusMenu>
-              </dd>
-
-              <dt className="px-2 text-muted-foreground">Priority</dt>
-              <dd>
-                <PriorityMenu workspace={workspace} task={task}>
-                  <Button variant="ghost" size="sm" className={PROPERTY}>
-                    <PriorityIcon priority={task.priority} />
-                    <span className="truncate">{priorityLabel}</span>
-                  </Button>
-                </PriorityMenu>
-              </dd>
-
-              <dt className="px-2 text-muted-foreground">List</dt>
-              <dd>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className={cn(PROPERTY, task.list === null && "text-muted-foreground")}
-                    >
-                      <ListGlyph />
-                      <span className="truncate">{listLabel(snapshot.lists, task.list)}</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-56">
-                    <DropdownMenuRadioGroup
-                      value={task.list ?? NO_LIST}
-                      onValueChange={(value) =>
-                        move.mutate({
-                          id: task.id,
-                          move: { list: value === NO_LIST ? null : value },
-                        })
-                      }
-                    >
-                      <DropdownMenuRadioItem value={NO_LIST}>
-                        <LayersIcon />
-                        No list
-                      </DropdownMenuRadioItem>
-                      {snapshot.lists.map((list) => {
-                        return (
-                          <DropdownMenuRadioItem key={list.id} value={list.id}>
-                            <ListGlyph />
-                            {listLabel(snapshot.lists, list.id)}
-                          </DropdownMenuRadioItem>
-                        );
-                      })}
-                    </DropdownMenuRadioGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </dd>
-
-              <dt className="self-start px-2 pt-1.5 text-muted-foreground">Tags</dt>
-              <dd>
-                <TagsEditor
-                  tags={task.tags}
-                  onChange={(tags) => update.mutate({ id: task.id, patch: { tags } })}
-                />
-              </dd>
-
-              <dt className="px-2 text-muted-foreground">Due</dt>
-              <dd>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className={cn(
-                        PROPERTY,
-                        task.due === null && "text-muted-foreground",
-                        due?.overdue && "text-destructive",
-                      )}
-                    >
-                      <CalendarIcon />
-                      {task.due ? format(parseISO(task.due), "EEE, MMM d, yyyy") : "Set due date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={task.due ? parseISO(task.due) : undefined}
-                      {...(task.due ? { defaultMonth: parseISO(task.due) } : {})}
-                      onSelect={(date) => setDue(date ? format(date, "yyyy-MM-dd") : null)}
-                    />
-                    <div className="flex gap-1 border-t p-2">
-                      <Button variant="ghost" size="xs" onClick={() => setDue(todayKey())}>
-                        Today
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => {
-                          const tomorrow = new Date();
-                          tomorrow.setDate(tomorrow.getDate() + 1);
-                          setDue(format(tomorrow, "yyyy-MM-dd"));
-                        }}
-                      >
-                        Tomorrow
-                      </Button>
-                      {task.due && (
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          className="ml-auto"
-                          onClick={() => setDue(null)}
-                        >
-                          Clear
-                        </Button>
-                      )}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </dd>
-            </dl>
-
-            <Separator className="my-2" />
-
-            <dl className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-y-1.5 px-2 text-xs text-muted-foreground">
-              <dt>ID</dt>
-              <dd className="font-mono">{task.id}</dd>
-              <dt>File</dt>
-              <dd className="font-mono break-all">{task.path}</dd>
-              <dt>Created</dt>
-              <dd>{formatTimestamp(task.created)}</dd>
-              <dt>Updated</dt>
-              <dd>{formatTimestamp(task.updated)}</dd>
-            </dl>
-          </section>
         </div>
       </ScrollArea>
+
+      {/* Footer: where the task lives on the left, everything else behind "…". */}
+      <div className="flex h-11 shrink-0 items-center gap-1 border-t px-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="min-w-0 font-normal text-muted-foreground"
+              aria-label={`List: ${listLabel(snapshot.lists, task.list)}`}
+            >
+              <ListGlyph />
+              <span className="truncate">{listLabel(snapshot.lists, task.list)}</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="top" className="w-56">
+            <DropdownMenuRadioGroup
+              value={task.list ?? NO_LIST}
+              onValueChange={(value) =>
+                move.mutate({
+                  id: task.id,
+                  move: { list: value === NO_LIST ? null : value },
+                })
+              }
+            >
+              <DropdownMenuRadioItem value={NO_LIST}>
+                <LayersIcon />
+                No list
+              </DropdownMenuRadioItem>
+              {snapshot.lists.map((list) => (
+                <DropdownMenuRadioItem key={list.id} value={list.id}>
+                  <ListGlyph />
+                  {listLabel(snapshot.lists, list.id)}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="ml-auto text-muted-foreground"
+              aria-label="More actions"
+            >
+              <MoreHorizontalIcon />
+            </Button>
+          </DropdownMenuTrigger>
+          {/* Opens upward, so "Close panel" sits right above the button. */}
+          <DropdownMenuContent align="end" side="top" className="w-64">
+            <DropdownMenuGroup>
+              <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 px-1.5 py-1.5 text-xs text-muted-foreground">
+                <dt>ID</dt>
+                <dd className="font-mono text-foreground">{task.id}</dd>
+                <dt>File</dt>
+                <dd className="font-mono break-all">{task.path}</dd>
+                <dt>Created</dt>
+                <dd className="font-mono">{formatTimestamp(task.created)}</dd>
+                <dt>Updated</dt>
+                <dd className="font-mono">{formatTimestamp(task.updated)}</dd>
+              </dl>
+              <DropdownMenuItem
+                onSelect={() =>
+                  void navigator.clipboard
+                    .writeText(task.path)
+                    .then(() => toast.success("File path copied"))
+                }
+              >
+                <CopyIcon />
+                Copy path
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(true)}>
+                <Trash2Icon />
+                Delete task
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem onSelect={onClose}>
+                <PanelRightCloseIcon />
+                Close panel
+                <DropdownMenuShortcut>Esc</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
@@ -392,6 +365,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
   );
 }
 
+/** The save state, kept quiet: a muted mono word while saving, a retry link when it failed. */
 function SaveState({
   phase,
   error,
@@ -401,35 +375,25 @@ function SaveState({
   error: string | null;
   onRetry: () => void;
 }) {
-  if (phase === "editing") return <span className="text-xs text-muted-foreground">Editing…</span>;
-  if (phase === "saving") {
-    return (
-      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-        <Spinner className="size-3" />
-        Saving
-      </span>
-    );
-  }
-  if (phase === "saved") {
-    return (
-      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-        <CheckIcon className="size-3" />
-        Saved
-      </span>
-    );
-  }
   if (phase === "error") {
     return (
       <button
         type="button"
         onClick={onRetry}
-        className="flex items-center gap-1 text-xs text-destructive"
+        className="flex items-center gap-1 rounded-md px-1 font-mono text-[11px] text-destructive hover:underline"
         title={error ?? undefined}
       >
         <AlertCircleIcon className="size-3" />
-        Not saved, retry
+        Retry save
       </button>
     );
   }
-  return null;
+  const label =
+    phase === "editing" || phase === "saving" ? "Saving…" : phase === "saved" ? "Saved" : null;
+  if (label === null) return null;
+  return (
+    <span aria-live="polite" className="px-1 font-mono text-[11px] text-muted-foreground">
+      {label}
+    </span>
+  );
 }

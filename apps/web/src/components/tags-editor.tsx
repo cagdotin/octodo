@@ -1,6 +1,5 @@
 import { XIcon } from "lucide-react";
 import { useState } from "react";
-import { Chip } from "@/components/task-bits";
 
 /** Inline tag chips: Enter, comma or space adds; Backspace on an empty input removes the last. */
 export function TagsEditor({
@@ -19,25 +18,28 @@ export function TagsEditor({
   };
 
   return (
-    <div className="flex min-h-7 flex-wrap items-center gap-1 rounded-md px-1.5 py-0.5 hover:bg-muted focus-within:bg-muted">
+    <div className="flex min-h-7 flex-wrap items-center gap-x-2 gap-y-1 rounded-md px-2 py-0.5 font-mono text-xs focus-within:bg-muted/60">
       {tags.map((tag) => (
-        <Chip key={tag} className="pr-0.5 text-foreground">
-          <span className="truncate">{tag}</span>
+        <span
+          key={tag}
+          className="group/tag flex max-w-44 items-center gap-0.5 rounded-sm bg-muted py-0.5 pr-0.5 pl-1.5 text-muted-foreground"
+        >
+          <span className="truncate">#{tag}</span>
           <button
             type="button"
             aria-label={`Remove ${tag}`}
-            className="rounded-full p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="rounded-sm p-0.5 opacity-50 group-hover/tag:opacity-100 hover:bg-accent hover:text-foreground focus-visible:opacity-100"
             onClick={() => onChange(tags.filter((entry) => entry !== tag))}
           >
             <XIcon className="size-3" />
           </button>
-        </Chip>
+        </span>
       ))}
       <input
         aria-label="Add tag"
         value={text}
-        placeholder={tags.length === 0 ? "Add tags" : "Add…"}
-        className="min-w-12 flex-1 bg-transparent px-0.5 text-base outline-none placeholder:text-muted-foreground md:text-sm"
+        placeholder={tags.length === 0 ? "#add tag" : "#tag"}
+        className="w-16 min-w-12 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground/70 md:text-xs"
         onChange={(event) => setText(event.target.value)}
         onBlur={commit}
         onKeyDown={(event) => {

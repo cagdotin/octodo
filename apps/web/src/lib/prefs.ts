@@ -20,5 +20,6 @@ const pref = (key: string) => ({ get: () => read(key), set: (value: string) => w
 
 export const lastWorkspace = pref("octodo:last-workspace");
 export const theme = pref("octodo:theme");
+export const showBacklog = pref("octodo:show-backlog");
 export const showCompleted = pref("octodo:show-completed");
 export const showArchived = pref("octodo:show-archived");

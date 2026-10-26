@@ -87,41 +87,29 @@ export const isInList = (task: Task, list: string) =>
   task.list === list || (task.list?.startsWith(`${list}/`) ?? false);
 
 /** The filter tabs above the list: Active (unstarted + started), Backlog, and All but archived. */
-export type Tab = "active" | "backlog" | "all";
-
-export const TABS: ReadonlyArray<{ value: Tab; label: string }> = [
-  { value: "active", label: "Active" },
-  { value: "backlog", label: "Backlog" },
-  { value: "all", label: "All" },
-];
-
 export interface DisplayOptions {
+  showBacklog: boolean;
   showCompleted: boolean;
   showArchived: boolean;
 }
 
-/** Which status categories a tab and the display options let through. */
+/** Which status categories the display options let through. */
 export const visibleCategory = (
   category: StatusCategory | undefined,
-  tab: Tab,
   display: DisplayOptions,
 ): boolean => {
-  if (category === undefined) return tab === "all";
-  switch (tab) {
-    case "active":
-      return category === "unstarted" || category === "started";
+  switch (category) {
     case "backlog":
-      return category === "backlog";
-    case "all":
-      if (category === "archived") return display.showArchived;
-      if (category === "completed" || category === "canceled") return display.showCompleted;
+      return display.showBacklog;
+    case "completed":
+    case "canceled":
+      return display.showCompleted;
+    case "archived":
+      return display.showArchived;
+    default:
       return true;
   }
 };
-
-/** Where a new task goes from a tab: the Backlog tab files into the backlog. */
-export const composeStatus = (statuses: ReadonlyArray<StatusDefinition>, tab: Tab) =>
-  (tab === "backlog" ? firstStatus(statuses, "backlog") : undefined) ?? defaultStatus(statuses);
 
 export interface TaskFilter {
   priorities: ReadonlyArray<Priority>;

@@ -6,7 +6,7 @@ import type {
   Task,
   WorkspaceSnapshot,
 } from "@octodo/core";
-import { HashIcon } from "lucide-react";
+import { FolderIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -139,72 +139,62 @@ export function PriorityIcon({ priority, className }: { priority: Priority; clas
   );
 }
 
-/** The icon every list gets. */
+/** The icon every list gets: a list is a folder on disk. */
 export function ListGlyph({ className }: { className?: string }) {
-  return <HashIcon className={className} />;
+  return <FolderIcon className={className} />;
 }
 
 /* ---------------------------------------------------------------------------------------------- */
 /* Chips                                                                                          */
 /* ---------------------------------------------------------------------------------------------- */
 
-const TAG_DOTS = [
-  "bg-tag-1",
-  "bg-tag-2",
-  "bg-tag-3",
-  "bg-tag-4",
-  "bg-tag-5",
-  "bg-tag-6",
-  "bg-tag-7",
-  "bg-tag-8",
-] as const;
-
-/** A stable colour per tag name, so the same tag looks the same everywhere. */
-export const tagDot = (tag: string) => {
-  let hash = 0;
-  for (const char of tag) hash = (hash * 31 + char.charCodeAt(0)) | 0;
-  return TAG_DOTS[Math.abs(hash) % TAG_DOTS.length]!;
-};
-
 export function Chip({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <Badge
       variant="outline"
-      className={cn("h-6 max-w-44 gap-1.5 px-2 font-normal text-muted-foreground", className)}
+      className={cn(
+        "h-[22px] max-w-44 gap-1.5 rounded-full px-2 font-normal text-muted-foreground",
+        className,
+      )}
     >
       {children}
     </Badge>
   );
 }
 
+/** A tag as it reads in the file's frontmatter, set like a markdown hashtag. */
 export function TagChip({ tag }: { tag: string }) {
   return (
-    <Chip>
-      <span className={cn("size-2 shrink-0 rounded-full", tagDot(tag))} />
-      <span className="truncate">{tag}</span>
-    </Chip>
+    <span className="max-w-36 shrink-0 truncate font-mono text-xs text-muted-foreground">
+      #{tag}
+    </span>
   );
 }
 
 export function TagChips({ tags, max = 2 }: { tags: ReadonlyArray<string>; max?: number }) {
   if (tags.length === 0) return null;
   return (
-    <span className="flex min-w-0 shrink items-center gap-1 overflow-hidden">
+    <span className="flex min-w-0 shrink items-center gap-2 overflow-hidden">
       {tags.slice(0, max).map((tag) => (
         <TagChip key={tag} tag={tag} />
       ))}
-      {tags.length > max && <Chip>+{tags.length - max}</Chip>}
+      {tags.length > max && (
+        <span className="font-mono text-xs text-muted-foreground">+{tags.length - max}</span>
+      )}
     </span>
   );
 }
 
+/** A list as the folder it is on disk (`garden/seeds/`), with its display name on hover. */
 export function ListChip({ lists, list }: { lists: ReadonlyArray<List>; list: string | null }) {
   if (list === null) return null;
   return (
-    <Chip>
-      <ListGlyph />
-      <span className="truncate">{listLabel(lists, list)}</span>
-    </Chip>
+    <span
+      title={listLabel(lists, list)}
+      className="max-w-44 shrink-0 truncate font-mono text-xs text-muted-foreground"
+    >
+      {list}/
+    </span>
   );
 }
 
@@ -216,8 +206,8 @@ export function TaskDate({ task, className }: { task: Task; className?: string }
       <span
         title={`Due ${task.due}`}
         className={cn(
-          "shrink-0 text-xs tabular-nums",
-          due.overdue ? "text-destructive" : due.today ? "text-primary" : "text-foreground/80",
+          "shrink-0 font-mono text-xs",
+          due.overdue ? "text-destructive" : due.today ? "text-foreground" : "text-foreground/80",
           className,
         )}
       >
@@ -230,7 +220,7 @@ export function TaskDate({ task, className }: { task: Task; className?: string }
   return (
     <span
       title={created.title}
-      className={cn("shrink-0 text-xs text-muted-foreground tabular-nums", className)}
+      className={cn("shrink-0 font-mono text-xs text-muted-foreground", className)}
     >
       {created.label}
     </span>

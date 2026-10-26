@@ -122,7 +122,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b pr-2 pl-4">
-        <span className="text-xs font-medium text-muted-foreground tabular-nums">{task.id}</span>
+        <span className="font-mono text-xs text-muted-foreground">{task.id}</span>
         <SaveState
           phase={String(phase)}
           error={error}
@@ -172,7 +172,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
                 blurOnEscape(event);
               }}
               onBlur={() => editor.send({ type: "FLUSH" })}
-              className="min-h-0 resize-none border-transparent bg-transparent px-2 py-1 text-lg leading-snug font-semibold shadow-none focus-visible:border-transparent focus-visible:ring-0 md:text-lg dark:bg-transparent"
+              className="min-h-0 resize-none border-transparent bg-transparent px-2 py-1 text-xl leading-snug font-semibold tracking-[-0.02em] shadow-none focus-visible:border-transparent focus-visible:ring-0 md:text-xl dark:bg-transparent"
             />
 
             <div className="group/notes relative">
@@ -223,7 +223,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
           </div>
 
           <section className="rounded-lg border bg-card p-1.5 pb-2">
-            <h2 className="flex h-8 items-center px-2 text-xs font-medium text-muted-foreground">
+            <h2 className="flex h-8 items-center px-2 font-mono text-[11px] tracking-[0.08em] text-muted-foreground uppercase">
               Properties
             </h2>
             <dl className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-y-0.5">
@@ -354,7 +354,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
 
             <dl className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-y-1.5 px-2 text-xs text-muted-foreground">
               <dt>ID</dt>
-              <dd className="tabular-nums">{task.id}</dd>
+              <dd className="font-mono">{task.id}</dd>
               <dt>File</dt>
               <dd className="font-mono break-all">{task.path}</dd>
               <dt>Created</dt>

@@ -100,7 +100,7 @@ export function ListView({
 
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <div className="@container flex flex-col gap-0.5 px-2 pt-1 pb-24 md:px-3">
+      <div className="@container flex flex-col px-2 pt-1 pb-24 md:px-3">
         {groups.map((status) => {
           const ids = columns[status.id] ?? [];
           const isOpen =
@@ -112,16 +112,17 @@ export function ListView({
               open={isOpen}
               onOpenChange={(value) => setOpen((prev) => ({ ...prev, [status.id]: value }))}
             >
-              <div className="flex h-9 items-center rounded-md bg-band pr-1.5">
-                <CollapsibleTrigger className="group flex h-full flex-1 items-center gap-2.5 rounded-md pl-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
-                  <Disclosure className="group-data-[state=open]:rotate-90" />
+              <div className="group/header relative flex h-9 items-center">
+                <CollapsibleTrigger className="group flex h-full flex-1 items-center gap-2.5 rounded-md pr-10 pl-1 text-left transition-colors outline-none hover:bg-row-hover focus-visible:ring-2 focus-visible:ring-ring/50 md:pl-[3px]">
+                  <Disclosure className="opacity-0 group-hover/header:opacity-100 group-focus-visible:opacity-100 group-data-[state=closed]:opacity-100 group-data-[state=open]:rotate-90" />
                   <StatusIcon category={status.category} />
                   <span className="font-medium">{status.name}</span>
-                  <span className="text-muted-foreground tabular-nums">{ids.length}</span>
+                  <span className="font-mono text-xs text-muted-foreground">{ids.length}</span>
                 </CollapsibleTrigger>
                 <Button
                   variant="ghost"
                   size="icon-xs"
+                  className="absolute right-1.5 text-muted-foreground opacity-0 group-hover/header:opacity-100 focus-visible:opacity-100"
                   aria-label={`New task in ${status.name}`}
                   onClick={() => onCompose(status.id)}
                 >
@@ -186,7 +187,7 @@ function StatusGroup({
       ref={setNodeRef}
       open={open}
       onOpenChange={onOpenChange}
-      className={cn("flex flex-col gap-0.5 rounded-md", isOver && "bg-row-hover/60")}
+      className={cn("flex flex-col rounded-md", isOver && "bg-row-hover/60")}
     >
       {children}
     </Collapsible>
@@ -207,9 +208,7 @@ function SortableRow(props: {
       task: props.task,
       overlay: () => (
         <div className="flex h-7 w-fit max-w-80 items-center gap-2 rounded-md border bg-popover px-2.5 text-sm text-popover-foreground shadow-lg">
-          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-            {props.task.id}
-          </span>
+          <span className="shrink-0 font-mono text-xs text-muted-foreground">{props.task.id}</span>
           <span className="truncate">{props.task.title}</span>
         </div>
       ),
@@ -248,14 +247,22 @@ function TaskRow({
     <li
       data-active={active || undefined}
       className={cn(
-        "group/row relative flex h-9 items-center gap-1.5 rounded-md pr-3 pl-1.5 transition-colors hover:bg-row-hover data-active:bg-accent md:pl-[18px]",
+        "group/row relative flex h-9 items-center gap-1.5 rounded-md pr-3 pl-1.5 transition-colors hover:bg-row-hover data-active:rounded-l-none data-active:bg-accent data-active:shadow-[inset_2px_0_0_var(--foreground)] md:pl-[18px]",
         className,
       )}
       {...props}
     >
-      <PriorityMenu workspace={workspace} task={task} />
+      <PriorityMenu
+        workspace={workspace}
+        task={task}
+        // An unset priority stays out of the way until the row is pointed at.
+        className={cn(
+          task.priority === "none" &&
+            "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100",
+        )}
+      />
       <span
-        className="hidden shrink-0 text-xs text-muted-foreground tabular-nums sm:inline"
+        className="hidden shrink-0 font-mono text-xs text-muted-foreground sm:inline"
         style={{ width: idWidth }}
       >
         {task.id}
@@ -271,7 +278,7 @@ function TaskRow({
         {task.title}
       </Link>
       {/* Chips make way for the title as the list narrows (details panel open, small windows). */}
-      <span className="hidden min-w-0 shrink-0 items-center gap-1 @lg:flex">
+      <span className="mr-2 hidden min-w-0 shrink-0 items-center gap-2 @lg:flex">
         <TagChips tags={task.tags} />
         <span className="hidden @3xl:contents">
           <ListChip lists={snapshot.lists} list={task.list} />

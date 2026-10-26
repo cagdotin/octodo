@@ -197,18 +197,21 @@ export function AppSidebar({
 
 function Count({ value }: { value: number }) {
   return (
-    <SidebarMenuBadge className="top-1! font-normal text-sidebar-foreground/50">
+    <SidebarMenuBadge className="top-1! font-mono font-normal text-sidebar-foreground/50">
       {value}
     </SidebarMenuBadge>
   );
 }
 
-/** A sidebar section whose header ("Lists ▾") folds it, like Linear's. */
+/** A sidebar section whose small mono header ("LISTS ▾") folds it. */
 function Section({ label, children }: { label: string; children: ReactNode }) {
   return (
     <Collapsible defaultOpen className="group/section">
       <SidebarGroup className="py-1">
-        <SidebarGroupLabel asChild className="h-7 w-fit gap-1.5 text-sidebar-foreground/60">
+        <SidebarGroupLabel
+          asChild
+          className="h-7 w-fit gap-1.5 font-mono text-[11px] tracking-[0.08em] text-sidebar-foreground/50 uppercase"
+        >
           <CollapsibleTrigger>
             {label}
             <Disclosure className="size-2 rotate-90 text-sidebar-foreground/50 group-data-[state=closed]/section:rotate-0" />

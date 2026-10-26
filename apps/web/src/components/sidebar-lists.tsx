@@ -285,7 +285,7 @@ function ListRow({
         {link}
       </SidebarMenuSubButton>
       {count > 0 && (
-        <span className="pointer-events-none absolute top-1.5 right-2 text-xs text-sidebar-foreground/50 tabular-nums">
+        <span className="pointer-events-none absolute top-1.5 right-2 font-mono text-xs text-sidebar-foreground/50">
           {count}
         </span>
       )}

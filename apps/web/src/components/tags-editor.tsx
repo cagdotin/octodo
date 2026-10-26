@@ -1,7 +1,6 @@
 import { XIcon } from "lucide-react";
 import { useState } from "react";
-import { Chip, tagDot } from "@/components/task-bits";
-import { cn } from "@/lib/utils";
+import { Chip } from "@/components/task-bits";
 
 /** Inline tag chips: Enter, comma or space adds; Backspace on an empty input removes the last. */
 export function TagsEditor({
@@ -23,7 +22,6 @@ export function TagsEditor({
     <div className="flex min-h-7 flex-wrap items-center gap-1 rounded-md px-1.5 py-0.5 hover:bg-muted focus-within:bg-muted">
       {tags.map((tag) => (
         <Chip key={tag} className="pr-0.5 text-foreground">
-          <span className={cn("size-2 shrink-0 rounded-full", tagDot(tag))} />
           <span className="truncate">{tag}</span>
           <button
             type="button"

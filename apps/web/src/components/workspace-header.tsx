@@ -7,10 +7,11 @@ import {
   PanelRightIcon,
   PlusIcon,
   SlidersHorizontalIcon,
+  TagIcon,
   XIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { ListGlyph, PriorityIcon, tagDot } from "@/components/task-bits";
+import { ListGlyph, PriorityIcon } from "@/components/task-bits";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -37,8 +38,10 @@ import { cn } from "@/lib/utils";
 import {
   allTags,
   type DisplayOptions,
+  dueInfo,
   EMPTY_FILTER,
   filterCount,
+  isClosedCategory,
   listLabel,
   PRIORITIES,
   type Tab,
@@ -66,24 +69,36 @@ export function PageHeader({ title, children }: { title: ReactNode; children?: R
       )}
     >
       {showTrigger && <SidebarTrigger className="-ml-1 text-muted-foreground" />}
-      <h1 className="flex min-w-0 items-center gap-1 truncate px-1 font-medium">{title}</h1>
+      <div className="flex min-w-0 items-center gap-1.5 truncate px-1 font-mono text-xs text-muted-foreground">
+        {title}
+      </div>
       {children && <div className="ml-auto flex items-center gap-0.5">{children}</div>}
     </header>
   );
 }
 
-/** The task views' header: the view's title, the command palette and New task. */
+/** The task views' header: where you are, the command palette and New task. */
 export function WorkspaceHeader({
+  workspace,
   title,
   onNewTask,
   onOpenPalette,
 }: {
+  workspace: string;
   title: string;
   onNewTask: () => void;
   onOpenPalette: () => void;
 }) {
   return (
-    <PageHeader title={title}>
+    <PageHeader
+      title={
+        <>
+          <span className="truncate">{workspace}</span>
+          <span aria-hidden>·</span>
+          <span className="truncate text-foreground">{title}</span>
+        </>
+      }
+    >
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -102,7 +117,7 @@ export function WorkspaceHeader({
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button variant="ghost" size="sm" onClick={onNewTask}>
+          <Button size="sm" className="ml-1" onClick={onNewTask}>
             <PlusIcon data-icon="inline-start" />
             New task
           </Button>
@@ -115,7 +130,35 @@ export function WorkspaceHeader({
   );
 }
 
-const ROUND = "rounded-full text-muted-foreground aria-expanded:text-foreground";
+/** The view's name set large, with a one-line count of what is open and late. */
+export function ViewTitle({
+  title,
+  snapshot,
+  tasks,
+}: {
+  title: string;
+  snapshot: WorkspaceSnapshot;
+  /** Tasks in the current list, before tab and filters. */
+  tasks: ReadonlyArray<Task>;
+}) {
+  const categories = new Map(snapshot.statuses.map((status) => [status.id, status.category]));
+  const open = tasks.filter((task) => !isClosedCategory(categories.get(task.status)));
+  const overdue = open.filter((task) => dueInfo(task.due)?.overdue).length;
+  return (
+    <div className="flex flex-col gap-1.5 px-4 pt-7 pb-2 md:px-[30px]">
+      <h1 className="truncate text-[1.75rem] leading-tight font-semibold tracking-[-0.03em]">
+        {title}
+      </h1>
+      <p className="font-mono text-xs text-muted-foreground">
+        {open.length} open
+        {overdue > 0 && <span className="text-destructive"> · {overdue} overdue</span>}
+      </p>
+    </div>
+  );
+}
+
+const ROUND =
+  "rounded-lg text-muted-foreground aria-expanded:bg-accent aria-expanded:text-foreground";
 
 /** The row under the header: filter tabs on the left, filter / display / panel buttons right. */
 export function ViewBar({
@@ -148,22 +191,23 @@ export function ViewBar({
 }) {
   const count = filterCount(filter);
   return (
-    <div className="flex h-12 shrink-0 items-center gap-2 px-2 md:px-3">
+    <div className="flex h-12 shrink-0 items-center gap-2 px-3 md:px-[26px]">
       <ToggleGroup
         type="single"
         size="sm"
-        spacing={1}
+        spacing={0}
         value={tab}
         onValueChange={(value) => {
           if (value === "active" || value === "backlog" || value === "all") onTabChange(value);
         }}
         aria-label="Filter tabs"
+        className="rounded-lg bg-muted p-0.5"
       >
         {TABS.map((entry) => (
           <ToggleGroupItem
             key={entry.value}
             value={entry.value}
-            className="h-7 rounded-full border border-border px-3 text-muted-foreground data-[state=on]:border-transparent data-[state=on]:bg-accent data-[state=on]:text-foreground"
+            className="h-6 rounded-md px-2.5 text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-xs"
           >
             {entry.label}
           </ToggleGroupItem>
@@ -184,12 +228,12 @@ export function ViewBar({
         )}
         <FilterMenu snapshot={snapshot} tasks={tasks} filter={filter} onChange={onFilterChange}>
           {count > 0 ? (
-            <Button variant="outline" size="sm" className={cn(ROUND, "text-foreground")}>
+            <Button variant="ghost" size="sm" className={cn(ROUND, "bg-accent text-foreground")}>
               <ListFilterIcon data-icon="inline-start" />
               {count}
             </Button>
           ) : (
-            <Button variant="outline" size="icon-sm" className={ROUND} aria-label="Filter">
+            <Button variant="ghost" size="icon-sm" className={ROUND} aria-label="Filter">
               <ListFilterIcon />
             </Button>
           )}
@@ -200,7 +244,7 @@ export function ViewBar({
             <TooltipTrigger asChild>
               <PopoverTrigger asChild>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="icon-sm"
                   className={ROUND}
                   aria-label="Display options"
@@ -263,7 +307,7 @@ export function ViewBar({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="outline"
+              variant="ghost"
               size="icon-sm"
               className={cn(ROUND, panelOpen && "bg-accent text-foreground")}
               aria-label="Details panel"
@@ -349,7 +393,7 @@ function FilterMenu({
           </DropdownMenuSub>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger disabled={tags.length === 0}>
-              <span className="size-2 rounded-full bg-tag-5" />
+              <TagIcon />
               Tag
               <FacetCount count={filter.tags.length} />
             </DropdownMenuSubTrigger>
@@ -363,7 +407,6 @@ function FilterMenu({
                     onChange({ ...filter, tags: toggle(filter.tags, tag, on) })
                   }
                 >
-                  <span className={cn("size-2 shrink-0 rounded-full", tagDot(tag))} />
                   <span className="truncate">{tag}</span>
                 </DropdownMenuCheckboxItem>
               ))}

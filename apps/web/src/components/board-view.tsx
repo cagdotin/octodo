@@ -111,7 +111,7 @@ function BoardColumn({
       <header className="flex h-10 shrink-0 items-center gap-2 pr-1.5 pl-3">
         <StatusIcon category={status.category} />
         <span className="truncate font-medium">{status.name}</span>
-        <span className="text-muted-foreground tabular-nums">{ids.length}</span>
+        <span className="font-mono text-xs text-muted-foreground">{ids.length}</span>
         <Button
           variant="ghost"
           size="icon-xs"
@@ -200,7 +200,7 @@ function TaskCard({
       )}
     >
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground tabular-nums">{task.id}</span>
+        <span className="font-mono text-xs text-muted-foreground">{task.id}</span>
         <TaskDate task={task} className="ml-auto" />
       </div>
       <div className="flex items-start gap-1.5">

@@ -8,7 +8,7 @@ import { CommandPalette } from "@/components/command-palette";
 import { DragAndDrop } from "@/components/drag-and-drop";
 import { ListView } from "@/components/list-view";
 import { TaskDetail } from "@/components/task-detail";
-import { ViewBar, WorkspaceHeader } from "@/components/workspace-header";
+import { ViewBar, ViewTitle, WorkspaceHeader } from "@/components/workspace-header";
 import {
   Empty,
   EmptyDescription,
@@ -203,12 +203,14 @@ function WorkspacePage() {
         />
         <SidebarInset className="min-w-0 overflow-hidden">
           <WorkspaceHeader
+            workspace={snapshot.workspace.name}
             title={title}
             onNewTask={compose}
             onOpenPalette={() => setPaletteOpen(true)}
           />
           <div className="flex min-h-0 flex-1">
             <div className="flex min-w-0 flex-1 flex-col">
+              <ViewTitle title={title} snapshot={snapshot} tasks={inList} />
               <ViewBar
                 snapshot={snapshot}
                 tasks={inList}

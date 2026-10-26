@@ -44,7 +44,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.style.colorScheme = resolvedTheme;
     document
       .querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", resolvedTheme === "dark" ? "#18181b" : "#ffffff");
+      ?.setAttribute("content", resolvedTheme === "dark" ? "#0E1720" : "#F5F0EA");
   }, [resolvedTheme]);
 
   const setTheme = (next: Theme) => {

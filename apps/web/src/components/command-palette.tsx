@@ -170,7 +170,7 @@ export function CommandPalette({
                 >
                   <StatusIcon category={categories.get(task.status)} />
                   <span className="truncate">{task.title}</span>
-                  <CommandShortcut className="tabular-nums">{task.id}</CommandShortcut>
+                  <CommandShortcut className="font-mono">{task.id}</CommandShortcut>
                 </CommandItem>
               ))}
             </CommandGroup>

@@ -63,3 +63,8 @@ meant to be reachable from a phone over Tailscale.
 - Test against scratch folders (`OCTODO_HOME=<tmp> bin/octo ...`), never a real project's
   `.octodo/`.
 - UI work: follow the `shadcn` skill in `.agents/skills/` (also visible as `.claude/skills`).
+- The code is the documentation. A comment signals code that is too complicated or an edge case,
+  so first try to make it unnecessary (better names, types, smaller functions). Public functions
+  and schemas may get a one-line doc comment when their types don't say enough.
+- Non-trivial work: the `octo-mode` skill picks a playbook and the principles behind it;
+  `octo-help` maps the rest.

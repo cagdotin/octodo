@@ -114,9 +114,36 @@
       /* overview strip */
       .strip {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-        gap: 16px;
+        gap: 20px;
         padding: 32px 0 8px;
+      }
+      .strip-row {
+        display: grid;
+        grid-template-columns: 72px repeat(6, minmax(0, 1fr));
+        gap: 16px;
+        align-items: center;
+      }
+      @media (max-width: 820px) {
+        .strip-row {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .strip-label {
+          grid-column: 1 / -1;
+        }
+      }
+      .strip-label {
+        color: var(--faint);
+        font-size: 12px;
+      }
+      .seg {
+        display: flex;
+      }
+      .controls .seg button:first-child {
+        border-radius: 6px 0 0 6px;
+      }
+      .controls .seg button + button {
+        border-left: 0;
+        border-radius: 0 6px 6px 0;
       }
       .strip a {
         text-decoration: none;
@@ -296,19 +323,24 @@
         <h1>The tiled octopus as an identity</h1>
         <p>
           Every mark below is drawn live from the same shape as the octopus on the landing page: a
-          mantle, eyes and eight curling arms, sampled into rounded tiles. Each direction shows the
-          app tile, the small sizes where icons usually fall apart, and how it sits in a dock and a
-          browser tab. The sliders apply to all of them.
+          mantle, eyes and eight curling arms, sampled into rounded tiles. Switch between the
+          stylised mark and a more realistic animal; the strip below always shows both. Each
+          direction shows the app tile, the small sizes where icons usually fall apart, and how it
+          sits in a dock and a browser tab. The sliders apply to all of them.
         </p>
       </header>
 
       <div class="controls">
+        <span class="seg"
+          ><button data-shape="stylised" aria-pressed="true">stylised</button
+          ><button data-shape="realistic" aria-pressed="false">realistic</button></span
+        >
         <label
-          >density <input id="density" type="range" min="12" max="34" value="22" />
+          >density <input id="density" type="range" min="12" max="48" value="22" />
           <span id="densityOut">22</span></label
         >
         <label>arms <input id="curl" type="range" min="0" max="100" value="60" /></label>
-        <button id="animate" aria-pressed="false">animate</button>
+        <button id="animate" aria-pressed="true">animate</button>
         <button id="glyphs" aria-pressed="true">glyphs in tiles</button>
         <button id="theme">light page</button>
       </div>
@@ -337,15 +369,20 @@
           height="20"
           style="vertical-align: -5px"
         />
-        · <a href="/">landing</a> · <a href="/explore.html">direction study</a> ·
-        <a href="/classic.html">first landing</a>
+        · <a href="/">landing</a>
       </footer>
     </main>
 
     <script>
       const root = document.documentElement;
       const $ = (id) => document.getElementById(id);
-      const state = { density: 22, curl: 0.6, animate: false, glyphs: true };
+      const state = {
+        shape: "stylised",
+        density: { stylised: 22, realistic: 32 },
+        curl: 0.6,
+        animate: true,
+        glyphs: true,
+      };
 
       // Each direction: the tile behind the mark, how cells are painted, and its tile palette.
       const DIRS = [
@@ -440,8 +477,13 @@
       ];
 
       // --- the shape -------------------------------------------------------------------------
-      // Drawn into a square of side S as two layers: lum (shade, white = lit) and eye centres.
-      function drawShape(g, S, t) {
+      // Drawn into a square of side S in greys (white = lit); returns the eye centres.
+      function drawShape(g, S, t, shape, N) {
+        return shape === "realistic" ? drawRealistic(g, S, t, N) : drawStylised(g, S, t);
+      }
+
+      // The mark: symmetric, front-on, arms curling outward in pairs.
+      function drawStylised(g, S, t) {
         const cx = S / 2;
         const curl = 0.8 + state.curl * 2.2;
         g.clearRect(0, 0, S, S);
@@ -508,17 +550,176 @@
         ];
       }
 
+      // The animal: a three-quarter view with the mantle tilted back behind the head, eyes on the
+      // sides, a web between the arm roots, and eight arms that each reach and curl their own way,
+      // suckers along the near ones and mottling on the skin.
+      const ARMS = [
+        // base angle (0 = right, PI/2 = down), length, curl, near (drawn over the web)
+        [2.95, 0.4, -2.2, false],
+        [2.05, 0.34, 2.4, false],
+        [0.3, 0.4, 2.0, false],
+        [2.45, 0.44, 1.9, true],
+        [1.95, 0.46, -2.6, true],
+        [1.55, 0.42, 3.0, true],
+        [1.15, 0.46, -2.2, true],
+        [0.7, 0.44, 2.5, true],
+      ];
+      function drawRealistic(g, S, t, N) {
+        g.clearRect(0, 0, S, S);
+        const grey = (v) => `rgb(${v * 255},${v * 255},${v * 255})`;
+        const detail = N >= 18;
+        const curl = 0.35 + state.curl * 1.3;
+        const hx = S * 0.5;
+        const hy = S * 0.43;
+
+        const arms = ARMS.map(([a0, len0, k, near], i) => {
+          const n = 32;
+          const len = S * len0;
+          let ang = a0;
+          let x = hx + Math.cos(a0) * S * 0.05;
+          let y = hy + S * 0.03 + Math.sin(a0) * S * 0.04;
+          const pts = [[x, y, ang]];
+          for (let j = 0; j < n; j++) {
+            const u = j / n;
+            const wave = state.animate ? 0.6 * Math.sin(t * 1.3 + i * 1.9 - u * 3.5) * u : 0;
+            // a gentle S along the arm, then the tip rolls up
+            const turn = 0.5 * Math.sin(u * Math.PI * 1.6 + i) + k * curl * 3 * Math.pow(u, 2.4);
+            ang += (turn + wave) / n;
+            x += (Math.cos(ang) * len) / n;
+            y += (Math.sin(ang) * len) / n;
+            pts.push([x, y, ang]);
+          }
+          return { pts, near, k };
+        });
+        const width = (u) => S * (0.05 * Math.pow(1 - u, 1.2) + 0.013);
+        const drawArm = ({ pts, near, k }) => {
+          pts.forEach(([x, y], j) => {
+            const u = j / pts.length;
+            g.fillStyle = grey(near ? 0.66 - 0.1 * u : 0.44);
+            g.beginPath();
+            g.arc(x, y, width(u), 0, 7);
+            g.fill();
+          });
+          if (!near || !detail) return;
+          // suckers on the inside of the curl
+          pts.forEach(([x, y, a], j) => {
+            const u = j / pts.length;
+            if (j % 3 !== 1 || u < 0.12 || u > 0.85) return;
+            const side = Math.sign(k);
+            const w = width(u);
+            g.fillStyle = grey(0.93);
+            g.beginPath();
+            g.arc(
+              x + Math.cos(a + (side * Math.PI) / 2) * w * 0.55,
+              y + Math.sin(a + (side * Math.PI) / 2) * w * 0.55,
+              w * 0.42,
+              0,
+              7,
+            );
+            g.fill();
+          });
+        };
+
+        for (const arm of arms) if (!arm.near) drawArm(arm);
+        // the web between the arm roots
+        g.fillStyle = grey(0.47);
+        g.beginPath();
+        arms
+          .filter((a) => a.near)
+          .forEach(({ pts }, i) => {
+            const [x, y] = pts[4];
+            if (i === 0) g.moveTo(x, y);
+            else g.lineTo(x, y);
+          });
+        g.lineTo(hx, hy);
+        g.fill();
+        for (const arm of arms) if (arm.near) drawArm(arm);
+
+        // the mantle, tilted back behind the head, with mottled skin
+        const breathe = state.animate ? 1 + 0.035 * Math.sin(t * 1.1) : 1;
+        const mx = S * 0.43;
+        const my = S * 0.24;
+        const rot = -0.42;
+        const mrx = S * 0.135 * breathe;
+        const mry = (S * 0.2) / breathe;
+        const mantle = () => {
+          g.beginPath();
+          g.ellipse(mx, my, mrx, mry, rot, 0, 7);
+        };
+        const grad = g.createRadialGradient(mx - mrx * 0.3, my - mry * 0.5, 0, mx, my, mry * 1.2);
+        grad.addColorStop(0, grey(1));
+        grad.addColorStop(0.45, grey(0.8));
+        grad.addColorStop(1, grey(0.5));
+        g.fillStyle = grad;
+        mantle();
+        g.fill();
+        if (detail) {
+          g.save();
+          mantle();
+          g.clip();
+          let seed = 7;
+          const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+          for (let i = 0; i < 22; i++) {
+            const a = rand() * 7;
+            const r = Math.sqrt(rand());
+            g.fillStyle = grey(rand() > 0.2 ? 0.6 : 0.88);
+            g.beginPath();
+            g.arc(
+              mx + Math.cos(a) * r * mrx,
+              my + Math.sin(a) * r * mry,
+              S * (0.008 + rand() * 0.01),
+              0,
+              7,
+            );
+            g.fill();
+          }
+          g.restore();
+        }
+
+        // the head, with the eyes standing out on its sides
+        const hg = g.createRadialGradient(hx - S * 0.03, hy - S * 0.05, 0, hx, hy, S * 0.14);
+        hg.addColorStop(0, grey(0.85));
+        hg.addColorStop(1, grey(0.55));
+        g.fillStyle = hg;
+        g.beginPath();
+        g.ellipse(hx, hy, S * 0.125, S * 0.085, 0.08, 0, 7);
+        g.fill();
+        // siphon on the right side
+        g.fillStyle = grey(0.5);
+        g.beginPath();
+        g.ellipse(hx + S * 0.12, hy + S * 0.02, S * 0.03, S * 0.018, 0.5, 0, 7);
+        g.fill();
+        const eyes = [
+          [hx - S * 0.085, hy - S * 0.03],
+          [hx + S * 0.075, hy - S * 0.035],
+        ];
+        for (const [x, y] of eyes) {
+          g.fillStyle = grey(0.95);
+          g.beginPath();
+          g.arc(x, y - S * 0.006, S * 0.03, 0, 7);
+          g.fill();
+        }
+        return eyes;
+      }
+
       // --- sampling into tiles ---------------------------------------------------------------
       const work = document.createElement("canvas");
       const wg = work.getContext("2d", { willReadFrequently: true });
       const CHARS = [".", ":", "+", "x", "%", "8"];
       const RAMP = " .:-=+*#%@";
 
-      function sample(N, t) {
+      // Every canvas in a frame shares the same few (shape, density) samples.
+      let memo = new Map();
+      function sample(N, t, shape) {
+        const key = `${shape} ${N} ${t}`;
+        if (!memo.has(key)) memo.set(key, sampleShape(N, t, shape));
+        return memo.get(key);
+      }
+      function sampleShape(N, t, shape) {
         const SS = 4;
         const S = N * SS;
         work.width = work.height = S;
-        const eyes = drawShape(wg, S, t);
+        const eyes = drawShape(wg, S, t, shape, N);
         const d = wg.getImageData(0, 0, S, S).data;
         const cells = [];
         for (let r = 0; r < N; r++)
@@ -538,8 +739,8 @@
         return { cells, eyeCells };
       }
 
-      function paintCells(g, dir, N, ox, oy, size, t, small) {
-        const { cells, eyeCells } = sample(N, t);
+      function paintCells(g, dir, N, ox, oy, size, t, small, shape) {
+        const { cells, eyeCells } = sample(N, t, shape);
         const cell = size / N;
         const gap = Math.max(0.6, cell * 0.12);
         const rad = cell * 0.2;
@@ -632,14 +833,25 @@
         g.roundRect(inset, inset, side, side, radius);
         g.fill();
         // Small icons get fewer, bigger cells so the animal survives.
-        const N =
-          px <= 16 ? 8 : px <= 32 ? 11 : px <= 64 ? Math.min(state.density, 16) : state.density;
+        const shape = opts.shape || state.shape;
+        const density = state.density[shape];
+        const N = px <= 16 ? 8 : px <= 32 ? 11 : px <= 64 ? Math.min(density, 16) : density;
         const art = side * (bleed ? 1 : 0.9);
         g.save();
         g.beginPath();
         g.roundRect(inset, inset, side, side, radius);
         g.clip();
-        paintCells(g, dir, N, inset + (side - art) / 2, inset + (side - art) / 2, art, t, px < 64);
+        paintCells(
+          g,
+          dir,
+          N,
+          inset + (side - art) / 2,
+          inset + (side - art) / 2,
+          art,
+          t,
+          px < 64,
+          shape,
+        );
         g.restore();
       }
 
@@ -648,14 +860,22 @@
       const dirsEl = $("dirs");
       const live = []; // [canvas, dir, px, opts]
 
-      DIRS.forEach((dir, k) => {
-        const a = document.createElement("a");
-        a.href = "#" + dir.id;
-        const c = document.createElement("canvas");
-        a.append(c, dir.name.toLowerCase());
-        strip.append(a);
-        live.push([c, dir, 120, {}]);
+      for (const shape of ["stylised", "realistic"]) {
+        const row = document.createElement("div");
+        row.className = "strip-row";
+        row.innerHTML = `<span class="strip-label">${shape}</span>`;
+        for (const dir of DIRS) {
+          const a = document.createElement("a");
+          a.href = "#" + dir.id;
+          const c = document.createElement("canvas");
+          a.append(c, dir.name.toLowerCase());
+          row.append(a);
+          live.push([c, dir, 120, { shape }]);
+        }
+        strip.append(row);
+      }
 
+      DIRS.forEach((dir, k) => {
         const sec = document.createElement("section");
         sec.className = "dir";
         sec.id = dir.id;
@@ -716,6 +936,7 @@
       }
 
       function renderAll(t = 0) {
+        memo = new Map();
         for (const [c, dir, px, opts] of live) drawIcon(c, dir, px, t, opts);
       }
 
@@ -726,10 +947,19 @@
       }
 
       $("density").oninput = (e) => {
-        state.density = +e.target.value;
-        $("densityOut").textContent = state.density;
+        state.density[state.shape] = +e.target.value;
+        $("densityOut").textContent = e.target.value;
         if (!state.animate) renderAll();
       };
+      for (const b of document.querySelectorAll("[data-shape]")) {
+        b.onclick = () => {
+          state.shape = b.dataset.shape;
+          for (const o of document.querySelectorAll("[data-shape]"))
+            o.setAttribute("aria-pressed", o === b);
+          $("density").value = $("densityOut").textContent = state.density[state.shape];
+          if (!state.animate) renderAll();
+        };
+      }
       $("curl").oninput = (e) => {
         state.curl = e.target.value / 100;
         if (!state.animate) renderAll();
@@ -752,7 +982,10 @@
         e.target.textContent = light ? "dark page" : "light page";
       };
 
-      document.fonts.ready.then(() => renderAll());
+      document.fonts.ready.then(() => {
+        if (state.animate) raf = requestAnimationFrame(loop);
+        else renderAll();
+      });
     </script>
   </body>
 </html>

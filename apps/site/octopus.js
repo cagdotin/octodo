@@ -220,7 +220,10 @@
     // Arms are verlet chains: water drag (far stronger across an arm than along it), a muscle
     // pull toward the pose that is strong at the root and weak at the tip, and fixed segment
     // lengths solved root-outward. Tips lag, trail and drag through the water on their own.
+    // Drag grows with the square of speed: past cruising pace the water holds the arms
+    // harder, so a fast escape streams them behind instead of whipping them about.
     function stepArms(h, t) {
+      const fast = Math.max(1, Math.hypot(O.vx, O.vy) / (80 * S)) ** 2;
       for (const a of ARMS) {
         armTarget(a, t);
         const { p, q, t: T } = a;
@@ -239,7 +242,7 @@
           ty /= tl;
           const vt = vx * tx + vy * ty;
           const dT = Math.max(0, 1 - h * 1.6),
-            dN = Math.max(0, 1 - h * 7);
+            dN = Math.max(0, 1 - h * 7 * fast);
           vx = tx * vt * dT + (vx - tx * vt) * dN;
           vy = ty * vt * dT + (vy - ty * vt) * dN;
           const K = 520 * (1 - u) * (1 - u) + 11;
@@ -359,9 +362,7 @@
           }
         }
         const p = O.phase;
-        // at full tilt the water holds the arms closer: the same stroke, a smaller flare
-        const tilt = O.hurry ? O.fear : 0;
-        const flare = 0.62 - 0.2 * tilt;
+        const flare = 0.62;
         if (p < 0.28) {
           const u = p / 0.28;
           power = Math.sin(u * Math.PI);
@@ -371,12 +372,12 @@
         } else {
           const u = (p - 0.28) / 0.72;
           spreadT = 0.16 + (flare - 0.16) * ease(Math.min(1, u * 1.15));
-          curlT = (0.25 + 0.55 * u) * (1 - 0.5 * tilt);
+          curlT = 0.25 + 0.55 * u;
           squeezeT = Math.cos(u * Math.PI * 0.5) * 1.0 - 0.45 * Math.sin(u * Math.PI);
         }
         relaxT = 0;
         waveT = 0.35;
-        turnRate = (p < 0.28 ? 0.45 : 0.95) * (O.hurry ? 1.5 + 0.6 * O.fear : 1);
+        turnRate = (p < 0.28 ? 0.45 : 0.95) * (O.hurry ? 1.3 : 1);
       } else {
         // drifting: slow breathing, the web half open, every arm tip doing its own thing
         O.rest -= dt;
@@ -386,7 +387,7 @@
         relaxT = 1;
         waveT = 0.55;
         squeezeT = 0.12 * Math.sin(t * 2.4);
-        turnRate = O.hurry ? 2 : 0.42;
+        turnRate = O.hurry ? 1.3 : 0.42;
         // hanging in the water the mantle floats up; it only lines up with where it is going
         // in the moment before it sets off
         if (O.rest > 1.5) {
@@ -430,7 +431,8 @@
       const sp = Math.hypot(O.vx, O.vy);
       const vf = O.vx * f0 + O.vy * f1;
       const vl = -O.vx * f1 + O.vy * f0;
-      const dF = 1.25 + (sp * 0.004) / S,
+      // fleeing, it holds the streamlined glide longer, so each stroke carries it further
+      const dF = (1.25 + (sp * 0.004) / S) * (O.hurry ? 1 - GLIDE * O.fear : 1),
         dL = 4;
       const nf = vf * Math.max(0, 1 - dF * dt),
         nl = vl * Math.max(0, 1 - dL * dt);
@@ -502,7 +504,9 @@
     // --- fleeing the pointer -------------------------------------------------------------------
     // Pressure builds while the pointer stays close, faster when it closes in or follows, and
     // fades once it leaves. Close enough and the octopus flees straight away from it, with its
-    // ordinary jet cycle driven quicker and harder the more pressure there is.
+    // ordinary jet cycle pushing harder and gliding further the more pressure there is.
+    const THRUST = 1,
+      GLIDE = 0.4;
     let ptr = null,
       lastD = Infinity,
       closing = 0;
@@ -559,8 +563,9 @@
       if (!O.hurry) return;
       O.fleeMin -= dt;
       if (ptr) O.fleeA += wrapA(fleeHeading(ptr.x, ptr.y) - O.fleeA) * Math.min(1, dt * 5);
-      O.period = 0.85 - 0.35 * O.fear;
-      O.thrust = 2 + 2.4 * O.fear;
+      // the stroke itself never changes, only how hard it pushes and how far it glides
+      O.period = 1.05;
+      O.thrust = 1.7 + THRUST * O.fear;
       if (d > R * 1.15 && O.fear < 0.25 && O.fleeMin <= 0) {
         // safe: finish this stroke and settle down
         O.hurry = false;

@@ -22,6 +22,7 @@ import {
 } from "@/components/task-bits";
 import { TaskComposer } from "@/components/task-composer";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -53,8 +54,8 @@ export function BoardView({
   });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex min-h-0 flex-1 gap-2 overflow-x-auto px-2 pt-1 pb-3 md:px-3">
+    <ScrollArea orientation="horizontal" className="min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 gap-2 px-2 pt-1 pb-3 md:px-3">
         {statuses.map((status) => (
           <BoardColumn
             key={status.id}
@@ -80,7 +81,7 @@ export function BoardView({
           />
         ))}
       </div>
-    </div>
+    </ScrollArea>
   );
 }
 
@@ -124,27 +125,26 @@ function BoardColumn({
         </Button>
       </header>
       <SortableContext id={status.id} items={ids} strategy={verticalListSortingStrategy}>
-        <div
+        <ScrollArea
           ref={setNodeRef}
-          className={cn(
-            "flex min-h-24 flex-1 flex-col gap-1.5 overflow-y-auto rounded-b-lg px-1.5 pb-1.5 transition-colors",
-            isOver && "bg-band",
-          )}
+          className={cn("min-h-24 flex-1 rounded-b-lg transition-colors", isOver && "bg-band")}
         >
-          {composer}
-          {ids.map((id) => {
-            const task = byId.get(id);
-            return task ? (
-              <SortableCard
-                key={id}
-                workspace={workspace}
-                snapshot={snapshot}
-                task={task}
-                active={id === selected}
-              />
-            ) : null;
-          })}
-        </div>
+          <div className="flex flex-col gap-1.5 px-1.5 pb-1.5">
+            {composer}
+            {ids.map((id) => {
+              const task = byId.get(id);
+              return task ? (
+                <SortableCard
+                  key={id}
+                  workspace={workspace}
+                  snapshot={snapshot}
+                  task={task}
+                  active={id === selected}
+                />
+              ) : null;
+            })}
+          </div>
+        </ScrollArea>
       </SortableContext>
     </section>
   );

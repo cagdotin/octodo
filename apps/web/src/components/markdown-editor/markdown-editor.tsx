@@ -1,7 +1,7 @@
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, placeholder as placeholderText } from "@codemirror/view";
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { cn } from "@/lib/utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { bodyExtensions, fromFile, syncToFile } from "./body-state.ts";
 import { bodyTheme } from "./theme.ts";
 
@@ -17,7 +17,7 @@ interface Props {
 
 /**
  * An always-editable markdown editor with Obsidian-style live preview over the exact text. It fills
- * its container and scrolls itself, so a click anywhere in it lands in the text.
+ * its scroll area, so a click anywhere in it lands in the text.
  */
 export function MarkdownEditor({
   value,
@@ -79,5 +79,9 @@ export function MarkdownEditor({
     if (editor && spec) editor.dispatch(spec);
   }, [value]);
 
-  return <div ref={host} className={cn("min-w-0", className)} />;
+  return (
+    <ScrollArea className={className}>
+      <div ref={host} className="flex min-w-0 flex-1 flex-col" />
+    </ScrollArea>
+  );
 }

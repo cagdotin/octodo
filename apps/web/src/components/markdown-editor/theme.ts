@@ -3,14 +3,23 @@ import { EditorView } from "@codemirror/view";
 /** Ink on paper, from the app's CSS variables, so light and dark follow the `.dark` class. */
 export const bodyTheme = EditorView.theme({
   "&": {
-    height: "100%",
+    flexGrow: "1",
     color: "var(--foreground)",
     backgroundColor: "transparent",
     fontSize: "inherit",
   },
   "&.cm-focused": { outline: "none" },
-  ".cm-scroller": { fontFamily: "var(--font-sans)", lineHeight: "1.65" },
-  ".cm-content": { padding: "0.75rem 0.75rem 4rem", caretColor: "var(--foreground)" },
+  ".cm-scroller": {
+    flexGrow: "1",
+    overflow: "visible",
+    fontFamily: "var(--font-sans)",
+    lineHeight: "1.65",
+  },
+  ".cm-content": {
+    alignSelf: "stretch",
+    padding: "0.75rem 0.75rem 4rem",
+    caretColor: "var(--foreground)",
+  },
   ".cm-line": { padding: "0 0.5rem" },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--foreground)" },
   "& .cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection": {
@@ -80,12 +89,13 @@ export const bodyTheme = EditorView.theme({
     top: "50%",
     borderTop: "1px solid var(--border)",
   },
-  ".cm-md-table": { padding: "0.25rem 0.5rem", overflowX: "auto" },
+  ".cm-md-table": { padding: "0.25rem 0.5rem" },
   ".cm-md-table table": { borderCollapse: "collapse", fontSize: "0.95em" },
   ".cm-md-table th, .cm-md-table td": {
     border: "1px solid var(--border)",
     padding: "0.25rem 0.6rem",
     textAlign: "left",
+    overflowWrap: "anywhere",
   },
   ".cm-md-table th": { fontWeight: "600", backgroundColor: "var(--muted)" },
 });

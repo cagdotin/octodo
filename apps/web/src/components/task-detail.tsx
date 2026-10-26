@@ -12,7 +12,7 @@ import {
   PanelRightCloseIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { toast } from "sonner";
 import { fromPromise } from "xstate";
 import { DuePicker } from "@/components/due-picker";
@@ -112,12 +112,13 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
   const due = dueInfo(task.due);
 
   const currentStatus = snapshot.statuses.find((status) => status.id === task.status);
-  const priorityLabel = PRIORITIES.find((entry) => entry.value === task.priority)?.label;
+  const priority =
+    task.priority === "none"
+      ? undefined
+      : PRIORITIES.find((entry) => entry.value === task.priority);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* The buttons and the title's line box are all 28px tall, so the controls center on the
-          title's first line however many lines it wraps to. */}
       <div className="flex shrink-0 items-start gap-1 border-b px-3.5 py-3 desktop-mac:app-drag">
         <StatusMenu workspace={workspace} snapshot={snapshot} task={task}>
           <Button
@@ -129,37 +130,11 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
             <StatusIcon category={currentStatus?.category} className="size-4" />
           </Button>
         </StatusMenu>
-        <Textarea
-          aria-label="Title"
+        <TitleField
           value={draft.title}
-          rows={1}
-          onChange={(event) =>
-            editor.send({
-              type: "EDIT",
-              field: "title",
-              value: event.target.value.replace(/\n/g, " "),
-            })
-          }
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              editor.send({ type: "FLUSH" });
-            }
-            blurOnEscape(event);
-          }}
-          onBlur={() => editor.send({ type: "FLUSH" })}
-          className="min-h-7 min-w-0 flex-1 resize-none rounded-none border-0 bg-transparent px-0.5 py-0 text-lg leading-7 font-semibold tracking-[-0.015em] shadow-none focus-visible:ring-0 md:text-lg dark:bg-transparent"
+          onChange={(value) => editor.send({ type: "EDIT", field: "title", value })}
+          onCommit={() => editor.send({ type: "FLUSH" })}
         />
-        <PriorityMenu workspace={workspace} task={task}>
-          <Button variant="ghost" size="icon-sm" aria-label={`Priority: ${priorityLabel}`}>
-            {/* The "none" glyph reads as a "…" button up here, so an unset priority is a flag. */}
-            {task.priority === "none" ? (
-              <FlagIcon className="text-muted-foreground" />
-            ) : (
-              <PriorityIcon priority={task.priority} className="size-4" />
-            )}
-          </Button>
-        </PriorityMenu>
       </div>
 
       <MarkdownEditor
@@ -223,6 +198,22 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
             {due ? due.label : "Due"}
           </Button>
         </DuePicker>
+
+        <PriorityMenu workspace={workspace} task={task}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn("font-normal text-muted-foreground", priority && "text-foreground")}
+            aria-label={`Priority: ${priority?.label ?? "none"}`}
+          >
+            {priority ? (
+              <PriorityIcon priority={priority.value} />
+            ) : (
+              <FlagIcon data-icon="inline-start" />
+            )}
+            {priority?.label ?? "Priority"}
+          </Button>
+        </PriorityMenu>
 
         <Popover>
           <PopoverTrigger asChild>
@@ -370,5 +361,81 @@ function SaveState({
     <span aria-live="polite" className="px-1 font-mono text-[11px] text-muted-foreground">
       {label}
     </span>
+  );
+}
+
+const TITLE_TEXT =
+  "min-h-7 min-w-0 flex-1 px-0.5 text-lg leading-7 font-semibold tracking-[-0.015em] md:text-lg";
+
+/** Character offset of the point in `element`'s text, if the point is on it. */
+const offsetAt = (element: HTMLElement, x: number, y: number) => {
+  const position = document.caretPositionFromPoint?.(x, y);
+  return position && element.contains(position.offsetNode) ? position.offset : undefined;
+};
+
+/**
+ * The task title: one truncated line while reading, every line while editing. Clicking it starts
+ * editing with the caret where it was clicked.
+ */
+function TitleField({
+  value,
+  onChange,
+  onCommit,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onCommit: () => void;
+}) {
+  const [caret, setCaret] = useState<number | null>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
+  const editing = caret !== null;
+
+  useLayoutEffect(() => {
+    if (caret === null) return;
+    input.current?.focus();
+    input.current?.setSelectionRange(caret, caret);
+  }, [editing]);
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        aria-label={`Title: ${value}`}
+        title={value}
+        className={cn(TITLE_TEXT, "cursor-text truncate text-left outline-none")}
+        onMouseDown={(event) => {
+          event.preventDefault();
+          setCaret(offsetAt(event.currentTarget, event.clientX, event.clientY) ?? value.length);
+        }}
+        onFocus={() => setCaret(value.length)}
+      >
+        {value}
+      </button>
+    );
+  }
+
+  return (
+    <Textarea
+      ref={input}
+      aria-label="Title"
+      value={value}
+      rows={1}
+      onChange={(event) => onChange(event.target.value.replace(/\n/g, " "))}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
+        blurOnEscape(event);
+      }}
+      onBlur={() => {
+        onCommit();
+        setCaret(null);
+      }}
+      className={cn(
+        TITLE_TEXT,
+        "resize-none rounded-none border-0 bg-transparent py-0 shadow-none focus-visible:ring-0 dark:bg-transparent",
+      )}
+    />
   );
 }

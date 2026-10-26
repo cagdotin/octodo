@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Command as CommandPrimitive } from "cmdk"
 import { cn } from "cn"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 import {
   Dialog,
@@ -88,14 +89,13 @@ function CommandList({
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.List>) {
   return (
-    <CommandPrimitive.List
-      data-slot="command-list"
-      className={cn(
-        "no-scrollbar max-h-[min(24rem,60svh)] scroll-py-1 overflow-x-hidden overflow-y-auto outline-none",
-        className
-      )}
-      {...props}
-    />
+    <ScrollArea className="max-h-[min(24rem,60svh)]">
+      <CommandPrimitive.List
+        data-slot="command-list"
+        className={cn("outline-none", className)}
+        {...props}
+      />
+    </ScrollArea>
   )
 }
 

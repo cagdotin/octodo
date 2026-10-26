@@ -173,7 +173,7 @@ function Snippet({
           <CopyButton text={copy} label={title} />
         </ItemActions>
       </div>
-      <pre className="overflow-x-auto rounded-lg border bg-muted/50 px-3 py-2 font-mono text-xs leading-relaxed wrap-anywhere whitespace-pre-wrap text-muted-foreground">
+      <pre className="rounded-lg border bg-muted/50 px-3 py-2 font-mono text-xs leading-relaxed wrap-anywhere whitespace-pre-wrap text-muted-foreground">
         {shown}
       </pre>
     </Item>

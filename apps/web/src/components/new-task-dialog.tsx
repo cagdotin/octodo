@@ -41,6 +41,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { defaultStatus } from "@octodo/core/layout";
 import { useCreateTask } from "@/lib/api";
 import { withoutRanges, type QuickAddToken } from "@/lib/quick-add";
@@ -212,15 +213,17 @@ function NewTaskForm({
           className="text-lg font-medium"
           onSubmit={submit}
         />
-        <textarea
-          aria-label="Notes"
-          value={notes}
-          rows={1}
-          placeholder="Notes"
-          className="field-sizing-content max-h-40 min-h-6 resize-none bg-transparent text-base outline-none placeholder:text-muted-foreground/70 md:text-sm"
-          onChange={(event) => setNotes(event.target.value)}
-          onKeyDown={(event) => onEnter(event, false)}
-        />
+        <ScrollArea className="max-h-40">
+          <textarea
+            aria-label="Notes"
+            value={notes}
+            rows={1}
+            placeholder="Notes"
+            className="field-sizing-content min-h-6 resize-none bg-transparent text-base outline-none placeholder:text-muted-foreground/70 md:text-sm"
+            onChange={(event) => setNotes(event.target.value)}
+            onKeyDown={(event) => onEnter(event, false)}
+          />
+        </ScrollArea>
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
@@ -301,11 +304,7 @@ function NewTaskForm({
               <span className="max-w-40 truncate">{listLabel(snapshot.lists, targetList)}</span>
             </Chip>
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            className="max-h-72 w-52 overflow-y-auto"
-            onCloseAutoFocus={refocus}
-          >
+          <DropdownMenuContent align="start" className="max-h-72 w-52" onCloseAutoFocus={refocus}>
             <DropdownMenuGroup>
               <DropdownMenuLabel>List</DropdownMenuLabel>
               <DropdownMenuRadioGroup
@@ -341,11 +340,7 @@ function NewTaskForm({
               )}
             </Chip>
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            className="max-h-72 w-48 overflow-y-auto"
-            onCloseAutoFocus={refocus}
-          >
+          <DropdownMenuContent align="start" className="max-h-72 w-48" onCloseAutoFocus={refocus}>
             <DropdownMenuGroup>
               <DropdownMenuLabel>Tags</DropdownMenuLabel>
               {knownTags.map((tag) => (

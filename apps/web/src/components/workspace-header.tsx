@@ -236,7 +236,7 @@ function FilterMenu({
               Tag
               <FacetCount count={filter.tags.length} />
             </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="max-h-80 w-48 overflow-y-auto">
+            <DropdownMenuSubContent className="max-h-80 w-48">
               {tags.map((tag) => (
                 <DropdownMenuCheckboxItem
                   key={tag}
@@ -257,7 +257,7 @@ function FilterMenu({
               List
               <FacetCount count={filter.lists.length} />
             </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="max-h-80 w-52 overflow-y-auto">
+            <DropdownMenuSubContent className="max-h-80 w-52">
               {snapshot.lists.map((list) => {
                 return (
                   <DropdownMenuCheckboxItem

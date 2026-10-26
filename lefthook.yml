@@ -10,7 +10,7 @@ pre-commit:
 
     - name: lint-fix staged
       glob: "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}"
-      run: pnpm exec oxlint --fix --deny-warnings {staged_files}
+      run: pnpm exec oxlint --fix --deny-warnings --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
 
     - name: typecheck

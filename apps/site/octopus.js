@@ -1297,15 +1297,22 @@
     // joined near the root by a web.
     const g = (v, a = 1) => `rgba(${v * 255},${v * 255},${v * 255},${a})`;
     const LIGHT = [-0.45, -0.89];
-    // thick and muscular at the root, very fine at the tip
-    const armWidth = (u) => MW * 0.17 * (1 - u) ** 1.5 + 0.7 * S;
+    // thick and muscular at the root, very fine at the tip; streaming shut behind a jet, the
+    // arms stretch thinner past the web, so each still shows apart from its neighbours. The
+    // far arms, across the body, look a little slimmer.
+    let armK = 1;
+    const armWidth = (u) =>
+      (MW * 0.32 * (1 - u) ** 1.8 * (1 - 0.6 * O.shut * clamp((u - 0.1) / 0.2, 0, 1)) + 0.6 * S) *
+      armK;
 
     function drawArm(a, lvl, highlight) {
       const p = a.p;
       sx.lineCap = "round";
-      sx.strokeStyle = g(lvl);
       for (let j = 0; j < N; j++) {
-        sx.lineWidth = armWidth(j / N);
+        // the root is skin like the head's, the arm darkening a little toward the tip
+        const u = j / N;
+        sx.strokeStyle = g(lvl + (0.74 - lvl) * Math.max(0, 1 - u / 0.4));
+        sx.lineWidth = armWidth(u);
         sx.beginPath();
         sx.moveTo(p[j * 2], p[j * 2 + 1]);
         sx.lineTo(p[j * 2 + 2], p[j * 2 + 3]);
@@ -1335,7 +1342,7 @@
           px.arc(
             p[j * 2] + (-dy / l) * side * wd * 0.32,
             p[j * 2 + 1] + (dx / l) * side * wd * 0.32,
-            wd * 0.2,
+            wd * 0.11, // small, so the thicker arms carry no bright spots
             0,
             7,
           );
@@ -1405,8 +1412,8 @@
 
       // the web: a thin, sagging skin between neighbouring arms, out to a fifth of their length
       // or more as they open, scalloped between them
-      const wk = Math.max(2, Math.round(N * (0.1 + 0.2 * clamp(pose.spread, 0, 1))));
-      sx.fillStyle = g(0.4, 0.75);
+      const wk = Math.max(3, Math.round(N * (0.2 + 0.1 * clamp(pose.spread, 0, 1))));
+      sx.fillStyle = g(0.62, 0.95);
       for (let i = 0; i < 7; i++) {
         const a = ARMS[i].p,
           b = ARMS[i + 1].p;
@@ -1422,7 +1429,9 @@
         sx.fill();
       }
 
+      armK = 0.82;
       for (const a of ARMS) if (a.far) drawArm(a, 0.46, 0.62);
+      armK = 1;
 
       for (const a of ARMS) if (!a.far) drawArm(a, 0.6, 0.8);
 
@@ -1435,9 +1444,9 @@
       const ht = O.th - ARCH_HEAD * O.arch,
         [, , hn0, hn1] = frame0(ht);
       const HL = ML * 0.42 * (1 - 0.06 * sq),
-        Hw = MW * 0.36;
-      const Lm = ML * 1.25 * (1 + 0.08 * sq),
-        Wm = MW * 0.47 * (1 - 0.2 * sq);
+        Hw = MW * 0.33;
+      const Lm = ML * 1.1 * (1 + 0.08 * sq),
+        Wm = MW * 0.41 * (1 - 0.2 * sq);
       const lean = O.arch + pose.tilt;
       const neckW = Hw * 0.86;
       // the axis, crown to tip: x, y, normal x, normal y, half width

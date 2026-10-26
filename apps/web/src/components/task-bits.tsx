@@ -6,7 +6,7 @@ import type {
   Task,
   WorkspaceSnapshot,
 } from "@octodo/core";
-import { FolderIcon } from "lucide-react";
+import { FolderIcon, ListChecksIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useMoveTask, useUpdateTask } from "@/lib/api";
+import { checklistProgress } from "@/lib/checklist";
 import { cn } from "@/lib/utils";
 import { createdLabel, dueInfo, listLabel, PRIORITIES, PRIORITY_TEXT } from "@/lib/tasks";
 
@@ -199,6 +200,25 @@ export function ListChip({ lists, list }: { lists: ReadonlyArray<List>; list: st
 }
 
 /** The row's date: the due date when set (red when overdue), otherwise when it was created. */
+/** "2/5" for a body with a checklist, nothing otherwise. */
+export function ChecklistCount({ body, className }: { body: string; className?: string }) {
+  const progress = checklistProgress(body);
+  if (progress === null) return null;
+  const { done, total } = progress;
+  return (
+    <span
+      title={`${done} of ${total} checklist items done`}
+      className={cn(
+        "flex shrink-0 items-center gap-1 font-mono text-xs text-muted-foreground",
+        className,
+      )}
+    >
+      <ListChecksIcon className="size-3.5" />
+      {done}/{total}
+    </span>
+  );
+}
+
 export function TaskDate({ task, className }: { task: Task; className?: string }) {
   const due = dueInfo(task.due);
   if (due) {

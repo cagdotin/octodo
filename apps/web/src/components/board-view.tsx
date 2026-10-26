@@ -12,6 +12,7 @@ import {
   type DropData,
 } from "@/components/drag-and-drop";
 import {
+  ChecklistCount,
   ListChip,
   PriorityMenu,
   StatusIcon,
@@ -224,6 +225,7 @@ function TaskCard({
         <PriorityMenu workspace={workspace} task={task} className="-ml-1" />
         <TagChips tags={task.tags} />
         <ListChip lists={snapshot.lists} list={task.list} />
+        <ChecklistCount body={task.body} className="ml-auto" />
       </div>
     </div>
   );

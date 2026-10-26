@@ -12,7 +12,14 @@ import {
   type DragData,
   type DropData,
 } from "@/components/drag-and-drop";
-import { ListChip, PriorityMenu, StatusMenu, TagChips, TaskDate } from "@/components/task-bits";
+import {
+  ChecklistCount,
+  ListChip,
+  PriorityMenu,
+  StatusMenu,
+  TagChips,
+  TaskDate,
+} from "@/components/task-bits";
 import { TaskComposer } from "@/components/task-composer";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -273,6 +280,7 @@ function TaskRow({
         )}
         {task.title}
       </Link>
+      <ChecklistCount body={task.body} />
       {/* Chips make way for the title as the list narrows (details panel open, small windows). */}
       <span className="mr-1 hidden min-w-0 shrink-0 items-center gap-2 @lg:flex">
         <TagChips tags={task.tags} />

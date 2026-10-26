@@ -147,6 +147,7 @@
       fear: 0, // 0..1, builds while the pointer stays close or follows, scales the escape
       fleeA: 0, // smoothed escape heading
       fleeMin: 0, // a fright lasts at least this long
+      grip: 0, // 0..1, eases in while fleeing: how firmly the arms are held to their reach
       rest: 3,
       wx: 0,
       wy: 0,
@@ -170,6 +171,7 @@
         p: new Float32Array((N + 1) * 2), // node positions
         q: new Float32Array((N + 1) * 2), // previous positions (verlet)
         t: new Float32Array((N + 1) * 2), // where the muscles want them
+        tp: new Float32Array((N + 1) * 2), // ...and where they wanted them a step ago
       };
     });
     // slow, smooth, per-arm noise in [-1, 1]
@@ -220,13 +222,20 @@
     // Arms are verlet chains: water drag (far stronger across an arm than along it), a muscle
     // pull toward the pose that is strong at the root and weak at the tip, and fixed segment
     // lengths solved root-outward. Tips lag, trail and drag through the water on their own.
-    // Drag grows with the square of speed: past cruising pace the water holds the arms
-    // harder, so a fast escape streams them behind instead of whipping them about.
+    // Past cruising pace the arms would flutter, or be held by still water and fling out on
+    // every turn, so there the muscles damp them toward the pose's own motion, harder the
+    // faster it goes. While fleeing, no point strays further from the body's axis than REACH
+    // mantle lengths, however long the chase: no stroke opens wider than the first ones.
+    const REACH = 2.25;
     function stepArms(h, t) {
       const fast = Math.max(1, Math.hypot(O.vx, O.vy) / (80 * S)) ** 2;
+      const hold = Math.min(1, h * 20 * (fast - 1));
+      const [f0, f1, n0, n1] = frame0();
+      const reach = ML * (REACH + 4 * (1 - O.grip));
       for (const a of ARMS) {
+        a.tp.set(a.t);
         armTarget(a, t);
-        const { p, q, t: T } = a;
+        const { p, q, t: T, tp } = a;
         const seg = (a.len * AL) / N;
         p[0] = q[0] = T[0];
         p[1] = q[1] = T[1];
@@ -242,23 +251,38 @@
           ty /= tl;
           const vt = vx * tx + vy * ty;
           const dT = Math.max(0, 1 - h * 1.6),
-            dN = Math.max(0, 1 - h * 7 * fast);
+            dN = Math.max(0, 1 - h * 7);
           vx = tx * vt * dT + (vx - tx * vt) * dN;
           vy = ty * vt * dT + (vy - ty * vt) * dN;
+          vx -= (vx - (T[o] - tp[o])) * hold;
+          vy -= (vy - (T[o + 1] - tp[o + 1])) * hold;
           const K = 520 * (1 - u) * (1 - u) + 11;
           q[o] = p[o];
           q[o + 1] = p[o + 1];
           p[o] += vx + (T[o] - p[o]) * K * h * h;
           p[o + 1] += vy + (T[o + 1] - p[o + 1]) * K * h * h;
         }
-        // fixed lengths, and no joint bends sharper than a real arm can
+        // fixed lengths, no joint bends sharper than a real arm can, and within reach of the
+        // axis: a segment that would cross it swings back about its joint, keeping its length
         let pa = Math.atan2(p[3] - p[1], p[2] - p[0]);
         for (let j = 1; j <= N; j++) {
           const o = j * 2;
           let ang = Math.atan2(p[o + 1] - p[o - 1], p[o] - p[o - 2]);
           if (j > 1) ang = pa + clamp(wrapA(ang - pa), -0.42, 0.42);
-          p[o] = p[o - 2] + Math.cos(ang) * seg;
-          p[o + 1] = p[o - 1] + Math.sin(ang) * seg;
+          let dx = Math.cos(ang) * seg,
+            dy = Math.sin(ang) * seg;
+          const lp = (p[o - 2] - O.x) * n0 + (p[o - 1] - O.y) * n1;
+          let dl = dx * n0 + dy * n1;
+          if (Math.abs(lp + dl) > reach) {
+            const db = dx * f0 + dy * f1;
+            dl = Math.sign(lp + dl) * reach - lp;
+            const b = (db < 0 ? -1 : 1) * Math.sqrt(Math.max(0, seg * seg - dl * dl));
+            dx = f0 * b + n0 * dl;
+            dy = f1 * b + n1 * dl;
+            ang = Math.atan2(dy, dx);
+          }
+          p[o] = p[o - 2] + dx;
+          p[o + 1] = p[o - 1] + dy;
           pa = ang;
         }
       }
@@ -337,6 +361,7 @@
     function update(dt, t) {
       O.wpAge += dt;
       pressure(dt);
+      O.grip = approach(O.grip, O.hurry ? 1 : 0, 6, dt);
       if (!O.hurry && (Math.hypot(O.wx - O.x, O.wy - O.y) < 80 * S || O.wpAge > 16)) pickWaypoint();
       let want = O.hurry ? O.fleeA : desiredHeading(dt);
       let turnRate;
@@ -504,7 +529,7 @@
     // --- fleeing the pointer -------------------------------------------------------------------
     // Pressure builds while the pointer stays close, faster when it closes in or follows, and
     // fades once it leaves. Close enough and the octopus flees straight away from it, with its
-    // ordinary jet cycle pushing harder and gliding further the more pressure there is.
+    // ordinary jet cycle quicker, pushing harder and gliding further the more pressure there is.
     const THRUST = 1,
       GLIDE = 0.4;
     let ptr = null,
@@ -563,8 +588,9 @@
       if (!O.hurry) return;
       O.fleeMin -= dt;
       if (ptr) O.fleeA += wrapA(fleeHeading(ptr.x, ptr.y) - O.fleeA) * Math.min(1, dt * 5);
-      // the stroke itself never changes, only how hard it pushes and how far it glides
-      O.period = 1.05;
+      // fear quickens the stroke and makes it push harder and glide further; it never opens
+      // the arms wider (see REACH)
+      O.period = 1.05 - 0.3 * O.fear;
       O.thrust = 1.7 + THRUST * O.fear;
       if (d > R * 1.15 && O.fear < 0.25 && O.fleeMin <= 0) {
         // safe: finish this stroke and settle down

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Octopus water</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&display=swap"
+    />
+    <!--
+      The water for playground.html: the octopus alone, in an iframe that fills the playground's
+      main area, so its viewport is exactly that area. The pointer, clicks and scrolling reach it
+      as on the landing page. The playground drives it through this window's `sea` and sets the
+      canvas palette and the theme; on its own it shows the octopus as this browser last tuned it.
+    -->
+    <style>
+      :root {
+        --bg: #171716;
+        color-scheme: dark;
+      }
+      [data-theme="light"] {
+        --bg: #f3f1ed;
+        color-scheme: light;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: var(--bg);
+        transition: background 0.3s;
+      }
+      #sea {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="sea" aria-hidden="true"></canvas>
+    <script>
+      {
+        const get = (k) => {
+          try {
+            return localStorage.getItem(k);
+          } catch {
+            return null;
+          }
+        };
+        document.documentElement.dataset.theme =
+          get("pond-theme") ||
+          (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+        document.getElementById("sea").dataset.palette = get("pond-palette") || "abyss";
+      }
+    </script>
+    <script src="/octopus.js"></script>
+    <script>
+      // resolves with `sea` once the octopus is swimming
+      window.ready = (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => {
+        try {
+          sea.set(JSON.parse(localStorage.getItem("pond-tune") || "{}") || {});
+        } catch {}
+        sea.start();
+        return sea;
+      });
+    </script>
+  </body>
+</html>

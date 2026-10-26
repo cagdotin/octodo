@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Octopus playground</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&display=swap"
+    />
+    <!--
+      The landing page's octopus with its tuning panel always open: the panel is a sidebar on the
+      right, the rest of the window is the water (playground-stage.html in an iframe, so the
+      octopus's viewport is exactly that area and the pointer reaches it natively). Settings are
+      the landing page's own (localStorage pond-tune / pond-palette / pond-theme, see tune.js).
+    -->
+    <style>
+      :root {
+        --bg: #171716;
+        --fg: #f0ece5;
+        --muted: color-mix(in srgb, var(--fg) 60%, transparent);
+        --faint: color-mix(in srgb, var(--fg) 36%, transparent);
+        --line: color-mix(in srgb, var(--fg) 9%, transparent);
+        --surface: #1b1b1a;
+        --sheet: color-mix(in srgb, var(--fg) 4%, transparent);
+        --accent: #e5813f;
+        --mono: "Geist Mono", ui-monospace, Menlo, monospace;
+        color-scheme: dark;
+      }
+      [data-theme="light"] {
+        --bg: #f3f1ed;
+        --fg: #22211f;
+        --surface: #f8f7f4;
+        --sheet: color-mix(in srgb, var(--fg) 3%, transparent);
+        --accent: #c75f27;
+        color-scheme: light;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--fg);
+        font: 11.5px/1.6 var(--mono);
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: inherit;
+        text-decoration: underline;
+        text-decoration-color: var(--faint);
+        text-underline-offset: 4px;
+      }
+      a:hover {
+        text-decoration-color: var(--fg);
+      }
+
+      .app {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        height: 100vh;
+        height: 100dvh;
+      }
+      .water {
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+      }
+      .water iframe {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border: 0;
+      }
+
+      /* the sidebar: the landing page's tuning panel, always open */
+      .side {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        background: var(--surface);
+        border-left: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .side-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line);
+        color: var(--faint);
+      }
+      .side-head b {
+        font-weight: 500;
+        color: var(--fg);
+      }
+      .side-body {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        overscroll-behavior: contain;
+        display: grid;
+        align-content: start;
+        gap: 9px;
+        padding: 12px 14px 16px;
+      }
+      .side label {
+        display: grid;
+        grid-template-columns: 96px minmax(0, 1fr) 44px;
+        align-items: center;
+        gap: 8px;
+      }
+      .side input[type="range"] {
+        width: 100%;
+        margin: 0;
+        accent-color: var(--accent);
+      }
+      .side output {
+        text-align: right;
+        color: var(--fg);
+        font-variant-numeric: tabular-nums;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 96px minmax(0, 1fr);
+        align-items: start;
+        gap: 8px;
+      }
+      .presets {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 5px;
+        padding-bottom: 4px;
+      }
+      .side h3 {
+        margin: 6px 0 -2px;
+        padding-top: 8px;
+        border-top: 1px solid var(--line);
+        color: var(--faint);
+        font: inherit;
+        font-size: 10.5px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .side h3:first-child {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: 0;
+      }
+      /* the luminous style's knobs, quieter while another style is on */
+      .side[data-style]:not([data-style="luminous"]) .lum {
+        opacity: 0.4;
+      }
+      .seg {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .side button {
+        font: inherit;
+        line-height: 1.6;
+        padding: 0 7px;
+        background: transparent;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .side button:hover {
+        color: var(--fg);
+      }
+      .side button[aria-pressed="true"] {
+        background: var(--sheet);
+        border-color: color-mix(in srgb, var(--fg) 22%, transparent);
+        color: var(--fg);
+      }
+      .side button:focus-visible {
+        outline: 1px solid var(--accent);
+        outline-offset: 1px;
+      }
+      .foot {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: var(--faint);
+      }
+
+      /* the live readout */
+      .readout {
+        display: grid;
+        grid-template-columns: 96px minmax(0, 1fr);
+        gap: 0 8px;
+        margin: 0;
+        font-variant-numeric: tabular-nums;
+      }
+      .readout dt {
+        color: var(--faint);
+      }
+      .readout dd {
+        margin: 0;
+        color: var(--fg);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .readout .flee {
+        color: var(--accent);
+      }
+      .phase {
+        position: relative;
+        height: 4px;
+        margin-top: 3px;
+        background: var(--line);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .phase i,
+      .phase b {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+      }
+      .phase i {
+        left: 0;
+        background: color-mix(in srgb, var(--accent) 35%, transparent);
+      }
+      .phase b {
+        width: 2px;
+        background: var(--fg);
+      }
+      #toggle {
+        display: none;
+      }
+
+      /* phones: the sidebar becomes a bottom sheet that folds to its header, and the water
+         shrinks to the space above it (so the octopus never swims under it) */
+      @media (max-width: 720px) {
+        .app {
+          grid-template-columns: minmax(0, 1fr);
+          grid-template-rows: minmax(0, 1fr) auto;
+        }
+        .side {
+          max-height: 52dvh;
+          border-left: 0;
+          border-top: 1px solid var(--line);
+        }
+        .side.folded .side-body {
+          display: none;
+        }
+        .side.folded .side-head {
+          border-bottom: 0;
+        }
+        #toggle {
+          display: inline-block;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="water">
+        <iframe id="stage" src="/playground-stage.html" title="The octopus's water"></iframe>
+      </div>
+
+      <aside class="side" id="side" aria-label="Tune the octopus">
+        <div class="side-head">
+          <span><b>octopus playground</b></span>
+          <span class="seg">
+            <button id="theme" aria-label="Switch theme">light</button>
+            <button id="toggle" aria-expanded="true" aria-controls="sideBody">hide</button>
+          </span>
+        </div>
+        <div class="side-body" id="sideBody">
+          <h3>watch</h3>
+          <div class="row">
+            <span>clock</span>
+            <span class="seg"
+              ><button id="play">pause</button><button id="step" disabled>step</button></span
+            >
+          </div>
+          <div class="row">
+            <span>speed</span>
+            <span class="seg" id="speeds"
+              ><button data-speed="0.25">×0.25</button><button data-speed="0.5">×0.5</button
+              ><button data-speed="1">×1</button><button data-speed="2">×2</button></span
+            >
+          </div>
+          <div class="row">
+            <span>poke</span>
+            <span class="seg"
+              ><button id="frighten">frighten</button><button id="respawn">re-seed</button
+              ><button id="fresh">new octopus</button></span
+            >
+          </div>
+          <dl class="readout" aria-live="off">
+            <dt>mode</dt>
+            <dd id="rMode">–</dd>
+            <dt>speed</dt>
+            <dd id="rSpeed">–</dd>
+            <dt>fear</dt>
+            <dd id="rFear">–</dd>
+            <dt>heading</dt>
+            <dd id="rHeading">–</dd>
+            <dt>stroke</dt>
+            <dd>
+              <span id="rStroke">–</span>
+              <div class="phase" title="stroke phase; the shaded part is the jet and the close">
+                <i id="rJet"></i><b id="rPhase"></b>
+              </div>
+            </dd>
+            <dt>clock</dt>
+            <dd id="rClock">–</dd>
+          </dl>
+
+          <h3>presets</h3>
+          <div class="row presets">
+            <span class="seg"
+              ><button data-preset="jellyfish">jellyfish</button
+              ><button data-preset="biolume">bioluminescent</button
+              ><button data-preset="terminal">terminal</button
+              ><button data-preset="amber">amber crt</button><button data-preset="ice">ice</button
+              ><button data-preset="minimal">minimal</button
+              ><button data-preset="ember-tiles">ember tiles</button
+              ><button data-preset="ink-tiles">ink tiles</button></span
+            >
+          </div>
+
+          <h3>look</h3>
+          <div class="row">
+            <span>style</span>
+            <span class="seg"
+              ><button data-glyphs="luminous">luminous</button
+              ><button data-glyphs="ascii">tiles + ascii</button
+              ><button data-glyphs="subtle">glyphs</button
+              ><button data-glyphs="none">plain</button></span
+            >
+          </div>
+          <div class="row lum">
+            <span>ramp</span>
+            <span class="seg"
+              ><button data-ramp="jelly">' : o t % S 8 @</button
+              ><button data-ramp="classic">. : - + * # @</button
+              ><button data-ramp="binary">0 1</button></span
+            >
+          </div>
+          <label
+            >cell size
+            <input type="range" data-k="density" min="0.6" max="2" step="0.05" /><output></output
+          ></label>
+          <label class="lum"
+            >lit cells
+            <input type="range" data-k="lit" min="0" max="1" step="0.05" /><output></output
+          ></label>
+          <label class="lum"
+            >edge dither
+            <input type="range" data-k="dither" min="0" max="1" step="0.05" /><output></output
+          ></label>
+          <label class="lum"
+            >glow <input type="range" data-k="glow" min="0" max="1" step="0.05" /><output></output
+          ></label>
+          <label class="lum"
+            >grid <input type="range" data-k="grid" min="0" max="1" step="0.05" /><output></output
+          ></label>
+
+          <h3>colour</h3>
+          <div class="row">
+            <span>palette</span>
+            <span class="seg"
+              ><button data-pal="abyss">abyss</button><button data-pal="biolume">biolume</button
+              ><button data-pal="phosphor">phosphor</button><button data-pal="amber">amber</button
+              ><button data-pal="ice">ice</button><button data-pal="ember">ember</button
+              ><button data-pal="ink">ink</button><button data-pal="paper">paper ink</button
+              ><button data-pal="onebit">one-bit</button></span
+            >
+          </div>
+          <label class="lum"
+            >opacity
+            <input type="range" data-k="alpha" min="0.2" max="1" step="0.05" /><output></output
+          ></label>
+          <label class="lum"
+            >hue shift
+            <input type="range" data-k="hue" min="0" max="1" step="0.05" /><output></output
+          ></label>
+
+          <h3>motion</h3>
+          <label
+            >size
+            <input type="range" data-k="size" min="0.6" max="1.8" step="0.05" /><output></output
+          ></label>
+          <label
+            >cruise speed
+            <input type="range" data-k="speed" min="0.4" max="2.5" step="0.05" /><output></output
+          ></label>
+          <label
+            >fright
+            <input type="range" data-k="react" min="0" max="2" step="0.05" /><output></output
+          ></label>
+          <label
+            >scroll turn
+            <input type="range" data-k="scroll" min="0" max="3" step="0.1" /><output></output
+          ></label>
+          <div class="foot">
+            <span>shared with the landing page</span>
+            <button data-reset>reset</button>
+          </div>
+          <div class="foot">
+            <span><a href="/lab.html">lab</a> · <a href="/brand.html">brand</a></span>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <script src="/tune.js"></script>
+    <script src="/playground.js"></script>
+  </body>
+</html>

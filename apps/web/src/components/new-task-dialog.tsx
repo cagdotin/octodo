@@ -31,11 +31,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
+import { defaultStatus } from "@octodo/core/layout";
 import { useCreateTask } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
   allTags,
-  defaultStatus,
   dueInfo,
   isSmartView,
   listLabel,

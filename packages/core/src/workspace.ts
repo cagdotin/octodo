@@ -15,7 +15,6 @@ import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
 import {
   DEFAULT_STATUSES,
   InvalidRequest,
-  Priority,
   StorageError,
   TaskNotFound,
   WorkspaceConfig,
@@ -52,7 +51,7 @@ import {
   statusFolder,
   taskFileName,
 } from "./layout.ts";
-import { parseTaskFile, writeTaskFile } from "./markdown.ts";
+import { editTaskFile, newTaskFile, patchTaskFile, readTaskFile } from "./task-file.ts";
 
 /** One workspace on disk: a folder with a `.octodo/` directory. The files are the source of truth. */
 export interface Workspace {
@@ -86,29 +85,14 @@ export interface Workspace {
   readonly changes: Stream.Stream<void>;
 }
 
-const MANAGED_KEYS = new Set([
-  "id",
-  "title",
-  "priority",
-  "tags",
-  "due",
-  "created",
-  "updated",
-  "order",
-]);
-
 const storage =
   (message: string) =>
   <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, StorageError, R> =>
     Effect.mapError(effect, (cause) => new StorageError({ message, cause }));
 
 const decodeConfig = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceConfig));
-const decodePriority = Schema.decodeUnknownOption(Priority);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
-
-const stringOrNull = (value: unknown): string | null =>
-  typeof value === "string" && value.length > 0 ? value : null;
 
 const compareTasks =
   (key: string) =>
@@ -297,50 +281,32 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     const seenIds = new Set<string>();
     for (const { file, status, list } of files) {
       const text = yield* fs.readFileString(file);
-      let parsed;
-      try {
-        parsed = parseTaskFile(text);
-      } catch (error) {
-        diagnostics.push({ path: rel(file), message: String(error) });
+      const read = readTaskFile(text, { status, list, path: rel(file) });
+      if (read._tag === "Invalid") {
+        diagnostics.push({ path: rel(file), message: read.message });
         continue;
       }
-      const { data, body } = parsed;
-      const taskId = stringOrNull(data["id"]);
-      if (taskId === null) {
+      if (read._tag === "MissingId") {
         missingId.push({ file, text });
         continue;
       }
-      if (seenIds.has(taskId)) {
+      const { task } = read;
+      if (seenIds.has(task.id)) {
         diagnostics.push({
           path: rel(file),
-          message: `Duplicate task id ${taskId}; this copy is ignored`,
+          message: `Duplicate task id ${task.id}; this copy is ignored`,
         });
         continue;
       }
-      seenIds.add(taskId);
-      const tags = data["tags"];
-      tasks.push({
-        id: taskId,
-        title: stringOrNull(data["title"]) ?? humanize(path.basename(file, ".md")),
-        status,
-        list,
-        priority: Option.getOrElse(decodePriority(data["priority"]), () => "none" as const),
-        tags: Array.isArray(tags) ? tags.map(String) : typeof tags === "string" ? [tags] : [],
-        due: stringOrNull(data["due"]),
-        created: stringOrNull(data["created"]),
-        updated: stringOrNull(data["updated"]),
-        order: stringOrNull(data["order"]) ?? "",
-        body,
-        path: rel(file),
-        extra: Object.fromEntries(Object.entries(data).filter(([key]) => !MANAGED_KEYS.has(key))),
-      });
+      seenIds.add(task.id);
+      tasks.push(task);
     }
 
     // Files made by hand or by another tool get an id the first time the app sees them.
     let next = Math.max(0, ...tasks.map((task) => idNumber(task.id, config.key) ?? 0)) + 1;
     for (const { file, text } of missingId) {
       const assigned = `${config.key}-${next++}`;
-      yield* writeAtomic(file, writeTaskFile(text, { id: assigned }));
+      yield* writeAtomic(file, patchTaskFile(text, { id: assigned }));
       yield* Effect.logInfo(`Assigned ${assigned} to ${rel(file)}`);
     }
     if (missingId.length > 0) return yield* scanOnce;
@@ -417,7 +383,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       for (const [index, task] of column.entries()) {
         const order = keys[index]!;
         const file = path.join(root, task.path);
-        yield* writeAtomic(file, writeTaskFile(yield* fs.readFileString(file), { order }));
+        yield* writeAtomic(file, patchTaskFile(yield* fs.readFileString(file), { order }));
         ordered.push({ ...task, order });
       }
       return ordered;
@@ -471,21 +437,11 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         const column = yield* storage("Could not order tasks")(
           ensureOrdered(tasksIn(snapshot, status, list)),
         );
-        const now = yield* nowIso;
-        const content = writeTaskFile(
-          null,
-          {
-            id: taskId,
-            title: input.title,
-            priority: input.priority ?? "none",
-            tags: input.tags ?? [],
-            due: input.due ?? undefined,
-            created: now,
-            updated: now,
-            order: orderBetween(column, {}),
-          },
-          input.body ?? "",
-        );
+        const content = newTaskFile(input, {
+          id: taskId,
+          order: orderBetween(column, {}),
+          now: yield* nowIso,
+        });
         const dir = statusDir(placed, status, list);
         yield* Effect.gen(function* () {
           yield* fs.makeDirectory(dir, { recursive: true });
@@ -503,12 +459,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         const file = path.join(root, task.path);
         yield* Effect.gen(function* () {
           const text = yield* fs.readFileString(file);
-          const changes: Record<string, unknown> = { updated: yield* nowIso };
-          if (input.title !== undefined) changes["title"] = input.title;
-          if (input.priority !== undefined) changes["priority"] = input.priority;
-          if (input.tags !== undefined) changes["tags"] = input.tags;
-          if (input.due !== undefined) changes["due"] = input.due ?? undefined;
-          yield* writeAtomic(file, writeTaskFile(text, changes, input.body));
+          yield* writeAtomic(file, editTaskFile(text, input, yield* nowIso));
         }).pipe(storage("Could not write the task"));
         yield* invalidate;
         return yield* reread(taskId).pipe(Effect.orDie);
@@ -536,7 +487,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
             file = target;
           }
           const text = yield* fs.readFileString(file);
-          yield* writeAtomic(file, writeTaskFile(text, { order, updated: yield* nowIso }));
+          yield* writeAtomic(file, patchTaskFile(text, { order, updated: yield* nowIso }));
         }).pipe(storage("Could not move the task"));
         yield* invalidate;
         return yield* reread(taskId).pipe(Effect.orDie);

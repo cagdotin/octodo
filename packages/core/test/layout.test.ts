@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { List, StatusDefinition } from "../src/domain.ts";
 import {
+  classifyFolder,
+  compareFolders,
   defaultStatus,
+  deriveKey,
   isClosedCategory,
+  listFolder,
   listMoveError,
   movedListId,
   sortStatuses,
+  statusFolder,
+  taskFileName,
 } from "../src/layout.ts";
 
 const lists = (...ids: Array<string>): Array<List> =>
@@ -96,5 +102,55 @@ describe("statuses", () => {
       ),
     ).toEqual(["completed", "canceled", "archived"]);
     expect(isClosedCategory(undefined)).toBe(false);
+  });
+});
+
+describe("layout", () => {
+  it("classifies folders by prefix and reads their number", () => {
+    expect(classifyFolder("s02-in-progress")).toEqual({
+      type: "status",
+      slug: "in-progress",
+      position: 2,
+    });
+    expect(classifyFolder("l00-groceries")).toEqual({
+      type: "list",
+      slug: "groceries",
+      position: 0,
+    });
+    expect(classifyFolder("l-groceries")).toEqual({
+      type: "list",
+      slug: "groceries",
+      position: null,
+    });
+    expect(classifyFolder("p-thing")).toEqual({ type: "unknown" });
+    expect(classifyFolder("notes")).toEqual({ type: "unknown" });
+    expect(classifyFolder(".git")).toEqual({ type: "ignored" });
+  });
+
+  it("sorts numbered folders first, then by slug", () => {
+    const folders = [
+      { slug: "b", position: null },
+      { slug: "c", position: 1 },
+      { slug: "a", position: null },
+      { slug: "d", position: 0 },
+    ];
+    expect(folders.toSorted(compareFolders).map((folder) => folder.slug)).toEqual([
+      "d",
+      "c",
+      "a",
+      "b",
+    ]);
+    expect(listFolder(3, "garden")).toBe("l03-garden");
+    expect(statusFolder(12, "done")).toBe("s12-done");
+  });
+
+  it("derives Linear-style keys", () => {
+    expect(deriveKey("house-move")).toBe("HM");
+    expect(deriveKey("Garden")).toBe("GAR");
+    expect(deriveKey("My Big Home Project")).toBe("MBHP");
+  });
+
+  it("names task files after id and title", () => {
+    expect(taskFileName("HM-4", "Fix the Import!")).toBe("HM-4-fix-the-import.md");
   });
 });

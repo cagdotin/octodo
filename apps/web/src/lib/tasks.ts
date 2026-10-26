@@ -8,7 +8,7 @@ import type {
   Task,
   WorkspaceSnapshot,
 } from "@octodo/core";
-import { defaultStatus, inSubtree, isClosedCategory, movedListId } from "@octodo/core/layout";
+import { inSubtree, isClosedCategory, movedListId } from "@octodo/core/layout";
 import {
   addDays,
   format,

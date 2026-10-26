@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "tasksmd": {
+      "command": "bin/tasksmd",
+      "args": ["mcp"]
+    }
+  }
+}

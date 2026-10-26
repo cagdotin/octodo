@@ -14,10 +14,18 @@
   window.sea = (() => {
     const cv = document.getElementById("sea");
     const ctx = cv.getContext("2d");
-    // Knobs the page's tuning panel turns. density: cells per 10px (v5 was 1); glyphs: none |
-    // subtle | ascii; size: body scale; speed: cruising thrust; react: how far off the pointer
-    // frightens it; scroll: how far scrolling turns it.
-    const DEFAULTS = { density: 1.2, glyphs: "subtle", size: 1, speed: 1, react: 1, scroll: 1 };
+    // Knobs the page's tuning panel turns. density: cells per 10px (v5 was 1, 1.8 is 5.5px
+    // tiles); glyphs: none | subtle | ascii; size: body scale; speed: cruising thrust (and
+    // shorter rests); react: how far off the pointer frightens it; scroll: how far scrolling
+    // turns it.
+    const DEFAULTS = {
+      density: 1.8,
+      glyphs: "ascii",
+      size: 1.1,
+      speed: 1.9,
+      react: 0.35,
+      scroll: 1.4,
+    };
     const tune = { ...DEFAULTS };
     let CELL = 10; // tile size in px, set by resize() from tune.density
     const SS = 2; // supersampling per cell
@@ -190,6 +198,7 @@
       fleeMin: 0, // a fright lasts at least this long
       grip: 0, // 0..1, eases in while fleeing: how firmly the arms are held to their reach
       rest: 3,
+      burst: 3, // strokes in the next bout, chosen with the rest before it
       wx: 0,
       wy: 0,
       wpAge: 0,
@@ -200,6 +209,7 @@
       sv: 0, // scroll speed, px/s, low-passed
       sk: 0, // 0..1, how much scrolling is going on, eased
       ws: 0, // the turn scrolling is giving it, rad/s
+      arch: 0, // rad, how far the body bends into its turn (see ARCH)
     };
     // the muscle pose the arms are pulled toward, shaped by the stroke cycle
     const pose = { spread: 0.6, curl: 1, relax: 1, wave: 0.6, squeeze: 0, tilt: 0 };
@@ -224,16 +234,23 @@
     const nz = (a, t, k) =>
       0.62 * Math.sin(t * a.w[k] + a.ph[k]) + 0.38 * Math.sin(t * a.w[k] * 2.31 + a.ph[k] * 1.7);
 
-    const frame0 = () => {
-      const f0 = Math.cos(O.th),
-        f1 = Math.sin(O.th);
+    const frame0 = (a = O.th) => {
+      const f0 = Math.cos(a),
+        f1 = Math.sin(a);
       return [f0, f1, -f1, f0];
     };
+    // The body bends into a turn, concave toward it: the mantle leans in by O.arch, the head
+    // and the arms' roots, behind the neck, the other way about it, so the arms (their pose,
+    // the reach and the midline all hang off this frame) trail around the curve.
+    const ARCH = 0.34,
+      ARCH_HEAD = 0.35,
+      ARCH_ARMS = 0.6;
+    const armFrame = () => frame0(O.th - ARCH_ARMS * O.arch);
 
     // The pose an arm's muscles hold, in world space: rooted on the crown behind the head,
     // fanned by `spread`, with a tip curl and a slow wave travelling out along it.
     function armTarget(a, t) {
-      const [f0, f1, n0, n1] = frame0();
+      const [f0, f1, n0, n1] = armFrame();
       const s = a.s,
         sg = Math.sign(s);
       const ra = -0.36 * ML + Math.abs(s) * 0.06 * ML,
@@ -245,7 +262,8 @@
       T[1] = y;
       const spread = clamp(pose.spread + pose.relax * 0.1 * nz(a, t, 0), 0, 1.1);
       // positive s sits on the +n side; rotating by -s fans it out to that side
-      let ang = O.th + Math.PI - s * (0.08 + 0.75 * spread) + pose.relax * 0.16 * nz(a, t, 1);
+      let ang =
+        Math.atan2(f1, f0) + Math.PI - s * (0.08 + 0.75 * spread) + pose.relax * 0.16 * nz(a, t, 1);
       // tip curl: inward (toward the axis, a bell) when swimming, wandering when relaxed
       const c =
         pose.curl * (sg * 0.6 * (1 - pose.relax) + pose.relax * (0.45 * sg + 0.65 * nz(a, t, 2)));
@@ -313,7 +331,7 @@
         Math.min(1, h * 20 * (fast - 1)) * (1 - LET_GO * O.loose * O.grip ** 4),
         Math.min(1, h * 20 * O.sk),
       );
-      const [f0, f1, n0, n1] = frame0();
+      const [f0, f1, n0, n1] = armFrame();
       const reach = ML * (REACH + 4 * (1 - O.grip)),
         soft = reach * 0.1,
         mw = O.shut,
@@ -371,7 +389,12 @@
         for (let j = 1; j <= N; j++) {
           const o = j * 2;
           let ang = Math.atan2(p[o + 1] - p[o - 1], p[o] - p[o - 2]);
-          if (j > 1) ang = pa + clamp(wrapA(ang - pa), -0.42, 0.42);
+          if (j > 1) {
+            // ...though a tip may curl tighter, so the last joints are not all held at the
+            // limit at once and swung round together in a flick
+            const lim = 0.42 + 0.4 * (j / N) ** 3;
+            ang = pa + clamp(wrapA(ang - pa), -lim, lim);
+          }
           let dx = Math.cos(ang) * seg,
             dy = Math.sin(ang) * seg;
           const lp = (p[o - 2] - O.x) * n0 + (p[o - 1] - O.y) * n1;
@@ -478,6 +501,19 @@
       return [O.x - f0 * ML * 0.1 + n0 * MW * 0.42, O.y - f1 * ML * 0.1 + n1 * MW * 0.42];
     }
 
+    // How long it hangs between bouts: mostly a short pause before a quick burst, often a glide,
+    // now and then a long hover. Each kind is exponential above a floor, capped.
+    function restLength() {
+      const u = random(),
+        ex = (floor, mean, cap) => Math.min(cap, floor - mean * Math.log(1 - random()));
+      if (u < 0.5) {
+        O.burst = random() < 0.6 ? 2 : 3;
+        return ex(0.2, 0.45, 1.3);
+      }
+      O.burst = Math.round(rnd(2, 4));
+      return u < 0.86 ? ex(1.2, 0.8, 3.5) : ex(3.5, 1.6, 8);
+    }
+
     function update(dt, t) {
       const x0 = O.x,
         y0 = O.y,
@@ -506,7 +542,7 @@
           // a hurrying octopus keeps stroking until it gets there
           if (!O.hurry && --O.strokes <= 0) {
             O.mode = "drift";
-            O.rest = rnd(3, 7) / Math.max(0.3, tune.speed);
+            O.rest = restLength() / Math.sqrt(Math.max(0.3, tune.speed));
             O.thrust = 1;
             O.period = 1.6;
           }
@@ -567,7 +603,7 @@
         ) {
           O.mode = "swim";
           O.phase = 0;
-          O.strokes = Math.round(rnd(2, 4));
+          O.strokes = O.burst;
           if (!O.hurry) {
             O.period = rnd(1.4, 1.8);
             O.thrust = 1;
@@ -580,12 +616,7 @@
       pose.wave = approach(pose.wave, waveT, 2, dt);
       pose.squeeze = approach(pose.squeeze, squeezeT, 16, dt);
       // the soft mantle sags and sways behind the head when not driven
-      pose.tilt = approach(
-        pose.tilt,
-        pose.relax * 0.16 * Math.sin(t * 0.5) - (O.w + O.ws) * 0.12,
-        2,
-        dt,
-      );
+      pose.tilt = approach(pose.tilt, pose.relax * 0.16 * Math.sin(t * 0.5), 2, dt);
 
       // turning, smoothed so the heading never snaps; while scrolling turns it, it barely steers
       // against that, and afterwards it eases back the ordinary way
@@ -593,6 +624,10 @@
       const diff = wrapA(want - O.th);
       O.w = approach(O.w, clamp(diff * 2, -turnRate, turnRate), 2.6, dt);
       O.th += (O.w + O.ws) * dt;
+      // the bend follows the turn rate (steering, scrolling or fleeing alike), eased in and out;
+      // saturating, so the sharpest turns bend it some 15 degrees
+      const arch0 = O.arch;
+      O.arch = approach(O.arch, ARCH * Math.tanh(0.85 * (O.w + O.ws)), 3, dt);
 
       // the jet pushes the mantle forward; the water slows everything down
       const f0 = Math.cos(O.th),
@@ -627,12 +662,14 @@
       const steps = Math.max(1, Math.ceil(dt / (1 / 100)));
       const x1 = O.x,
         y1 = O.y,
-        th1 = O.th;
+        th1 = O.th,
+        arch1 = O.arch;
       for (let i = 0; i < steps; i++) {
         const k = (i + 1) / steps;
         O.x = x0 + (x1 - x0) * k;
         O.y = y0 + (y1 - y0) * k;
         O.th = th0 + (th1 - th0) * k;
+        O.arch = arch0 + (arch1 - arch0) * k;
         stepArms(dt / steps, t - dt + k * dt);
       }
 
@@ -852,7 +889,6 @@
 
     let eyes = [];
     function render() {
-      const [f0, f1, n0, n1] = frame0();
       sx.clearRect(0, 0, W, H);
       px.clearRect(0, 0, W, H);
 
@@ -877,11 +913,13 @@
       for (const a of ARMS) if (a.far) drawArm(a, 0.5, 0.66);
 
       // head, then the mantle hanging off the neck, squeezed on each jet
-      const hx = O.x - f0 * ML * 0.14,
-        hy = O.y - f1 * ML * 0.14;
-      shadedEllipse(hx, hy, ML * 0.28, MW * 0.33, O.th, 0.9, 0.45);
+      const ht = O.th - ARCH_HEAD * O.arch,
+        [h0, h1, hn0, hn1] = frame0(ht);
+      const hx = O.x - h0 * ML * 0.14,
+        hy = O.y - h1 * ML * 0.14;
+      shadedEllipse(hx, hy, ML * 0.28, MW * 0.33, ht, 0.9, 0.45);
       for (const a of ARMS) if (!a.far) drawArm(a, 0.64, 0.86);
-      const mt = O.th + pose.tilt;
+      const mt = O.th + pose.tilt + O.arch;
       const sq = pose.squeeze;
       const mlen = ML * 0.62 * (1 + 0.07 * sq),
         mwid = MW * 0.56 * (1 - 0.2 * sq);
@@ -912,8 +950,8 @@
       }
 
       eyes = [-1, 1].map((side) => [
-        hx + n0 * side * MW * 0.32 - f0 * ML * 0.02,
-        hy + n1 * side * MW * 0.32 - f1 * ML * 0.02,
+        hx + hn0 * side * MW * 0.32 - h0 * ML * 0.02,
+        hy + hn1 * side * MW * 0.32 - h1 * ML * 0.02,
       ]);
       for (const [ex, ey] of eyes) {
         sx.fillStyle = g(1);
@@ -1182,7 +1220,7 @@
         Object.assign(O, { x, y, th, vx: 0, vy: 0, w: 0, mode: "drift", phase: 0, period: 1.6 });
         Object.assign(O, { strokes: 0, thrust: 1, hurry: false, fear: 0, fleeMin: 0, grip: 0 });
         Object.assign(O, { rest: 3, wander: 0, wpAge: 0, fleeA: th, pc: 0.28, shut: 0, loose: 0 });
-        Object.assign(O, { sv: 0, sk: 0, ws: 0 });
+        Object.assign(O, { sv: 0, sk: 0, ws: 0, arch: 0, burst: 3 });
         Object.assign(pose, { spread: 0.6, curl: 1, relax: 1, wave: 0.6, squeeze: 0, tilt: 0 });
         ptr = null;
         lastD = Infinity;
@@ -1201,6 +1239,8 @@
         vy: O.vy,
         th: O.th,
         w: O.w + O.ws,
+        arch: O.arch,
+        rest: O.rest,
         mode: O.mode,
         phase: O.phase,
         period: O.period,

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark" data-palette="ember">
+<html lang="en" data-theme="dark" data-palette="ink">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -1069,7 +1069,7 @@
         store.get("pond-theme") ||
           (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"),
       );
-      setPalette(store.get("pond-palette") || "ember");
+      setPalette(store.get("pond-palette") || "ink");
 
       // tuning panel: every knob applies at once and is kept, as the changes from the defaults
       const tune = document.getElementById("tune");

@@ -47,8 +47,11 @@ export class Workspaces extends Context.Service<
     ) => Effect.Effect<WorkspaceInfo, StorageError>;
     readonly remove: (id: string) => Effect.Effect<void, WorkspaceNotFound | StorageError>;
     readonly get: (id: string) => Effect.Effect<Workspace, WorkspaceNotFound | StorageError>;
-    /** The workspace containing `dir`: the nearest ancestor with a `.octodo/` folder. */
-    readonly resolve: (dir: string) => Effect.Effect<Workspace, WorkspaceNotFound | StorageError>;
+    /**
+     * `target` as a folder when it starts with `/` or `.` (the nearest ancestor holding a `.octodo/`
+     * folder), otherwise as a registered id.
+     */
+    readonly open: (target: string) => Effect.Effect<Workspace, WorkspaceNotFound | StorageError>;
     /**
      * The folders inside `dir` (an absolute path), skipping hidden ones, so a client without a
      * native folder picker (a browser, a phone) can choose a workspace folder on this machine.
@@ -66,7 +69,7 @@ export class Workspaces extends Context.Service<
         const scope = yield* Scope.Scope;
         const registryFile = path.join(options.home, "workspaces.json");
         const lock = yield* Semaphore.make(1);
-        const open = new Map<string, Workspace>();
+        const handles = new Map<string, Workspace>();
         const changes = yield* PubSub.sliding<WorkspaceChange>(64);
 
         const withPlatform = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
@@ -102,13 +105,13 @@ export class Workspaces extends Context.Service<
 
         const openHandle = (id: string, root: string) =>
           Effect.gen(function* () {
-            const existing = open.get(id);
+            const existing = handles.get(id);
             if (existing !== undefined) return existing;
             const workspace = yield* makeWorkspace(id, root, { watch: options.watch }).pipe(
               Scope.provide(scope),
               withPlatform,
             );
-            open.set(id, workspace);
+            handles.set(id, workspace);
             yield* workspace.changes.pipe(
               Stream.runForEach(() => PubSub.publish(changes, { workspace: id })),
               Effect.forkIn(scope),
@@ -163,7 +166,7 @@ export class Workspaces extends Context.Service<
             return yield* openHandle(entry.id, entry.root);
           });
 
-        const resolve = (dir: string) =>
+        const containing = (dir: string) =>
           Effect.gen(function* () {
             let current = path.resolve(dir);
             while (true) {
@@ -184,6 +187,9 @@ export class Workspaces extends Context.Service<
               current = parent;
             }
           });
+
+        const open = (target: string) =>
+          target.startsWith("/") || target.startsWith(".") ? containing(target) : get(target);
 
         const hasWorkspace = (dir: string) =>
           fs.exists(path.join(dir, TASKS_DIR, CONFIG_FILE)).pipe(Effect.orElseSucceed(() => false));
@@ -227,7 +233,7 @@ export class Workspaces extends Context.Service<
           add,
           remove,
           get,
-          resolve,
+          open,
           browse,
           changes: Stream.fromPubSub(changes),
         });

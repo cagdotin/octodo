@@ -10,6 +10,7 @@ import {
   type InvalidRequest,
   type StorageError,
   type TaskNotFound,
+  type Workspace,
   type WorkspaceNotFound,
 } from "@octodo/core";
 import { Cause, Effect, Exit, Fiber, Option, Schema, Stream, type ManagedRuntime } from "effect";
@@ -54,17 +55,6 @@ const AddWorkspaceInput = Schema.Struct({
 
 const PairInput = Schema.Struct({ token: Schema.String });
 
-const errorMessage = (error: ApiError): string => {
-  switch (error._tag) {
-    case "TaskNotFound":
-      return `No task with id ${error.id}`;
-    case "WorkspaceNotFound":
-      return `No workspace ${error.workspace}`;
-    default:
-      return error.message;
-  }
-};
-
 export interface AppOptions {
   readonly runtime: ManagedRuntime.ManagedRuntime<Workspaces, never>;
   readonly token: string;
@@ -88,13 +78,20 @@ export const createApi = ({ runtime, token, serverUrl }: AppOptions) => {
     if (Exit.isSuccess(exit)) return c.json(exit.value, 200);
     const failure = Cause.findErrorOption(exit.cause);
     if (Option.isSome(failure)) {
-      return c.json({ error: errorMessage(failure.value) }, STATUS[failure.value._tag]);
+      return c.json({ error: failure.value.message }, STATUS[failure.value._tag]);
     }
     console.error(Cause.pretty(exit.cause));
     return c.json({ error: "Internal error" }, 500);
   };
 
-  const withWorkspace = (id: string) => Workspaces.use((workspaces) => workspaces.get(id));
+  const runInWorkspace = <A>(
+    c: Context<any, `/workspaces/:ws${string}`>,
+    effect: (workspace: Workspace) => Effect.Effect<A, ApiError, Workspaces>,
+  ) =>
+    run(
+      c,
+      Workspaces.use((workspaces) => Effect.flatMap(workspaces.get(c.req.param("ws")), effect)),
+    );
 
   return (
     new Hono()
@@ -147,75 +144,34 @@ export const createApi = ({ runtime, token, serverUrl }: AppOptions) => {
           Workspaces.use((w) => Effect.as(w.remove(c.req.param("ws")), { ok: true })),
         ),
       )
-      .get("/workspaces/:ws", (c) =>
-        run(
-          c,
-          Effect.flatMap(withWorkspace(c.req.param("ws")), (ws) => ws.snapshot),
-        ),
-      )
+      .get("/workspaces/:ws", (c) => runInWorkspace(c, (ws) => ws.snapshot))
       .post("/workspaces/:ws/tasks", body(CreateTaskInput), (c) =>
-        run(
-          c,
-          Effect.flatMap(withWorkspace(c.req.param("ws")), (ws) =>
-            ws.createTask(c.req.valid("json")),
-          ),
-        ),
+        runInWorkspace(c, (ws) => ws.createTask(c.req.valid("json"))),
       )
       .get("/workspaces/:ws/tasks/:id", (c) =>
-        run(
-          c,
-          Effect.flatMap(withWorkspace(c.req.param("ws")), (ws) => ws.getTask(c.req.param("id"))),
-        ),
+        runInWorkspace(c, (ws) => ws.getTask(c.req.param("id"))),
       )
       .patch("/workspaces/:ws/tasks/:id", body(UpdateTaskInput), (c) =>
-        run(
-          c,
-          Effect.flatMap(withWorkspace(c.req.param("ws")), (ws) =>
-            ws.updateTask(c.req.param("id"), c.req.valid("json")),
-          ),
-        ),
+        runInWorkspace(c, (ws) => ws.updateTask(c.req.param("id"), c.req.valid("json"))),
       )
       .post("/workspaces/:ws/tasks/:id/move", body(MoveTaskInput), (c) =>
-        run(
-          c,
-          Effect.flatMap(withWorkspace(c.req.param("ws")), (ws) =>
-            ws.moveTask(c.req.param("id"), c.req.valid("json")),
-          ),
-        ),
+        runInWorkspace(c, (ws) => ws.moveTask(c.req.param("id"), c.req.valid("json"))),
       )
       .delete("/workspaces/:ws/tasks/:id", (c) =>
-        run(
-          c,
-          Effect.flatMap(withWorkspace(c.req.param("ws")), (ws) =>
-            Effect.as(ws.deleteTask(c.req.param("id")), { ok: true }),
-          ),
-        ),
+        runInWorkspace(c, (ws) => Effect.as(ws.deleteTask(c.req.param("id")), { ok: true })),
       )
       .post("/workspaces/:ws/lists", body(CreateListInput), (c) =>
-        run(
-          c,
-          Effect.flatMap(withWorkspace(c.req.param("ws")), (ws) =>
-            ws.createList(c.req.valid("json")),
-          ),
-        ),
+        runInWorkspace(c, (ws) => ws.createList(c.req.valid("json"))),
       )
       // List ids contain slashes, so the id travels in the body rather than the path.
       .post("/workspaces/:ws/lists/move", body(MoveListBody), (c) =>
-        run(
-          c,
-          Effect.flatMap(withWorkspace(c.req.param("ws")), (ws) => {
-            const { id, ...input } = c.req.valid("json");
-            return ws.moveList(id, input);
-          }),
-        ),
+        runInWorkspace(c, (ws) => {
+          const { id, ...input } = c.req.valid("json");
+          return ws.moveList(id, input);
+        }),
       )
       .put("/workspaces/:ws/statuses/order", body(ReorderStatusesInput), (c) =>
-        run(
-          c,
-          Effect.flatMap(withWorkspace(c.req.param("ws")), (ws) =>
-            ws.reorderStatuses(c.req.valid("json")),
-          ),
-        ),
+        runInWorkspace(c, (ws) => ws.reorderStatuses(c.req.valid("json"))),
       )
       // Server-sent events: `change` with `{ workspace }` whenever files in an open workspace change.
       .get("/events", (c) =>

@@ -49,11 +49,7 @@ const taskId = Argument.String("id").pipe(Argument.withDescription("Task id, e.g
 const workspace = Effect.gen(function* () {
   const root = yield* octo;
   const workspaces = yield* Workspaces;
-  return yield* Option.match(root.workspace, {
-    onNone: () => workspaces.resolve(process.cwd()),
-    onSome: (target) =>
-      target.includes("/") || target === "." ? workspaces.resolve(target) : workspaces.get(target),
-  });
+  return yield* workspaces.open(Option.getOrElse(root.workspace, () => process.cwd()));
 });
 
 const optional = <A>(option: Option.Option<A>) => Option.getOrUndefined(option);
@@ -397,6 +393,12 @@ const skillsCommand = Command.make("skills").pipe(
   ]),
 );
 
+const fail = (message: string) =>
+  Effect.andThen(
+    Console.error(message),
+    Effect.sync(() => (process.exitCode = 1)),
+  );
+
 octo.pipe(
   Command.withSubcommands([
     listCommand,
@@ -414,28 +416,10 @@ octo.pipe(
   ]),
   Command.run({ version: "0.0.0" }),
   Effect.catchTags({
-    TaskNotFound: (error) =>
-      Effect.andThen(
-        Console.error(`No task with id ${error.id}`),
-        Effect.sync(() => (process.exitCode = 1)),
-      ),
-    WorkspaceNotFound: (error) =>
-      Effect.andThen(
-        Console.error(
-          `No workspace for ${error.workspace}. Run \`octo init\` or pass --workspace.`,
-        ),
-        Effect.sync(() => (process.exitCode = 1)),
-      ),
-    InvalidRequest: (error) =>
-      Effect.andThen(
-        Console.error(error.message),
-        Effect.sync(() => (process.exitCode = 1)),
-      ),
-    StorageError: (error) =>
-      Effect.andThen(
-        Console.error(`${error.message}: ${String(error.cause)}`),
-        Effect.sync(() => (process.exitCode = 1)),
-      ),
+    TaskNotFound: (error) => fail(error.message),
+    WorkspaceNotFound: (error) => fail(`${error.message}. Run \`octo init\` or pass --workspace.`),
+    InvalidRequest: (error) => fail(error.message),
+    StorageError: (error) => fail(`${error.message}: ${String(error.cause)}`),
   }),
   Effect.provide(Workspaces.layer({ home, watch: false })),
   Effect.provide(NodeServices.layer),

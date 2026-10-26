@@ -177,11 +177,19 @@ export type ReorderStatusesInput = typeof ReorderStatusesInput.Type;
 export class WorkspaceNotFound extends Schema.TaggedError<WorkspaceNotFound>()(
   "WorkspaceNotFound",
   { workspace: Schema.String },
-) {}
+) {
+  override get message(): string {
+    return `No workspace found for ${this.workspace}`;
+  }
+}
 
 export class TaskNotFound extends Schema.TaggedError<TaskNotFound>()("TaskNotFound", {
   id: Schema.String,
-}) {}
+}) {
+  override get message(): string {
+    return `No task with id ${this.id}`;
+  }
+}
 
 export class InvalidRequest extends Schema.TaggedError<InvalidRequest>()("InvalidRequest", {
   message: Schema.String,

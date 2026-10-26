@@ -177,16 +177,7 @@ export const TasksToolkit = Toolkit.make(
   MoveList,
 );
 
-const toFailure = (error: { readonly _tag: string; readonly message?: string }) => {
-  switch (error._tag) {
-    case "TaskNotFound":
-      return { error: `No task with id ${(error as { id?: string }).id}` };
-    case "WorkspaceNotFound":
-      return { error: `No workspace found for ${(error as { workspace?: string }).workspace}` };
-    default:
-      return { error: error.message ?? error._tag };
-  }
-};
+const toFailure = (error: { readonly message: string }) => ({ error: error.message });
 
 /**
  * Tool handlers. `defaultDir` is where a call without a `workspace` looks for one: the directory
@@ -202,8 +193,7 @@ export const toolkitLayer = (options: { readonly defaultDir?: string | undefined
         if (target === undefined) {
           return Effect.fail({ error: "Pass a workspace: call list_workspaces to see them" });
         }
-        const lookup = target.startsWith("/") ? workspaces.resolve(target) : workspaces.get(target);
-        return Effect.mapError(lookup, toFailure);
+        return Effect.mapError(workspaces.open(target), toFailure);
       };
 
       return TasksToolkit.of({

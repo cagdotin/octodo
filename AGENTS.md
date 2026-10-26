@@ -1,9 +1,13 @@
 # Agent instructions
 
 octodo is a local-first task manager. Every task is a markdown file with YAML frontmatter inside a
-project's `.octodo/` folder, and the files are the source of truth: the app, the CLI, the MCP server
-and people editing files by hand all work on the same files. Long-term it competes with TickTick,
-Todoist and any.do first, then Linear.
+project's `.octodo/` folder, and the files are the source of truth. The app, the CLI and the MCP
+server are the editors, for people and agents alike: every status change, move, rename and link
+goes through them. The files are a portable format (plain markdown with custom properties) that
+reads well and copies anywhere; matching another tool's behavior on them is not a goal. Sync tools
+(iCloud, git) and stray hand edits still touch the files, so the app reads them strictly and
+reports what is wrong instead of breaking. Long-term it competes with TickTick, Todoist and any.do
+first, then Linear.
 
 ## The on-disk model
 

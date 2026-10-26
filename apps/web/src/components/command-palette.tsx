@@ -80,7 +80,16 @@ export function CommandPalette({
           onOpenChange(next);
         }}
       >
-        <Command>
+        <Command
+          onKeyDown={(event) => {
+            // ⌘N jumps straight to the new-task dialog, taking whatever was typed as the title.
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "n") {
+              event.preventDefault();
+              const title = query.trim();
+              run(() => requestAnimationFrame(() => onNewTask(title)))();
+            }
+          }}
+        >
           <CommandInput
             placeholder="Type a command or search tasks…"
             value={query}
@@ -91,7 +100,7 @@ export function CommandPalette({
               <CommandItem onSelect={run(() => requestAnimationFrame(() => onNewTask()))}>
                 <PlusIcon />
                 New task
-                <CommandShortcut>N</CommandShortcut>
+                <CommandShortcut>⌘N</CommandShortcut>
               </CommandItem>
               <CommandItem onSelect={run(onToggleView)}>
                 {view === "list" ? <KanbanIcon /> : <ListIcon />}

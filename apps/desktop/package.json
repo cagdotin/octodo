@@ -1,0 +1,20 @@
+{
+  "name": "@tasksmd/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.mjs",
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown && TASKSMD_DEV_URL=http://localhost:5520 electron .",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "@tasksmd/core": "workspace:*",
+    "@tasksmd/server": "workspace:*"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "tsdown": "^0.23.2"
+  }
+}

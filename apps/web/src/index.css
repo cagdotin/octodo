@@ -1,0 +1,229 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+/* The macOS desktop app draws its own title bar; see src/lib/desktop.ts. `windowed-mac` is the
+   same minus full screen, where the traffic lights are hidden. */
+@custom-variant desktop-mac (&:where([data-desktop="mac"] *));
+@custom-variant windowed-mac (&:where([data-desktop="mac"]:not([data-fullscreen]) *));
+
+/* Electron drag region: dragging moves the window and a double-click zooms it. Controls inside one
+   must opt out or they stop receiving clicks, so the common ones do here; add `app-no-drag` to any
+   other interactive element placed inside. Browsers ignore both. */
+@utility app-drag {
+  -webkit-app-region: drag;
+
+  & :is(button, a, input, textarea, select, [role="button"], [role="radio"], [role="tab"]) {
+    -webkit-app-region: no-drag;
+  }
+}
+
+@utility app-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+@theme inline {
+  --color-priority-urgent: var(--priority-urgent);
+  --color-priority-high: var(--priority-high);
+  --color-priority-medium: var(--priority-medium);
+  --color-priority-low: var(--priority-low);
+  --color-status-backlog: var(--status-backlog);
+  --color-status-unstarted: var(--status-unstarted);
+  --color-status-started: var(--status-started);
+  --color-status-completed: var(--status-completed);
+  --color-status-canceled: var(--status-canceled);
+  --color-tag-1: var(--tag-1);
+  --color-tag-2: var(--tag-2);
+  --color-tag-3: var(--tag-3);
+  --color-tag-4: var(--tag-4);
+  --color-tag-5: var(--tag-5);
+  --color-tag-6: var(--tag-6);
+  --color-tag-7: var(--tag-7);
+  --color-tag-8: var(--tag-8);
+  --color-band: var(--band);
+  --color-row-hover: var(--row-hover);
+  --color-sync-live: var(--sync-live);
+  --color-sync-pending: var(--sync-pending);
+  --font-heading: var(--font-sans);
+  --font-sans: "Geist Variable", sans-serif;
+  /* Linear-density type: 13px UI text (shadcn components use text-sm), 12px secondary. */
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* Linear-like palette: a warm light-gray canvas (the sidebar) around a near-white card. */
+  --priority-urgent: oklch(0.68 0.19 42);
+  --priority-high: oklch(0.45 0 0);
+  --priority-medium: oklch(0.45 0 0);
+  --priority-low: oklch(0.45 0 0);
+  --status-backlog: oklch(0.62 0 0);
+  --status-unstarted: oklch(0.55 0 0);
+  --status-started: oklch(0.8 0.16 85);
+  --status-completed: oklch(0.55 0.17 272);
+  --status-canceled: oklch(0.62 0 0);
+  --tag-1: oklch(0.68 0.16 45);
+  --tag-2: oklch(0.8 0.15 88);
+  --tag-3: oklch(0.65 0.15 150);
+  --tag-4: oklch(0.66 0.12 200);
+  --tag-5: oklch(0.6 0.16 255);
+  --tag-6: oklch(0.6 0.17 295);
+  --tag-7: oklch(0.65 0.18 350);
+  --tag-8: oklch(0.62 0.2 25);
+  --sync-live: oklch(0.7 0.17 150);
+  --sync-pending: oklch(0.8 0.15 85);
+  --background: oklch(0.989 0.0005 90);
+  --foreground: oklch(0.23 0.003 270);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.23 0.003 270);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.23 0.003 270);
+  --primary: oklch(0.55 0.15 275);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.955 0.001 90);
+  --secondary-foreground: oklch(0.25 0.003 270);
+  --muted: oklch(0.955 0.001 90);
+  --muted-foreground: oklch(0.54 0.004 270);
+  --accent: oklch(0.945 0.002 90);
+  --accent-foreground: oklch(0.23 0.003 270);
+  --band: oklch(0.953 0.001 90);
+  --row-hover: oklch(0.965 0.001 90);
+  --destructive: oklch(0.58 0.21 27);
+  --border: oklch(0.915 0.002 90);
+  --input: oklch(0.9 0.002 90);
+  --ring: oklch(0.7 0.12 275);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.5rem;
+  --sidebar: oklch(0.962 0.002 90);
+  --sidebar-foreground: oklch(0.27 0.003 270);
+  --sidebar-primary: oklch(0.55 0.15 275);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.925 0.002 90);
+  --sidebar-accent-foreground: oklch(0.2 0.003 270);
+  --sidebar-border: oklch(0.91 0.002 90);
+  --sidebar-ring: oklch(0.7 0.12 275);
+}
+
+.dark {
+  /* Linear's dark theme: an almost-black canvas, a slightly lifted card, low-contrast borders. */
+  --priority-urgent: oklch(0.72 0.17 45);
+  --priority-high: oklch(0.72 0.004 270);
+  --priority-medium: oklch(0.72 0.004 270);
+  --priority-low: oklch(0.72 0.004 270);
+  --status-backlog: oklch(0.55 0.004 270);
+  --status-unstarted: oklch(0.68 0.004 270);
+  --status-started: oklch(0.82 0.15 85);
+  --status-completed: oklch(0.62 0.15 275);
+  --status-canceled: oklch(0.55 0.004 270);
+  --tag-1: oklch(0.72 0.15 45);
+  --tag-2: oklch(0.83 0.14 88);
+  --tag-3: oklch(0.72 0.14 150);
+  --tag-4: oklch(0.72 0.11 200);
+  --tag-5: oklch(0.68 0.14 255);
+  --tag-6: oklch(0.68 0.15 295);
+  --tag-7: oklch(0.72 0.16 350);
+  --tag-8: oklch(0.68 0.18 25);
+  --sync-live: oklch(0.74 0.16 150);
+  --sync-pending: oklch(0.83 0.14 85);
+  --background: oklch(0.185 0.003 270);
+  --foreground: oklch(0.94 0.002 270);
+  --card: oklch(0.215 0.004 270);
+  --card-foreground: oklch(0.94 0.002 270);
+  --popover: oklch(0.225 0.004 270);
+  --popover-foreground: oklch(0.94 0.002 270);
+  --primary: oklch(0.62 0.15 275);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.25 0.004 270);
+  --secondary-foreground: oklch(0.94 0.002 270);
+  --muted: oklch(0.24 0.004 270);
+  --muted-foreground: oklch(0.66 0.006 270);
+  --accent: oklch(0.255 0.004 270);
+  --accent-foreground: oklch(0.96 0.002 270);
+  --band: oklch(0.22 0.004 270);
+  --row-hover: oklch(0.215 0.004 270);
+  --destructive: oklch(0.68 0.19 24);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.55 0.12 275);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.15 0.003 270);
+  --sidebar-foreground: oklch(0.86 0.003 270);
+  --sidebar-primary: oklch(0.62 0.15 275);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.23 0.004 270);
+  --sidebar-accent-foreground: oklch(0.96 0.002 270);
+  --sidebar-border: oklch(1 0 0 / 7%);
+  --sidebar-ring: oklch(0.55 0.12 275);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-sans;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    @apply text-sm;
+  }
+}

@@ -42,6 +42,7 @@ export const keys = {
   session: ["session"] as const,
   workspaces: ["workspaces"] as const,
   snapshot: (ws: string) => ["workspace", ws] as const,
+  connection: ["connection"] as const,
 };
 
 export const sessionQuery = queryOptions({
@@ -69,6 +70,13 @@ export const foldersQuery = (path: string | undefined) =>
     retry: false,
     staleTime: 10_000,
   });
+
+/** The server's MCP endpoint, pairing link and token, for connecting agents and devices. */
+export const connectionQuery = queryOptions({
+  queryKey: keys.connection,
+  queryFn: () => unwrap(api.connection.$get()),
+  staleTime: Infinity,
+});
 
 export const snapshotQuery = (ws: string) =>
   queryOptions({

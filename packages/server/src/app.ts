@@ -17,7 +17,7 @@ import { Hono, type Context } from "hono";
 import { homedir } from "node:os";
 import { setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
-import { SESSION_COOKIE, requireToken, tokenMatches } from "./auth.ts";
+import { SESSION_COOKIE, pairUrl, requireToken, tokenMatches } from "./auth.ts";
 
 type ApiError = TaskNotFound | WorkspaceNotFound | InvalidRequest | StorageError;
 
@@ -68,6 +68,8 @@ const errorMessage = (error: ApiError): string => {
 export interface AppOptions {
   readonly runtime: ManagedRuntime.ManagedRuntime<Workspaces, never>;
   readonly token: string;
+  /** The address the server listens on, known once it has started. */
+  readonly serverUrl: () => string;
   /** Handles `/mcp`; built separately because it runs on Effect's HTTP router. */
   readonly mcp?: ((request: Request) => Promise<Response>) | undefined;
 }
@@ -80,7 +82,7 @@ const pairCookie = (c: Context, token: string) =>
     maxAge: 60 * 60 * 24 * 365,
   });
 
-export const createApi = ({ runtime, token }: AppOptions) => {
+export const createApi = ({ runtime, token, serverUrl }: AppOptions) => {
   const run = async <A>(c: Context, effect: Effect.Effect<A, ApiError, Workspaces>) => {
     const exit = await runtime.runPromiseExit(effect);
     if (Exit.isSuccess(exit)) return c.json(exit.value, 200);
@@ -113,6 +115,12 @@ export const createApi = ({ runtime, token }: AppOptions) => {
       })
       .use(requireToken(token))
       .get("/session", (c) => c.json({ ok: true }))
+      // What an agent or another device needs to connect. Paired clients already hold the token.
+      .get("/connection", (c) => {
+        const url = serverUrl();
+        c.header("Cache-Control", "no-store");
+        return c.json({ url, mcpUrl: `${url}/mcp`, pairUrl: pairUrl(url, token), token }, 200);
+      })
       // A folder browser for adding workspaces from a client without a native picker.
       .get("/folders", (c) =>
         run(

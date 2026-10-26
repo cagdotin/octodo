@@ -1,9 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { CopyIcon, FolderOpenIcon } from "lucide-react";
-import type { ReactNode } from "react";
 import { toast } from "sonner";
-import { SettingsPage } from "@/components/settings-page";
+import { Row, Section, SettingsPage } from "@/components/settings-page";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,15 +15,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemSeparator,
-  ItemTitle,
-} from "@/components/ui/item";
+import { ItemSeparator } from "@/components/ui/item";
 import { snapshotQuery, useRemoveWorkspace } from "@/lib/api";
 import { desktop } from "@/lib/desktop";
 
@@ -117,34 +108,5 @@ function GeneralSettings() {
         </Row>
       </Section>
     </SettingsPage>
-  );
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-3">
-      <h3 className="text-base font-medium">{title}</h3>
-      <ItemGroup className="rounded-xl border bg-card px-1">{children}</ItemGroup>
-    </section>
-  );
-}
-
-function Row({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <Item className="py-3.5">
-      <ItemContent>
-        <ItemTitle>{title}</ItemTitle>
-        <ItemDescription>{description}</ItemDescription>
-      </ItemContent>
-      <ItemActions>{children}</ItemActions>
-    </Item>
   );
 }

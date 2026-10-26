@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { join, relative } from "node:path";
 import { createApi } from "./app.ts";
-import { hostGuard, loadToken, tokenMatches } from "./auth.ts";
+import { hostGuard, loadToken, pairUrl, tokenMatches } from "./auth.ts";
 
 export type { Api } from "./app.ts";
 
@@ -55,7 +55,8 @@ export const startServer = async (options: ServerOptions): Promise<RunningServer
     { memoMap, disableLogger: true },
   );
 
-  const api = createApi({ runtime, token });
+  let url = "";
+  const api = createApi({ runtime, token, serverUrl: () => url });
   const app = new Hono()
     .use(hostGuard(options.allowedHosts ?? []))
     .route("/api", api)
@@ -81,12 +82,12 @@ export const startServer = async (options: ServerOptions): Promise<RunningServer
     );
   });
   const { port } = server.address() as AddressInfo;
-  const url = `http://${host.includes(":") ? `[${host}]` : host}:${port}`;
+  url = `http://${host.includes(":") ? `[${host}]` : host}:${port}`;
 
   return {
     url,
     token,
-    pairUrl: `${url}/api/pair?token=${encodeURIComponent(token)}&next=/`,
+    pairUrl: pairUrl(url, token),
     mcpUrl: `${url}/mcp`,
     close: async () => {
       // Open event streams never end on their own, so close every connection instead of waiting.

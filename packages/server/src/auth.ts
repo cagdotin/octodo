@@ -29,6 +29,10 @@ export const loadToken = (home: string): string => {
   return token;
 };
 
+/** Opens the app at `url` and signs the browser in. */
+export const pairUrl = (url: string, token: string): string =>
+  `${url}/api/pair?token=${encodeURIComponent(token)}&next=/`;
+
 export const tokenMatches = (expected: string, given: string | undefined): boolean => {
   if (given === undefined) return false;
   const a = Buffer.from(expected);

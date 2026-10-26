@@ -284,6 +284,18 @@
     const ease = (t) => t * t * (3 - 2 * t);
     const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
     const approach = (v, to, rate, dt) => v + (to - v) * Math.min(1, rate * dt);
+    // Like approach(), but a critically damped spring (solved exactly, so stable at any step):
+    // the value's speed never jumps when its target or its rate does, only its acceleration.
+    // About as quick as approach() at the same rate. vel is o[k + "V"]; returns the new value.
+    const spring = (o, k, to, rate, dt) => {
+      const w = 2 * rate,
+        x = o[k] - to,
+        v = o[k + "V"] || 0,
+        e = Math.exp(-w * dt),
+        m = (v + w * x) * dt;
+      o[k + "V"] = (v - w * m) * e;
+      return (o[k] = to + (x + m) * e);
+    };
 
     // --- the animal ---------------------------------------------------------------------
     // O.x/O.y is the neck, between head and mantle; th points the way the mantle leads.
@@ -315,9 +327,12 @@
       edgeK: 0, // 0..1, how close the edge ahead is, against how far it needs to turn away
       weave: 0, // the phase of the path's slow weave (see desiredHeading())
       style: "jet", // jet | web: a bout of jetting, or of slower web pulses (see update())
+      from: -1, // the spread the first stroke of a bout closes from (see update())
       pc: 0.28, // the part of the stroke cycle that is the jet and the close
       shut: 0, // 1 through the close and glide, falling to 0 as the arms open again
       loose: 0, // like shut, but rising only once the arms are well on their way in
+      gs: 0, // ...its eased part (see update())
+      firm: 0, // 0..1, how firmly the arms are held to their sides: gently while gathering
       gather: 0, // 0..1, how firmly each arm is kept on its own side of the axis (see midline())
       sv: 0, // scroll speed, px/s, low-passed
       sk: 0, // 0..1, how much scrolling is going on, eased
@@ -326,7 +341,10 @@
       reach: 6.25, // how far from the axis an arm may stray, mantle lengths (see REACH)
     };
     // the muscle pose the arms are pulled toward, shaped by the stroke cycle
-    const pose = { spread: 0.6, curl: 1, relax: 1, wave: 0.6, squeeze: 0, tilt: 0 };
+    // (wph is the wave's phase, advanced in update() at a pace the relax sets: as a phase of its
+    // own, never t times a changing pace, which would sweep the wave through whole cycles in a
+    // blink whenever the relax changes, worse the longer the page has been open)
+    const pose = { spread: 0.6, curl: 1, relax: 1, wave: 0.6, squeeze: 0, tilt: 0, wph: 0 };
     let power = 0;
 
     const N = 16; // segments per arm
@@ -372,9 +390,9 @@
       const s = a.s,
         sg = Math.sign(s);
       const ra = -0.36 * ML + Math.abs(s) * 0.06 * ML,
-        // closed, the roots sit a little wider round the crown, so the bundle behind them stays a
-        // fan of separate arms rather than one rope
-        rb = s * MW * (0.36 + 0.18 * O.shut);
+        // the roots ring the crown, inside the head's width (closed, a little wider, so the
+        // bundle behind them stays a fan of separate arms rather than one rope)
+        rb = s * MW * (0.24 + 0.12 * O.shut);
       let x = O.x + f0 * ra + n0 * rb,
         y = O.y + f1 * ra + n1 * rb;
       const T = a.t;
@@ -411,7 +429,7 @@
           c * ((1 - r) * 8 * u * u * u + r * 14 * Math.max(0, (u - 0.4) / 0.6) ** 3) +
           // the reaching arm's tip curls into a spiral, away from the body
           -sg * 10 * e * e * Math.max(0, (u - 0.7) / 0.3) ** 2 +
-          pose.wave * (0.25 + u - 0.15 * r) * Math.sin(t * (1.7 - 0.6 * r) + a.ph[1] - u * 5) +
+          pose.wave * (0.25 + u - 0.15 * r) * Math.sin(pose.wph + a.ph[1] - u * 5) +
           // closing and gliding in a fright, a quicker ripple runs down the arm toward the tip
           RIPPLE * O.shut * Math.min(1, 2 * O.fear) * u * u * Math.sin(t * 13 + a.ph[2] - u * 7);
         ang += k / N;
@@ -475,7 +493,13 @@
       const reach = ML * O.reach,
         soft = reach * 0.1,
         mw = O.gather,
-        side = SIDE * ML * h,
+        edge = SIDE * ML * h,
+        // (as briskly as the gathering has got going, so an arm lying across the axis as it
+        // begins drifts back to its side rather than being flicked over)
+        side = edge * Math.min(1, 2 * mw),
+        // (O.firm eases from the one to the other just before a stroke)
+        pull = Math.min(1, 8 * h) + (1 - Math.min(1, 8 * h)) * O.firm ** 2,
+        keep = 1 - 0.5 * O.firm,
         glass = 0.5 * ML,
         whip = WHIP * ML * h;
       for (const a of ARMS) {
@@ -521,18 +545,22 @@
           // never add up down the arm into a flick at the tip
           if (mw > 0) {
             const l = (p[o] - O.x) * n0 + (p[o + 1] - O.y) * n1;
-            const d = clamp(midline(a, j, l, mw) - l, -side, side);
+            // (while it gathers its arms before a stroke, a gentle pull that hands the point no
+            // momentum: the stroke's hard shove, which also hands it half the shove as momentum,
+            // overshot an arm lying across the axis and flicked it back, a stutter in the arms
+            // just before every push)
+            const d = clamp((midline(a, j, l, mw) - l) * pull, -side, side);
             if (d !== 0) {
               p[o] += n0 * d;
               p[o + 1] += n1 * d;
-              q[o] += n0 * d * 0.5;
-              q[o + 1] += n1 * d * 0.5;
+              q[o] += n0 * d * keep;
+              q[o + 1] += n1 * d * keep;
             }
           }
           // an arm point close to an edge of the screen is eased away from it, like an arm
           // feeling the glass, at most SIDE mantle lengths a second
-          const ex = clamp(glass - p[o], 0, side) - clamp(p[o] - (W - glass), 0, side),
-            ey = clamp(glass - p[o + 1], 0, side) - clamp(p[o + 1] - (H - glass), 0, side);
+          const ex = clamp(glass - p[o], 0, edge) - clamp(p[o] - (W - glass), 0, edge),
+            ey = clamp(glass - p[o + 1], 0, edge) - clamp(p[o + 1] - (H - glass), 0, edge);
           if (ex || ey) {
             p[o] += ex;
             p[o + 1] += ey;
@@ -891,7 +919,7 @@
     // a time, never while swimming.
     let exploreIn = 1;
     function explore(dt) {
-      const calm = O.mode === "drift" && !O.hurry && O.fear < 0.05;
+      const calm = O.mode === "drift" && !O.hurry && O.fear < 0.05 && O.rest > 0.8;
       exploreIn -= dt;
       if (calm && exploreIn <= 0 && !ARMS.some((a) => a.exT >= 0)) {
         const a = ARMS[Math.floor(random() * ARMS.length)];
@@ -904,7 +932,7 @@
           a.exT += dt / a.exD;
           if (a.exT >= 1 || !calm) a.exT = -1;
         }
-        a.ex = approach(a.ex, a.exT >= 0 ? Math.sin(Math.PI * a.exT) : 0, 2.5, dt);
+        a.ex = Math.max(0, spring(a, "ex", a.exT >= 0 ? Math.sin(Math.PI * a.exT) : 0, 2.5, dt));
       }
     }
 
@@ -949,6 +977,7 @@
         O.phase += dt / O.period;
         if (O.phase >= 1) {
           O.phase -= 1;
+          O.from = -1;
           if (O.settle) calm();
           // fleeing, each stroke takes its length from the fear when it begins
           if (O.hurry) O.period = fleePeriod();
@@ -986,7 +1015,10 @@
           // the arms stay held until they are well on their way in, off the reach, so none
           // springs loose from where the reach held it bent
           O.loose = ease(clamp((u - 0.35) / 0.45, 0, 1));
-          spreadT = flare + (shutT - flare) * ease(Math.min(1, u * 1.4));
+          // (the first stroke closes from however open the arms hung, not from a flare they
+          // were never at)
+          const from = O.from >= 0 ? O.from : flare;
+          spreadT = from + (shutT - from) * ease(Math.min(1, u * 1.4));
           curlT = web ? 0.45 : 0.15;
           squeezeT = Math.sin(u * Math.PI * 0.5) * wk;
         } else {
@@ -1038,6 +1070,7 @@
         ) {
           O.mode = "swim";
           O.phase = 0;
+          O.from = pose.spread;
           O.strokes = O.burst;
           // unhurried, about one bout in three is web pulses rather than jetting
           O.style = !O.hurry && random() < 0.35 ? "web" : "jet";
@@ -1050,15 +1083,21 @@
       // the arms gather onto their own sides through the close and glide, and already in the
       // moment before a stroke, or while something looms, so none starts the close across the
       // axis
-      O.gather =
-        O.mode === "swim"
-          ? Math.max(O.shut, approach(O.gather, O.shut, 3, dt))
-          : approach(
-              O.gather,
-              O.rest < 0.8 || O.fear > 0.15 || O.hurry ? 1 : 0,
-              O.hurry ? 8 : 3,
-              dt,
-            );
+      // (on a spring: the arms start and stop gathering smoothly, never jerked to the side)
+      const gs = clamp(
+        spring(
+          O,
+          "gs",
+          O.mode === "swim" ? O.shut : O.rest < 0.8 || O.fear > 0.15 || O.hurry ? 1 : 0,
+          O.mode === "swim" ? 3 : O.hurry ? 8 : 3,
+          dt,
+        ),
+        0,
+        1,
+      );
+      O.gather = O.mode === "swim" ? Math.max(O.shut, gs) : gs;
+      // ...and are held to their sides firmly once the stroke is about to begin (see stepArms())
+      O.firm = clamp(spring(O, "firm", O.mode === "swim" || O.rest < 0.35 ? 1 : 0, 4, dt), 0, 1);
       // unhurried, it rights itself from mantle-down briskly, on a stroke or between them, and
       // between them it turns as briskly from an edge close ahead
       if (!O.hurry && (Math.sin(O.th) > 0.45 || (O.mode === "drift" && offside(O.th) > 0.25)))
@@ -1069,14 +1108,16 @@
             ? 7
             : 14 * (1 + (O.hurry ? 0.5 * O.fear : 0))
           : 2.5;
-      pose.spread = approach(pose.spread, spreadT, spreadRate, dt);
+      // (springs, not approach(): the targets step as a stroke begins, and an arm's pose must
+      // never change speed in a frame, or the arms visibly stutter just before the push)
+      spring(pose, "spread", spreadT, spreadRate, dt);
       // each arm follows the stroke at its own pace, a little ahead or behind the rest
-      for (const a of ARMS) a.sp = approach(a.sp, spreadT, spreadRate * a.rate, dt);
+      for (const a of ARMS) spring(a, "sp", spreadT, spreadRate * a.rate, dt);
       explore(dt);
-      pose.curl = approach(pose.curl, curlT, 3, dt);
-      pose.relax = approach(pose.relax, relaxT, O.mode === "swim" ? 4 : 0.8, dt);
-      pose.wave = approach(pose.wave, waveT, 2, dt);
-      pose.squeeze = approach(pose.squeeze, squeezeT, 16, dt);
+      spring(pose, "curl", curlT, 3, dt);
+      spring(pose, "relax", relaxT, O.mode === "swim" ? 4 : 0.8, dt);
+      spring(pose, "wave", waveT, 2, dt);
+      spring(pose, "squeeze", squeezeT, 16, dt);
       // the soft mantle sags and sways behind the head when not driven
       pose.tilt = approach(pose.tilt, pose.relax * 0.16 * Math.sin(t * 0.5), 2, dt);
 
@@ -1173,6 +1214,8 @@
       // the arms step at 100Hz with the body moved smoothly between frames, so no arm point is
       // handed a whole frame's travel in one substep
       const steps = Math.max(1, Math.ceil(dt / (1 / 100)));
+      const wph0 = pose.wph,
+        wph1 = wph0 + dt * (1.7 - 0.6 * pose.relax);
       const x1 = O.x,
         y1 = O.y,
         th1 = O.th,
@@ -1183,6 +1226,7 @@
         O.y = y0 + (y1 - y0) * k;
         O.th = th0 + (th1 - th0) * k;
         O.arch = arch0 + (arch1 - arch0) * k;
+        pose.wph = wph0 + (wph1 - wph0) * k;
         stepArms(dt / steps, t - dt + k * dt);
       }
       measure();
@@ -1398,7 +1442,7 @@
     // far arms, across the body, look a little slimmer.
     let armK = 1;
     const armWidth = (u) =>
-      (MW * 0.32 * (1 - u) ** 1.8 * (1 - 0.6 * O.shut * clamp((u - 0.1) / 0.2, 0, 1)) + 0.6 * S) *
+      (MW * 0.28 * (1 - u) ** 2 * (1 - 0.65 * O.shut * clamp((u - 0.04) / 0.16, 0, 1)) + 0.6 * S) *
       armK;
 
     function drawArm(a, lvl, highlight) {
@@ -1473,9 +1517,12 @@
       sx.fill();
     }
 
-    // the mantle's half width along its length, s from the neck (0) to the tip (1): widest a
-    // third of the way, tapering to a rounded point (render() eases it in from the neck)
-    const mantleW = (s) => (s < 0.3 ? 1 : (1 - ((s - 0.3) / 0.7) ** 2.2) ** 0.62);
+    // the mantle's half width along its length, s from the neck (0) to the tip (1): an egg,
+    // widest some 40% of the way, tapering all the way to a rounded, slightly pointed tip
+    // (render() swells it out of the neck up to MANTLE_MAX)
+    const MANTLE_MAX = 0.4;
+    const mantleW = (s) =>
+      s < MANTLE_MAX ? 1 : (1 - ((s - MANTLE_MAX) / (1 - MANTLE_MAX)) ** 1.7) ** 0.8;
     // chromatophore patches on the mantle and head, in body coordinates (s along, l across,
     // radius in mantle widths), each darkening and fading on its own slow beat
     const PATCHES = Array.from({ length: 11 }, (_, k) => [
@@ -1520,7 +1567,8 @@
 
       // the web: a thin, sagging skin between neighbouring arms, out to a fifth of their length
       // or more as they open, scalloped between them
-      const wk = Math.max(3, Math.round(N * (0.2 + 0.1 * clamp(pose.spread, 0, 1))));
+      // (shorter as the arms close, so shut it is a short cone off the head, never a slab)
+      const wk = Math.max(2, Math.round(N * (0.1 + 0.16 * clamp(pose.spread, 0, 1))));
       sx.fillStyle = g(0.62, 0.95);
       for (let i = 0; i < 7; i++) {
         const a = ARMS[i].p,
@@ -1551,12 +1599,13 @@
       const sq = pose.squeeze;
       const ht = O.th - ARCH_HEAD * O.arch,
         [, , hn0, hn1] = frame0(ht);
-      const HL = ML * 0.42 * (1 - 0.06 * sq),
-        Hw = MW * 0.33;
-      const Lm = ML * 1.1 * (1 + 0.1 * sq),
-        Wm = MW * 0.41 * (1 - 0.28 * sq);
+      // (the head a good deal narrower than the sac, and a clear neck between them)
+      const HL = ML * 0.4 * (1 - 0.06 * sq),
+        Hw = MW * 0.3;
+      const Lm = ML * 1.12 * (1 + 0.1 * sq),
+        Wm = MW * 0.45 * (1 - 0.28 * sq);
       const lean = O.arch + pose.tilt;
-      const neckW = Hw * 0.86;
+      const neckW = Hw * 0.78;
       // the axis, crown to tip: x, y, normal x, normal y, half width
       let hx = O.x,
         hy = O.y,
@@ -1573,13 +1622,14 @@
           axis[o + 1] = ay;
           axis[o + 2] = -Math.sin(phi);
           axis[o + 3] = Math.cos(phi);
-          // broadest at the eyes, which bulge out on either side, rounding off over the crown
+          // broadest at the eyes, which bulge out a little on either side, rounding off over
+          // the crown: a small, round head
           axis[o + 4] =
             Hw *
-            (0.86 +
-              0.24 * Math.sin(Math.PI * v * 0.95) +
-              0.38 * Math.exp(-(((v - 0.45) / 0.12) ** 2))) *
-            (v > 0.7 ? Math.sqrt(1 - 0.6 * ((v - 0.7) / 0.3) ** 2) : 1);
+            (0.78 +
+              0.3 * Math.sin(Math.PI * v * 0.95) +
+              0.2 * Math.exp(-(((v - 0.45) / 0.14) ** 2))) *
+            (v > 0.6 ? Math.sqrt(1 - 0.75 * ((v - 0.6) / 0.4) ** 2) : 1);
           if (k === Math.round(KH * 0.45)) {
             hx = ax;
             hy = ay;
@@ -1598,7 +1648,7 @@
           ay += (sn * Lm) / KM;
           // soft, never quite symmetric: a slow ripple runs along the outline
           const w =
-            (neckW + (Wm * mantleW(s) - neckW) * ease(Math.min(1, s / 0.3))) *
+            (neckW + (Wm * mantleW(s) - neckW) * ease(Math.min(1, s / MANTLE_MAX))) *
             (1 + 0.03 * Math.sin(s * 9 + t * 0.8));
           // relaxed, the sac sags toward the sea floor
           const sag = pose.relax * 0.1 * ML * s * s * Math.abs(c);
@@ -2305,8 +2355,18 @@
         Object.assign(O, { strokes: 0, thrust: 1, hurry: false, fear: 0, fleeMin: 0, grip: 0 });
         Object.assign(O, { rest: 3, wander: 0, wpAge: 0, fleeA: th, pc: 0.28, shut: 0, loose: 0 });
         Object.assign(O, { sv: 0, sk: 0, ws: 0, arch: 0, burst: 3, gather: 0, settle: false });
-        Object.assign(pose, { spread: 0.6, curl: 1, relax: 1, wave: 0.6, squeeze: 0, tilt: 0 });
-        for (const a of ARMS) Object.assign(a, { sp: 0.6, ex: 0, exT: -1 });
+        Object.assign(O, { gs: 0, gsV: 0, firm: 0, firmV: 0 });
+        Object.assign(pose, {
+          spread: 0.6,
+          curl: 1,
+          relax: 1,
+          wave: 0.6,
+          squeeze: 0,
+          tilt: 0,
+          wph: 0,
+        });
+        for (const k of ["spread", "curl", "relax", "wave", "squeeze"]) pose[k + "V"] = 0;
+        for (const a of ARMS) Object.assign(a, { sp: 0.6, spV: 0, ex: 0, exV: 0, exT: -1 });
         Object.assign(O, { weave: 0, style: "jet", reach: REACH + 4, edgeSide: 0, edgeK: 0 });
         Object.assign(wall, { x: 0, y: 0, k: 0, hR: 1, hold: 0, last: 0 });
         visits.fill(0);
@@ -2339,6 +2399,8 @@
         period: O.period,
         pc: O.pc,
         shut: O.shut,
+        gather: O.gather,
+        pose: { ...pose },
         hurry: O.hurry,
         fear: O.fear,
         grip: O.grip,

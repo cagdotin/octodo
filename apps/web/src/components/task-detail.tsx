@@ -9,15 +9,13 @@ import {
   LayersIcon,
   MoreHorizontalIcon,
   PanelRightCloseIcon,
-  PencilIcon,
   Trash2Icon,
 } from "lucide-react";
 import { useEffect, useState, type KeyboardEvent } from "react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { fromPromise } from "xstate";
 import { DuePicker } from "@/components/due-picker";
+import { MarkdownEditor } from "@/components/markdown-editor/markdown-editor";
 import {
   ListGlyph,
   PriorityIcon,
@@ -76,9 +74,6 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
   const update = useUpdateTask(workspace);
   const move = useMoveTask(workspace);
   const remove = useDeleteTask(workspace);
-  const [mode, setMode] = useState<"write" | "preview">(
-    task.body.trim() === "" ? "write" : "preview",
-  );
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   // The save actor goes through TanStack Query so it shares the optimistic cache update.
@@ -199,51 +194,14 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
             onChange={(tags) => update.mutate({ id: task.id, patch: { tags } })}
           />
 
-          <div className="group/notes relative mt-1">
-            {mode === "write" ? (
-              <Textarea
-                aria-label="Notes"
-                placeholder="Add notes in markdown…"
-                value={draft.body}
-                // oxlint-disable-next-line jsx-a11y/no-autofocus -- follows a click on the preview.
-                autoFocus={draft.body.trim() !== ""}
-                onChange={(event) =>
-                  editor.send({ type: "EDIT", field: "body", value: event.target.value })
-                }
-                onBlur={() => {
-                  editor.send({ type: "FLUSH" });
-                  if (draft.body.trim() !== "") setMode("preview");
-                }}
-                onKeyDown={blurOnEscape}
-                className="min-h-32 resize-none border-transparent bg-transparent px-2 text-[13px] leading-relaxed shadow-none focus-visible:border-transparent focus-visible:ring-0 md:text-[13px] dark:bg-transparent"
-              />
-            ) : (
-              <>
-                {/* Clicking the rendered notes edits them; links and checkboxes still work. */}
-                {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- the Edit button below is the keyboard path. */}
-                <div
-                  className="min-h-16 cursor-text rounded-lg px-2 py-2"
-                  onClick={(event) => {
-                    if ((event.target as HTMLElement).closest("a, input")) return;
-                    setMode("write");
-                  }}
-                >
-                  <div className="prose prose-sm max-w-none text-foreground dark:prose-invert prose-headings:font-semibold prose-a:text-primary [&_.contains-task-list]:list-none [&_.contains-task-list]:pl-1">
-                    <Markdown remarkPlugins={[remarkGfm]}>{draft.body}</Markdown>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  className="absolute top-1 right-1 opacity-0 group-hover/notes:opacity-100 focus-visible:opacity-100"
-                  onClick={() => setMode("write")}
-                >
-                  <PencilIcon data-icon="inline-start" />
-                  Edit
-                </Button>
-              </>
-            )}
-          </div>
+          <MarkdownEditor
+            aria-label="Notes"
+            placeholder="Add notes in markdown…"
+            value={draft.body}
+            onChange={(value) => editor.send({ type: "EDIT", field: "body", value })}
+            onBlur={() => editor.send({ type: "FLUSH" })}
+            className="mt-1 text-base md:text-sm"
+          />
         </div>
       </ScrollArea>
 

@@ -1,0 +1,86 @@
+import { EditorView } from "@codemirror/view";
+
+/** Ink on paper, from the app's CSS variables, so light and dark follow the `.dark` class. */
+export const bodyTheme = EditorView.theme({
+  "&": { color: "var(--foreground)", backgroundColor: "transparent", fontSize: "inherit" },
+  "&.cm-focused": { outline: "none" },
+  ".cm-scroller": { fontFamily: "var(--font-sans)", lineHeight: "1.65", overflow: "visible" },
+  ".cm-content": { minHeight: "8rem", padding: "0.25rem 0 1rem", caretColor: "var(--foreground)" },
+  ".cm-line": { padding: "0 0.5rem" },
+  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--foreground)" },
+  "& .cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection": {
+    backgroundColor: "color-mix(in srgb, var(--ink) 22%, transparent) !important",
+  },
+  ".cm-placeholder": { color: "var(--muted-foreground)" },
+
+  ".cm-md-h": { fontWeight: "600", letterSpacing: "-0.01em", color: "var(--foreground)" },
+  ".cm-md-h1": { fontSize: "1.45em", lineHeight: "1.35", paddingTop: "0.5em !important" },
+  ".cm-md-h2": { fontSize: "1.25em", lineHeight: "1.4", paddingTop: "0.4em !important" },
+  ".cm-md-h3": { fontSize: "1.1em", paddingTop: "0.3em !important" },
+  ".cm-md-strong": { fontWeight: "600" },
+  ".cm-md-em": { fontStyle: "italic" },
+  ".cm-md-strike, .cm-md-done": {
+    textDecoration: "line-through",
+    color: "var(--muted-foreground)",
+  },
+  ".cm-md-inline-code": {
+    fontFamily: "var(--font-mono)",
+    fontSize: "0.88em",
+    backgroundColor: "var(--muted)",
+    borderRadius: "4px",
+    padding: "0.1em 0.3em",
+  },
+  ".cm-md-link": {
+    color: "var(--ink)",
+    textDecoration: "underline",
+    textDecorationColor: "color-mix(in srgb, var(--ink) 40%, transparent)",
+    textUnderlineOffset: "2px",
+    cursor: "pointer",
+  },
+  ".cm-md-html": {
+    fontFamily: "var(--font-mono)",
+    fontSize: "0.88em",
+    color: "var(--muted-foreground)",
+  },
+  ".cm-md-list-mark": { color: "var(--muted-foreground)" },
+  ".cm-md-bullet": { color: "var(--muted-foreground)", display: "inline-block", width: "0.75em" },
+  ".cm-md-checkbox": {
+    width: "0.95em",
+    height: "0.95em",
+    margin: "0 0.35em 0 0",
+    verticalAlign: "-0.12em",
+    accentColor: "var(--foreground)",
+    cursor: "pointer",
+  },
+  ".cm-md-quote": {
+    color: "var(--muted-foreground)",
+    boxShadow: "inset 2px 0 0 var(--border)",
+    paddingLeft: "1rem !important",
+  },
+  ".cm-md-code": {
+    fontFamily: "var(--font-mono)",
+    fontSize: "0.88em",
+    backgroundColor: "var(--muted)",
+    paddingLeft: "0.75rem !important",
+  },
+  ".cm-md-code-first": { borderTopLeftRadius: "6px", borderTopRightRadius: "6px" },
+  ".cm-md-code-last": { borderBottomLeftRadius: "6px", borderBottomRightRadius: "6px" },
+  ".cm-md-table-source": { fontFamily: "var(--font-mono)", fontSize: "0.88em" },
+  ".cm-md-hr": { position: "relative" },
+  ".cm-md-hr::after": {
+    content: '""',
+    position: "absolute",
+    left: "0.5rem",
+    right: "0.5rem",
+    top: "50%",
+    borderTop: "1px solid var(--border)",
+  },
+  ".cm-md-table": { padding: "0.25rem 0.5rem", overflowX: "auto" },
+  ".cm-md-table table": { borderCollapse: "collapse", fontSize: "0.95em" },
+  ".cm-md-table th, .cm-md-table td": {
+    border: "1px solid var(--border)",
+    padding: "0.25rem 0.6rem",
+    textAlign: "left",
+  },
+  ".cm-md-table th": { fontWeight: "600", backgroundColor: "var(--muted)" },
+});

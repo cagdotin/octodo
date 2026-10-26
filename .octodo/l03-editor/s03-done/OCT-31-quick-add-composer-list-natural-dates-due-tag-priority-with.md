@@ -5,8 +5,8 @@ priority: none
 tags:
   - web
 created: 2026-10-26T13:23:40.121Z
-updated: 2026-10-26T13:23:40.121Z
-order: a2
+updated: 2026-10-26T14:13:56.901Z
+order: a1
 ---
 
 Todoist-style quick add, replacing the plain input in `task-composer.tsx` and `new-task-dialog.tsx`.

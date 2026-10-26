@@ -4,8 +4,8 @@ title: "Task body editor: CodeMirror 6 live preview with clickable checklists"
 priority: none
 tags: []
 created: 2026-10-25T17:37:47.971Z
-updated: 2026-10-26T13:23:34.220Z
-order: a1
+updated: 2026-10-26T13:57:03.955Z
+order: a0
 ---
 
 Replace the react-markdown preview and textarea toggle in `task-detail.tsx` with one CodeMirror 6 editor that you can edit right away. Markup is styled and hidden while the cursor is away (Obsidian Live Preview, which is CM6 as well).

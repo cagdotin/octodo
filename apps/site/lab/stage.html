@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-palette="ember">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>octopus stage</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&display=swap"
+    />
+    <!--
+      The octopus on its own, for the lab (../lab.html loads this in a fixed-size iframe, so the
+      animal always sees the same viewport). It mirrors the landing page's layout only where
+      octopus.js looks at it: #sea, and the text column (.hero .col) it keeps clear of. The
+      pointer, scrolling and resizing never reach the animal here; the lab drives it through
+      sea.lab. Math.random is seeded while octopus.js loads, so its arms come out the same on
+      every load. ?src= loads another copy of octopus.js (same origin).
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #171716;
+      }
+      #sea {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+      }
+      .wrap {
+        width: min(1080px, 100% - 32px);
+        margin: 0 auto;
+      }
+      .col {
+        max-width: 620px;
+        height: 1px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="sea" aria-hidden="true"></canvas>
+    <main class="wrap">
+      <div class="hero"><div class="col"></div></div>
+    </main>
+    <script>
+      // nothing from the page reaches the animal's own listeners
+      for (const type of [
+        "pointermove",
+        "pointerdown",
+        "pointerup",
+        "pointerout",
+        "pointercancel",
+        "scroll",
+        "resize",
+      ])
+        addEventListener(type, (e) => e.stopImmediatePropagation(), { capture: true });
+
+      const mulberry = (seed) => {
+        let a = seed >>> 0;
+        return () => {
+          a = (a + 0x6d2b79f5) >>> 0;
+          let t = Math.imul(a ^ (a >>> 15), 1 | a);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      };
+      const q = new URLSearchParams(location.search);
+      const frame = () => new Promise((r) => requestAnimationFrame(r));
+
+      // resolves once the animal is running, paused, with a sea.lab to drive (or null if this
+      // octopus.js has none)
+      window.ready = new Promise((resolve, reject) => {
+        const realRandom = Math.random;
+        Math.random = mulberry(+(q.get("load") || 1));
+        const s = document.createElement("script");
+        s.src = q.get("src") || "/octopus.js";
+        s.onerror = () => ((Math.random = realRandom), reject(new Error("octopus.js failed")));
+        s.onload = async () => {
+          Math.random = realRandom;
+          const sea = window.sea;
+          if (!sea || !sea.lab) return resolve(null);
+          sea.set(sea.defaults || {});
+          sea.start();
+          // start() settles the arms on its first animation frame; let that pass first
+          await frame();
+          await frame();
+          sea.lab.pause();
+          await (document.fonts ? document.fonts.ready : null);
+          resolve(sea);
+        };
+        document.body.append(s);
+      });
+    </script>
+  </body>
+</html>

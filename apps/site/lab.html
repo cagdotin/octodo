@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Octopus lab</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&display=swap"
+    />
+    <!--
+      The octopus test bench: deterministic scenarios, measurements and checks for octopus.js
+      (engine in lab/engine.js, headless runner in lab/run.cjs). Not linked from the site.
+      ?src=/some/octopus.js tests another copy; ?w=&h= changes the animal's viewport (1440x900).
+    -->
+    <style>
+      :root {
+        --bg: #171716;
+        --panel: #1d1d1c;
+        --fg: #f0ece5;
+        --muted: color-mix(in srgb, var(--fg) 62%, transparent);
+        --faint: color-mix(in srgb, var(--fg) 36%, transparent);
+        --line: color-mix(in srgb, var(--fg) 10%, transparent);
+        --accent: #e5813f;
+        --pass: #7cc58f;
+        --warn: #d9b25c;
+        --fail: #e66a5c;
+        --mono: "Geist Mono", ui-monospace, Menlo, monospace;
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font: 12px/1.6 var(--mono);
+        -webkit-font-smoothing: antialiased;
+      }
+      button,
+      select {
+        font: inherit;
+        color: var(--fg);
+        background: transparent;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 2px 9px;
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) {
+        border-color: var(--faint);
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      header {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        flex-wrap: wrap;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      header b {
+        font-weight: 500;
+      }
+      header .src {
+        color: var(--muted);
+      }
+      #progress {
+        flex: 1;
+        min-width: 120px;
+        color: var(--muted);
+      }
+      #progress i {
+        display: block;
+        height: 2px;
+        background: var(--accent);
+        width: 0;
+        transition: width 0.2s;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 230px minmax(0, 1fr);
+      }
+      aside {
+        border-right: 1px solid var(--line);
+        padding: 8px 0;
+        min-height: calc(100vh - 50px);
+      }
+      aside button {
+        display: flex;
+        width: 100%;
+        gap: 8px;
+        align-items: baseline;
+        border: 0;
+        border-radius: 0;
+        padding: 5px 16px;
+        text-align: left;
+      }
+      aside button[aria-current="true"] {
+        background: var(--panel);
+      }
+      aside button span:nth-child(2) {
+        flex: 1;
+      }
+      aside hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 8px 16px;
+      }
+      .badge {
+        display: inline-block;
+        min-width: 4.2em;
+        text-align: center;
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        border-radius: 3px;
+        padding: 0 4px;
+        border: 1px solid currentColor;
+        color: var(--faint);
+      }
+      .badge.pass {
+        color: var(--pass);
+      }
+      .badge.warn {
+        color: var(--warn);
+      }
+      .badge.fail {
+        color: var(--fail);
+      }
+      main {
+        padding: 16px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 560px);
+        gap: 24px;
+        align-items: start;
+      }
+      main > .full {
+        grid-column: 1 / -1;
+      }
+      @media (max-width: 1100px) {
+        main {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      @media (max-width: 700px) {
+        .layout {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        aside {
+          min-height: 0;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+      }
+      h2 {
+        font-size: 15px;
+        font-weight: 500;
+        margin: 0 0 4px;
+      }
+      h3 {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--muted);
+        text-transform: lowercase;
+        margin: 22px 0 6px;
+      }
+      p.about {
+        color: var(--muted);
+        margin: 0 0 8px;
+        max-width: 70ch;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 3px 10px 3px 0;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+        white-space: nowrap;
+      }
+      th {
+        font-weight: 400;
+        color: var(--faint);
+      }
+      td.note {
+        color: var(--muted);
+        white-space: normal;
+      }
+      td.num,
+      th.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .scroll {
+        overflow-x: auto;
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+        gap: 2px 24px;
+      }
+      .metrics div {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        border-bottom: 1px solid var(--line);
+      }
+      .metrics span:first-child {
+        color: var(--muted);
+      }
+      .charts canvas {
+        display: block;
+        width: 100%;
+        height: 74px;
+        margin-bottom: 4px;
+        cursor: crosshair;
+      }
+      #readout {
+        color: var(--muted);
+        min-height: 1.6em;
+      }
+      .replay {
+        position: sticky;
+        top: 12px;
+      }
+      .screen {
+        position: relative;
+        overflow: hidden;
+        background: #171716;
+        border: 1px solid var(--line);
+      }
+      .screen iframe {
+        position: absolute;
+        left: 0;
+        top: 0;
+        border: 0;
+        transform-origin: 0 0;
+        pointer-events: none;
+      }
+      .screen canvas {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .controls {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+      .controls input[type="range"] {
+        flex: 1;
+        min-width: 140px;
+        accent-color: var(--accent);
+      }
+      .controls label {
+        color: var(--muted);
+      }
+      #time {
+        min-width: 9ch;
+        font-variant-numeric: tabular-nums;
+      }
+      .film img {
+        display: block;
+        width: 100%;
+        cursor: zoom-in;
+      }
+      .film.big {
+        overflow-x: auto;
+      }
+      .film.big img {
+        width: auto;
+        max-width: none;
+        cursor: zoom-out;
+      }
+      details summary {
+        cursor: pointer;
+        color: var(--muted);
+      }
+      #tuneRow input[type="number"] {
+        width: 5em;
+        font: inherit;
+        color: var(--fg);
+        background: transparent;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 1px 4px;
+      }
+      .flip {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+      #flipView {
+        width: 480px;
+        max-width: 100%;
+        image-rendering: pixelated;
+        border: 1px solid var(--line);
+      }
+      .flip-side {
+        flex: 1;
+        min-width: 260px;
+      }
+      #flipLine {
+        display: block;
+        width: 100%;
+        cursor: pointer;
+        margin-top: 8px;
+      }
+      .pair {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+      .pair .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      img.onion {
+        display: block;
+        width: 420px;
+        max-width: 100%;
+      }
+      td.spark {
+        color: var(--accent);
+        letter-spacing: -0.05em;
+      }
+      .hist {
+        display: flex;
+        align-items: flex-end;
+        gap: 2px;
+        height: 80px;
+        border-bottom: 1px solid var(--line);
+      }
+      .hist div {
+        flex: 1;
+        background: var(--accent);
+        border-radius: 2px 2px 0 0;
+        min-height: 1px;
+      }
+      .hist-axis {
+        display: flex;
+        justify-content: space-between;
+        color: var(--faint);
+      }
+      .notice {
+        color: var(--warn);
+      }
+      .muted {
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <b>octopus lab</b>
+      <span class="src" id="src"></span>
+      <button id="runAll" disabled>run all</button>
+      <details id="tuneBox">
+        <summary>settings: <span id="tuneSummary"></span></summary>
+        <div id="tuneRow" class="controls"></div>
+      </details>
+      <div id="progress"><span id="progressText">loading…</span><i id="progressBar"></i></div>
+    </header>
+    <div class="layout">
+      <aside id="list" aria-label="Scenarios"></aside>
+      <main>
+        <section id="detail"></section>
+        <section class="replay" aria-label="Replay">
+          <div class="screen" id="screen">
+            <iframe id="stage" title="octopus stage" tabindex="-1"></iframe>
+            <canvas id="overlay"></canvas>
+          </div>
+          <div class="controls">
+            <button id="play" disabled>play</button>
+            <input id="scrub" type="range" min="0" max="1" step="0.01" value="0" disabled />
+            <span id="time">0.00 s</span>
+          </div>
+          <div class="controls">
+            <label><input type="checkbox" id="ovl" checked /> guides</label>
+            <label><input type="checkbox" id="zoom" /> zoom on body</label>
+            <label
+              >speed
+              <select id="speed">
+                <option value="1">1×</option>
+                <option value="0.5">½×</option>
+                <option value="0.25">¼×</option>
+                <option value="0.1">⅒×</option>
+              </select></label
+            >
+          </div>
+          <p class="muted" id="replayNote"></p>
+        </section>
+        <section class="full" id="filmSection"></section>
+      </main>
+    </div>
+    <script src="/lab/engine.js"></script>
+    <script src="/lab.js"></script>
+  </body>
+</html>

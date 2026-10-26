@@ -1,10 +1,12 @@
 import type { CreateTaskInput, WorkspaceSnapshot } from "@octodo/core";
-import { useState, type FormEvent } from "react";
+import { useMemo } from "react";
+import { QuickAddInput } from "@/components/quick-add/quick-add-input";
+import { suggestionsFor, useQuickAdd } from "@/components/quick-add/use-quick-add";
 import { PriorityIcon, StatusIcon, TagChip } from "@/components/task-bits";
 import { Kbd } from "@/components/ui/kbd";
 import { useCreateTask } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { dueInfo, isSmartView, parseQuickAdd, SMART, todayKey } from "@/lib/tasks";
+import { dueInfo, isSmartView, SMART, todayKey } from "@/lib/tasks";
 
 interface Props {
   workspace: string;
@@ -21,7 +23,7 @@ interface Props {
 
 /**
  * Inline new-task row. Enter saves and keeps it open for the next one, Esc (or leaving it empty)
- * closes it. Understands the quick-add tokens `!high`, `#tag` and `due:`.
+ * closes it. Understands the quick-add tokens (`/list`, `#tag`, `!high`, `due:`, natural dates).
  */
 export function TaskComposer({
   workspace,
@@ -32,31 +34,34 @@ export function TaskComposer({
   variant = "row",
   idWidth,
 }: Props) {
-  const [text, setText] = useState("");
+  const draft = useQuickAdd(snapshot.lists);
+  const suggestions = useMemo(() => suggestionsFor(snapshot), [snapshot]);
   const create = useCreateTask(workspace);
-  const parsed = parseQuickAdd(text);
+  const { title, fields } = draft.parsed;
   const category = snapshot.statuses.find((entry) => entry.id === status)?.category;
-  const due = dueInfo(parsed.due ?? null);
+  const due = dueInfo(fields.due ?? null);
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    if (parsed.title === "") return;
+  const submit = () => {
+    if (title === "") return;
     const input: CreateTaskInput = {
-      title: parsed.title,
-      tags: parsed.tags,
+      title,
+      tags: fields.tags,
       status,
-      ...(parsed.priority ? { priority: parsed.priority } : {}),
+      ...(fields.priority ? { priority: fields.priority } : {}),
       // Adding from Today means due today unless the text says otherwise.
-      ...(parsed.due ? { due: parsed.due } : list === SMART.today ? { due: todayKey() } : {}),
-      ...(isSmartView(list) ? {} : { list: list ?? null }),
+      ...(fields.due ? { due: fields.due } : list === SMART.today ? { due: todayKey() } : {}),
+      ...(fields.list ? { list: fields.list } : isSmartView(list) ? {} : { list: list ?? null }),
     };
     create.mutate(input);
-    setText("");
+    draft.setText("");
   };
 
   return (
     <form
-      onSubmit={submit}
+      onSubmit={(event) => {
+        event.preventDefault();
+        submit();
+      }}
       className={cn(
         "flex items-center gap-2",
         variant === "row"
@@ -76,30 +81,23 @@ export function TaskComposer({
           style={{ width: idWidth }}
         />
       )}
-      <input
+      <QuickAddInput
         // oxlint-disable-next-line jsx-a11y/no-autofocus -- opened on purpose by a click or `n`.
         autoFocus
-        aria-label="New task title"
-        value={text}
-        autoComplete="off"
-        enterKeyHint="done"
-        placeholder="Task title, then Enter  (!high  #tag  due:tomorrow)"
-        className="min-w-0 flex-1 bg-transparent pl-1 text-base outline-none placeholder:text-muted-foreground md:text-sm"
-        onChange={(event) => setText(event.target.value)}
-        onBlur={() => text.trim() === "" && onClose()}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            event.preventDefault();
-            event.stopPropagation();
-            onClose();
-          }
-        }}
+        draft={draft}
+        suggestions={suggestions}
+        label="New task title"
+        placeholder="Task title, then Enter  (/list  #tag  !high  tomorrow)"
+        className="min-w-0 flex-1 pl-1 text-base md:text-sm"
+        onSubmit={submit}
+        onEscape={onClose}
+        onBlur={() => draft.text.trim() === "" && onClose()}
       />
       <span className="flex shrink-0 items-center gap-1.5">
-        {parsed.priority && parsed.priority !== "none" && (
-          <PriorityIcon priority={parsed.priority} />
+        {fields.priority && fields.priority !== "none" && (
+          <PriorityIcon priority={fields.priority} />
         )}
-        {parsed.tags.map((tag) => (
+        {fields.tags.map((tag) => (
           <TagChip key={tag} tag={tag} />
         ))}
         {due && (
@@ -107,7 +105,7 @@ export function TaskComposer({
             {due.label}
           </span>
         )}
-        {variant === "row" && text === "" && (
+        {variant === "row" && draft.text === "" && (
           <span className="hidden text-xs text-muted-foreground md:inline">
             <Kbd>Esc</Kbd> to cancel
           </span>

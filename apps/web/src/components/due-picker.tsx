@@ -46,6 +46,7 @@ export function DuePicker({
   onChange,
   children,
   align = "start",
+  defaultOpen = false,
   onOpenChange,
   onCloseAutoFocus,
 }: {
@@ -54,11 +55,12 @@ export function DuePicker({
   /** The trigger, rendered as the popover's anchor. */
   children: ReactNode;
   align?: "start" | "center" | "end";
+  defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   /** Where focus goes on close; call `preventDefault` to keep it off the trigger. */
   onCloseAutoFocus?: (event: Event) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [draft, setDraft] = useState<string | null>(value);
   const setOpenState = (next: boolean) => {
     if (next) setDraft(value);

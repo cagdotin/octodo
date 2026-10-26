@@ -10,6 +10,7 @@
     "postinstall": "tsr generate"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.4",
     "@codemirror/commands": "^6.11.1",
     "@codemirror/lang-markdown": "^6.5.2",
     "@codemirror/language": "^6.13.1",
@@ -26,6 +27,7 @@
     "@tanstack/react-query": "^5.104.5",
     "@tanstack/react-router": "^1.170.46",
     "@xstate/react": "^6.1.0",
+    "chrono-node": "^2.10.3",
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
     "cn": "^0.5.0",

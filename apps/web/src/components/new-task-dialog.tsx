@@ -8,8 +8,18 @@ import {
   PaperclipIcon,
   type LucideIcon,
 } from "lucide-react";
-import { useRef, useState, type ComponentProps, type KeyboardEvent, type ReactNode } from "react";
+import {
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { DuePicker } from "@/components/due-picker";
+import { completing } from "@/components/quick-add/editor";
+import { QuickAddInput, type QuickAddInputHandle } from "@/components/quick-add/quick-add-input";
+import { suggestionsFor, useQuickAdd } from "@/components/quick-add/use-quick-add";
 import { ListGlyph, PriorityIcon, StatusIcon } from "@/components/task-bits";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +43,7 @@ import {
 import { Kbd } from "@/components/ui/kbd";
 import { defaultStatus } from "@octodo/core/layout";
 import { useCreateTask } from "@/lib/api";
+import { withoutRanges, type QuickAddToken } from "@/lib/quick-add";
 import { cn } from "@/lib/utils";
 import {
   allTags,
@@ -40,7 +51,6 @@ import {
   isSmartView,
   listLabel,
   listTree,
-  parseQuickAdd,
   PRIORITIES,
   SMART,
   todayKey,
@@ -63,14 +73,6 @@ const flatLists = (
   depth = 0,
 ): Array<{ list: List; depth: number }> =>
   nodes.flatMap((node) => [{ list: node.list, depth }, ...flatLists(node.children, depth + 1)]);
-
-/** Drops the quick-add tokens a picker has just overridden, so the dialog shows one answer. */
-const stripTokens = (text: string, drop: (word: string) => boolean) =>
-  text
-    .split(/(\s+)/)
-    .filter((word) => !drop(word))
-    .join("")
-    .replace(/\s{2,}/g, " ");
 
 interface Props {
   open: boolean;
@@ -96,7 +98,10 @@ export function NewTaskDialog({ open, onOpenChange, ...props }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="top-[18%] translate-y-0 gap-0 overflow-hidden rounded-xl! p-0 shadow-2xl sm:max-w-xl"
+        className="top-[18%] translate-y-0 gap-0 rounded-xl! p-0 shadow-2xl sm:max-w-xl"
+        onEscapeKeyDown={(event) => {
+          if (completing(event.target)) event.preventDefault();
+        }}
       >
         <DialogHeader className="sr-only">
           <DialogTitle>New task</DialogTitle>
@@ -118,8 +123,9 @@ function NewTaskForm({
   onDone,
 }: Omit<Props, "open" | "onOpenChange"> & { onDone: () => void }) {
   const create = useCreateTask(workspace);
-  const titleInput = useRef<HTMLInputElement>(null);
-  const [text, setText] = useState(initialTitle);
+  const titleInput = useRef<QuickAddInputHandle>(null);
+  const draft = useQuickAdd(snapshot.lists, initialTitle);
+  const suggestions = useMemo(() => suggestionsFor(snapshot), [snapshot]);
   const [notes, setNotes] = useState("");
   // Picks from the buttons; undefined means "whatever the tokens or the view say".
   const [pickedStatus, setPickedStatus] = useState<string>();
@@ -128,17 +134,25 @@ function NewTaskForm({
   const [pickedList, setPickedList] = useState<string | null>();
   const [pickedTags, setPickedTags] = useState<Array<string>>([]);
 
-  const parsed = parseQuickAdd(text);
+  const { parsed } = draft;
+  // A pick from the buttons replaces what the tokens said, so the dialog shows one answer.
+  const dropTokens = (drop: (token: QuickAddToken) => boolean) =>
+    draft.setText(
+      withoutRanges(
+        draft.text,
+        parsed.ranges.filter((range) => drop(range.token)),
+      ),
+    );
   const status =
     snapshot.statuses.find((entry) => entry.id === pickedStatus) ??
     defaultStatus(snapshot.statuses);
-  const priority = parsed.priority ?? pickedPriority ?? "none";
+  const priority = parsed.fields.priority ?? pickedPriority ?? "none";
   const due =
-    parsed.due ??
+    parsed.fields.due ??
     (pickedDue === undefined ? (list === SMART.today ? todayKey() : null) : pickedDue);
   const viewList = isSmartView(list) ? null : (list ?? null);
-  const targetList = pickedList === undefined ? viewList : pickedList;
-  const tags = [...new Set([...pickedTags, ...parsed.tags])];
+  const targetList = parsed.fields.list ?? (pickedList === undefined ? viewList : pickedList);
+  const tags = [...new Set([...pickedTags, ...parsed.fields.tags])];
   const knownTags = [...new Set([...allTags(snapshot.tasks), ...tags])].sort((a, b) =>
     a.localeCompare(b),
   );
@@ -146,7 +160,9 @@ function NewTaskForm({
   const ready = parsed.title !== "" && status !== undefined;
 
   const toggleTag = (tag: string) => {
-    if (parsed.tags.includes(tag)) setText(stripTokens(text, (word) => word === `#${tag}`));
+    if (parsed.fields.tags.includes(tag)) {
+      dropTokens((token) => token.kind === "tag" && token.tag === tag);
+    }
     setPickedTags(
       tags.includes(tag) ? pickedTags.filter((entry) => entry !== tag) : [...pickedTags, tag],
     );
@@ -182,26 +198,19 @@ function NewTaskForm({
   };
 
   return (
-    <div
-      className="flex flex-col"
-      onFocusCapture={(event) => {
-        // Radix focuses the first field on open; put the caret after a prefilled title.
-        if (event.target === titleInput.current && initialTitle !== "" && text === initialTitle) {
-          titleInput.current.setSelectionRange(text.length, text.length);
-        }
-      }}
-    >
+    <div className="flex flex-col">
       <div className="flex flex-col gap-1 px-4 pt-4 pb-2">
-        <input
+        <QuickAddInput
           ref={titleInput}
-          aria-label="Task title"
-          value={text}
-          autoComplete="off"
-          enterKeyHint="done"
+          // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens to type a title.
+          autoFocus
+          wrap
+          draft={draft}
+          suggestions={suggestions}
+          label="Task title"
           placeholder="Task title"
-          className="bg-transparent text-lg font-medium outline-none placeholder:text-muted-foreground/70"
-          onChange={(event) => setText(event.target.value)}
-          onKeyDown={(event) => onEnter(event, true)}
+          className="text-lg font-medium"
+          onSubmit={submit}
         />
         <textarea
           aria-label="Notes"
@@ -254,11 +263,7 @@ function NewTaskForm({
                 onValueChange={(value) => {
                   const picked = MENU_PRIORITIES.find((entry) => entry === value);
                   if (picked === undefined) return;
-                  if (parsed.priority) {
-                    setText(
-                      stripTokens(text, (word) => parseQuickAdd(word).priority !== undefined),
-                    );
-                  }
+                  if (parsed.fields.priority) dropTokens((token) => token.kind === "priority");
                   setPickedPriority(picked);
                 }}
               >
@@ -278,7 +283,7 @@ function NewTaskForm({
         <DuePicker
           value={due}
           onChange={(next) => {
-            if (parsed.due) setText(stripTokens(text, (word) => /^due:\S+$/i.test(word)));
+            if (parsed.fields.due) dropTokens((token) => token.kind === "due");
             setPickedDue(next);
           }}
           onCloseAutoFocus={refocus}
@@ -305,7 +310,10 @@ function NewTaskForm({
               <DropdownMenuLabel>List</DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={targetList ?? ""}
-                onValueChange={(value) => setPickedList(value === "" ? null : value)}
+                onValueChange={(value) => {
+                  if (parsed.fields.list) dropTokens((token) => token.kind === "list");
+                  setPickedList(value === "" ? null : value);
+                }}
               >
                 <DropdownMenuRadioItem value="">No list</DropdownMenuRadioItem>
                 {flatLists(listTree(snapshot.lists)).map(({ list: entry, depth }) => (

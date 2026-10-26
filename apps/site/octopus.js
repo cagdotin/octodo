@@ -143,13 +143,15 @@
       period: 1.6,
       strokes: 0,
       thrust: 1,
-      hurry: false, // startled: heading for the far side of the screen
+      hurry: false, // fleeing the pointer
+      fear: 0, // 0..1, builds while the pointer stays close or follows, scales the escape
+      fleeA: 0, // smoothed escape heading
+      fleeMin: 0, // a fright lasts at least this long
       rest: 3,
       wx: 0,
       wy: 0,
       wpAge: 0,
       wander: 0,
-      cool: 0,
       flowY: 0,
     };
     // the muscle pose the arms are pulled toward, shaped by the stroke cycle
@@ -330,16 +332,10 @@
     }
 
     function update(dt, t) {
-      O.cool -= dt;
       O.wpAge += dt;
-      const togo = Math.hypot(O.wx - O.x, O.wy - O.y);
-      if (O.hurry && (togo < 60 * S || O.wpAge > 14)) {
-        // far enough: finish this stroke and settle down
-        O.hurry = false;
-        O.strokes = Math.min(O.strokes, 1);
-      }
-      if (!O.hurry && (togo < 80 * S || O.wpAge > 16)) pickWaypoint();
-      let want = desiredHeading(dt);
+      pressure(dt);
+      if (!O.hurry && (Math.hypot(O.wx - O.x, O.wy - O.y) < 80 * S || O.wpAge > 16)) pickWaypoint();
+      let want = O.hurry ? O.fleeA : desiredHeading(dt);
       let turnRate;
 
       // Stroke cycle: a quick jet (the mantle squeezes, the arms snap shut and stream behind),
@@ -354,7 +350,6 @@
         O.phase += dt / O.period;
         if (O.phase >= 1) {
           O.phase -= 1;
-          if (O.hurry) O.period = 1.05;
           // a hurrying octopus keeps stroking until it gets there
           if (!O.hurry && --O.strokes <= 0) {
             O.mode = "drift";
@@ -364,7 +359,9 @@
           }
         }
         const p = O.phase;
-        const flare = 0.62;
+        // at full tilt the water holds the arms closer: the same stroke, a smaller flare
+        const tilt = O.hurry ? O.fear : 0;
+        const flare = 0.62 - 0.2 * tilt;
         if (p < 0.28) {
           const u = p / 0.28;
           power = Math.sin(u * Math.PI);
@@ -374,12 +371,12 @@
         } else {
           const u = (p - 0.28) / 0.72;
           spreadT = 0.16 + (flare - 0.16) * ease(Math.min(1, u * 1.15));
-          curlT = 0.25 + 0.55 * u;
+          curlT = (0.25 + 0.55 * u) * (1 - 0.5 * tilt);
           squeezeT = Math.cos(u * Math.PI * 0.5) * 1.0 - 0.45 * Math.sin(u * Math.PI);
         }
         relaxT = 0;
         waveT = 0.35;
-        turnRate = (p < 0.28 ? 0.45 : 0.95) * (O.hurry ? 1.3 : 1);
+        turnRate = (p < 0.28 ? 0.45 : 0.95) * (O.hurry ? 1.5 + 0.6 * O.fear : 1);
       } else {
         // drifting: slow breathing, the web half open, every arm tip doing its own thing
         O.rest -= dt;
@@ -389,18 +386,25 @@
         relaxT = 1;
         waveT = 0.55;
         squeezeT = 0.12 * Math.sin(t * 2.4);
-        turnRate = O.hurry ? 1.3 : 0.42;
+        turnRate = O.hurry ? 2 : 0.42;
         // hanging in the water the mantle floats up; it only lines up with where it is going
         // in the moment before it sets off
         if (O.rest > 1.5) {
           const up = -Math.PI / 2;
           want = up + clamp(wrapA(O.th - up), -0.7, 0.7) * 0.9;
         }
-        if (O.rest < 0 && (Math.abs(wrapA(want - O.th)) < (O.hurry ? 0.8 : 0.45) || O.rest < -5)) {
+        if (
+          O.rest < 0 &&
+          (Math.abs(wrapA(want - O.th)) < (O.hurry ? (room(O.th) > 150 * S ? 1.6 : 0.5) : 0.45) ||
+            O.rest < -5)
+        ) {
           O.mode = "swim";
           O.phase = 0;
           O.strokes = Math.round(rnd(2, 4));
-          O.period = O.hurry ? 1.05 : rnd(1.4, 1.8);
+          if (!O.hurry) {
+            O.period = rnd(1.4, 1.8);
+            O.thrust = 1;
+          }
         }
       }
       pose.spread = approach(pose.spread, spreadT, O.mode === "swim" ? 14 : 2.5, dt);
@@ -433,6 +437,10 @@
       O.vx = f0 * nf - f1 * nl;
       O.vy = f1 * nf + f0 * nl;
       if (O.mode === "drift") O.vy += (5 * S - O.vy) * 0.3 * dt; // slowly sinks
+      // the screen edge is a soft wall: never more than part of the body slips past it
+      const wm = 70 * S;
+      O.vx += (Math.max(0, wm - O.x) - Math.max(0, O.x - (W - wm))) * 18 * dt;
+      O.vy += (Math.max(0, wm - O.y) - Math.max(0, O.y - (H - wm))) * 18 * dt;
       O.x += O.vx * dt;
       O.y += O.vy * dt;
 
@@ -491,30 +499,82 @@
       }
     }
 
-    // Startle: pick a spot on the far side of the screen from the pointer, clear of the text,
-    // and swim there with the ordinary jet cycle, just a little quicker and for longer.
-    function startle(x, y) {
-      if (!running || O.cool > 0 || O.hurry) return;
-      let best = -1e9;
-      for (let i = 0; i < 40; i++) {
-        // with room beside the text column, stay on that side rather than cross under it
-        const tx = rnd(band ? colR + 60 : 0, W),
-          ty = rnd(0, H);
-        const dir = Math.atan2(ty - O.y, tx - O.x);
-        const sc =
-          appeal(tx, ty) * 1.5 +
-          (Math.hypot(tx - x, ty - y) / Math.hypot(W, H)) * 8 -
-          Math.max(0, Math.sin(dir) - 0.3) * 0.3;
+    // --- fleeing the pointer -------------------------------------------------------------------
+    // Pressure builds while the pointer stays close, faster when it closes in or follows, and
+    // fades once it leaves. Close enough and the octopus flees straight away from it, with its
+    // ordinary jet cycle driven quicker and harder the more pressure there is.
+    let ptr = null,
+      lastD = Infinity,
+      closing = 0;
+    const NEAR = () => 230 * S;
+
+    // how far the animal can swim at angle a before reaching the screen margin
+    function room(a) {
+      const m = 80 * S,
+        c = Math.cos(a),
+        s = Math.sin(a);
+      let r = 420 * S;
+      if (c > 1e-3) r = Math.min(r, (W - m - O.x) / c);
+      if (c < -1e-3) r = Math.min(r, (m - O.x) / c);
+      if (s > 1e-3) r = Math.min(r, (H - m - O.y) / s);
+      if (s < -1e-3) r = Math.min(r, (m - O.y) / s);
+      return Math.max(0, r);
+    }
+
+    // straight away from the pointer, unless a border is in the way: then whichever way along
+    // it leaves the most room. The text column is only a mild preference.
+    function fleeHeading(px, py) {
+      const away = Math.atan2(O.y - py, O.x - px);
+      let best = -1e9,
+        bestA = away;
+      for (let k = -12; k <= 12; k++) {
+        const a = away + k * 0.2;
+        const r = room(a);
+        const ex = O.x + Math.cos(a) * r;
+        let sc = (r / (420 * S)) * 2 + Math.cos(a - away) - Math.max(0, 1 - r / (200 * S)) * 2.5;
+        if (band && ex > colL - 40 && ex < colR + 40) sc -= 0.25;
+        sc -= Math.abs(wrapA(a - O.fleeA)) * 0.1; // don't flicker between equal choices
         if (sc > best) {
           best = sc;
-          O.wx = tx;
-          O.wy = ty;
+          bestA = a;
         }
       }
-      O.wpAge = 0;
+      return bestA;
+    }
+
+    function pressure(dt) {
+      const d = ptr ? Math.hypot(ptr.x - O.x, ptr.y - O.y) : Infinity;
+      const R = NEAR();
+      const rawClose = d < R && lastD < R ? clamp((lastD - d) / dt / (300 * S), -1, 1) : 0;
+      closing = approach(closing, rawClose, 5, dt);
+      lastD = d;
+      if (d < R) {
+        O.fear = Math.min(
+          1,
+          O.fear + dt * (0.06 + 0.16 * (1 - d / R) + 0.3 * Math.max(0, closing)),
+        );
+        if (!O.hurry && d < 140 * S) startFlee(1.5);
+      } else O.fear = Math.max(0, O.fear - dt * 0.3);
+
+      if (!O.hurry) return;
+      O.fleeMin -= dt;
+      if (ptr) O.fleeA += wrapA(fleeHeading(ptr.x, ptr.y) - O.fleeA) * Math.min(1, dt * 5);
+      O.period = 0.85 - 0.35 * O.fear;
+      O.thrust = 2 + 2.4 * O.fear;
+      if (d > R * 1.15 && O.fear < 0.25 && O.fleeMin <= 0) {
+        // safe: finish this stroke and settle down
+        O.hurry = false;
+        O.strokes = 1;
+        pickWaypoint();
+      }
+    }
+
+    function startFlee(min) {
+      if (!running) return;
+      O.fleeMin = Math.max(O.fleeMin, min);
+      if (O.hurry) return;
       O.hurry = true;
-      O.thrust = 1.7;
-      O.cool = 4;
+      O.fleeA = ptr ? Math.atan2(O.y - ptr.y, O.x - ptr.x) : O.th;
       if (O.mode === "drift") O.rest = 0;
     }
 
@@ -801,16 +861,20 @@
       { passive: true },
     );
 
-    addEventListener("pointermove", (e) => {
-      const dx = e.clientX - O.x,
-        dy = e.clientY - O.y;
-      if (Math.hypot(dx, dy) < 95 * S + Math.max(0, Math.cos(Math.atan2(dy, dx) - O.th)) * ML)
-        startle(e.clientX, e.clientY);
-    });
+    addEventListener("pointermove", (e) => (ptr = { x: e.clientX, y: e.clientY }));
     addEventListener("pointerdown", (e) => {
       if (e.target.closest("a,button,.card")) return;
-      if (Math.hypot(e.clientX - O.x, e.clientY - O.y) < 260 * S) startle(e.clientX, e.clientY);
+      ptr = { x: e.clientX, y: e.clientY };
+      // a click nearby is a fright on its own
+      if (Math.hypot(e.clientX - O.x, e.clientY - O.y) < 260 * S) {
+        O.fear = Math.min(1, O.fear + 0.15);
+        startFlee(2.5);
+      }
     });
+    const gone = () => ((ptr = null), (lastD = Infinity));
+    addEventListener("pointerout", (e) => !e.relatedTarget && gone());
+    addEventListener("pointerup", (e) => e.pointerType !== "mouse" && gone());
+    addEventListener("pointercancel", gone);
 
     // Lay the arms on their pose and let them hang in still water for a moment.
     function settle(t0, secs) {

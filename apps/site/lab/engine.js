@@ -79,6 +79,28 @@
     archCorr: 0.3,
     // an arm crossing itself (non-adjacent segments) in more than this share of frames (warning)
     selfCross: 0.01,
+    // "it should never go out of the view... it smoothly turns before it hits the edges": the
+    // whole body (every arm point, the mantle's tip, the head) inside the viewport on every
+    // frame, not a pixel out. edgeBand: "near an edge" is the body within this of it. There a
+    // bounce is the way out turning into the way in (above bounceV ML/s each way) while the
+    // mantle still points out, and edgeAcc caps how hard anything but its own heading may
+    // turn it from the edge (ML/s^2, inward, while the heading still points along or out).
+    edgeBand: 2,
+    bounceV: 0.3,
+    edgeAcc: 12,
+    // "the octopus is always on the right side of the screen": over a long cruise every third
+    // of the width (and of the height) holds at least this share of the time
+    coverThird: 0.2,
+    // "after the push, arms are still not closing enough": at the end of an unhurried close,
+    // the tips' span across the axis at its narrowest, as a share of the stroke's widest
+    // (octopus-v7: about 0.33 at cruise)
+    closeSpan: 0.25,
+    // an open panel (tune, data-sea-avoid) is no place to linger: share of the time behind it
+    behindPanel: 0.15,
+    // "the patterns are just too direct": cruise's turn rate while swimming varies (SD, rad/s),
+    // and the arms do not move as one (mean SD of the tips' distance from the axis, ML)
+    pathTurnSD: 0.15,
+    armDesync: 0.08,
 
     // --- per-frame anomaly flags (marked on timelines and contact sheets, not pass/fail) ---
     // jerk, the third derivative of position in the screen frame, measured over 1/30 s steps.
@@ -96,6 +118,14 @@
     noArchDeg: 1,
     noArchFor: 0.25,
   };
+  // "we are just making the animation faster, and it just flaps multiple times... make it
+  // push/flap stronger and the duration it travels can be longer": over a chase, strokes at
+  // high fear (>= fearHigh) against low (< fearLow): strokes a second must not rise (fleeRate:
+  // at most this times), the distance a stroke carries it must grow (at least fleeDist times)
+  THRESHOLDS.fearLow = 0.5;
+  THRESHOLDS.fearHigh = 0.9;
+  THRESHOLDS.fleeRate = 1.0;
+  THRESHOLDS.fleeDist = 1.15;
   const T = THRESHOLDS;
   // flag kinds: bit, short code for contact sheets, colour, what it means
   const FLAGS = {
@@ -113,6 +143,8 @@
     snap: [128, "SNP", "the turn rate changes faster than `headingSnap`"],
     noArch: [256, "ARC", "turning with no body arch for a while"],
     upside: [512, "UPS", "resting mantle-down near the top or bottom"],
+    out: [1024, "OUT", "part of the body is outside the viewport"],
+    bounce: [2048, "BNC", "turned back from an edge as if it bounced"],
   };
   const flagCodes = (bits) =>
     Object.values(FLAGS)
@@ -120,14 +152,15 @@
       .map(([, c]) => c);
   // flags about the arms' or body's motion in that very frame get a red border; the slower
   // pose ones (no arch, upside down) only an amber label
-  const MOTION = 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128;
+  const MOTION = 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 1024 | 2048;
   const RING = 1 | 8 | 64; // marked on the tip traces: flick, midline, cap
 
-  // The animal's settings for every run: the user's tuning (sea.set knobs) and palette, set
-  // explicitly so that older copies of octopus.js with other defaults run the same way. The lab
-  // page (?tune=, ?palette=) and run.cjs (--tune, --palette) override them.
-  const TUNE = { density: 1.8, glyphs: "ascii", size: 1.1, speed: 1.9, react: 0.35, scroll: 1.4 };
-  const PALETTE = "ink";
+  // The animal's settings for every run: the look comes from the octopus.js under test (its own
+  // sea.defaults, so the sheets show what visitors see), the user's motion tuning and body size
+  // are set explicitly, so older copies with other defaults move and measure the same way. The
+  // lab page (?tune=, ?palette=) and run.cjs (--tune, --palette) override them.
+  const TUNE = { size: 1.4, speed: 1.9, react: 0.35, scroll: 1.4 };
+  const PALETTE = "abyss";
 
   // --- small helpers -----------------------------------------------------------------------
   const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -232,6 +265,9 @@
   // arched: see armAxis()), "world" keeps the screen's frame.
   // checks: the scenario-specific checks; the arm and resting checks run everywhere.
   const UP = -Math.PI / 2;
+  // how near an edge the neck gets: octopus.js keeps room to swing its arms round (FREE, 3 ML)
+  // plus a margin. place(W, H, ML) gets the mantle length to put a run there.
+  const EDGE = 3.3;
   const SCENARIOS = [
     {
       id: "cruise",
@@ -242,7 +278,7 @@
       place: (W, H) => [W * 0.75, H * 0.5, UP],
       drive: () => {},
       film: { kind: "stroke", at: 10, align: "body" },
-      checks: ["arch"],
+      checks: ["arch", "closeSpan", "variety"],
     },
     {
       id: "click",
@@ -275,7 +311,7 @@
         else release(c);
       },
       film: { kind: "stroke", at: 3.2, align: "body" },
-      checks: ["reach", "lateSpread"],
+      checks: ["reach", "lateSpread", "fleeJet"],
     },
     {
       id: "chase-long",
@@ -290,20 +326,20 @@
         else release(c);
       },
       film: { kind: "stroke", at: 18, align: "body" },
-      checks: ["reach", "lateSpread", "fullFearClose"],
+      checks: ["reach", "lateSpread", "fullFearClose", "fleeJet"],
     },
     ...[
-      ["tl", "top left", () => [130, 130]],
-      ["tr", "top right", (W) => [W - 130, 130]],
-      ["bl", "bottom left", (_W, H) => [130, H - 130]],
-      ["br", "bottom right", (W, H) => [W - 130, H - 130]],
+      ["tl", "top left", (_W, _H, e) => [e, e]],
+      ["tr", "top right", (W, _H, e) => [W - e, e]],
+      ["bl", "bottom left", (_W, H, e) => [e, H - e]],
+      ["br", "bottom right", (W, H, e) => [W - e, H - e]],
     ].map(([k, name, xy], n) => ({
       id: "corner-" + k,
       title: "corner chase, " + name,
-      about: `Starts 130 px from the ${name} corner; a pointer between it and the middle of the screen follows 0.6 of the fright radius off for 8 s (1-9 s), herding it into the corner.`,
+      about: `Starts as near the ${name} corner as it swims (EDGE mantle lengths from each edge); a pointer between it and the middle of the screen follows 0.6 of the fright radius off for 8 s (1-9 s), herding it into the corner.`,
       seed: 5 + n,
       secs: 13,
-      place: (W, H) => [...xy(W, H), UP],
+      place: (W, H, ML) => [...xy(W, H, EDGE * ML), UP],
       drive: (c) => {
         if (c.t >= 1 && c.t < 9) follow(c, CHASE * c.near, toCenter);
         else release(c);
@@ -339,10 +375,11 @@
     {
       id: "rest-top",
       title: "rest at the top",
-      about: "Near the top edge; flung down the page and back (0.5 s, 2.6 s), then left to rest.",
+      about:
+        "As near the top edge as it swims; flung down the page and back (0.5 s, 2.6 s), then left to rest.",
       seed: 11,
       secs: 24,
-      place: (W) => [W * 0.7, 100, -0.3],
+      place: (W, _H, ML) => [W * 0.7, EDGE * ML, -0.3],
       drive: (c) => {
         fling(c, 0.5, 4000);
         if (!c.st.scrolling) fling(c, 2.6, -4000);
@@ -353,10 +390,11 @@
     {
       id: "rest-bottom",
       title: "rest at the bottom",
-      about: "Near the bottom edge; flung to the end of the page at 0.5 s, then left to rest.",
+      about:
+        "As near the bottom edge as it swims; flung to the end of the page at 0.5 s, then left to rest.",
       seed: 12,
       secs: 24,
-      place: (W, H) => [W * 0.7, H - 100, -0.3],
+      place: (W, H, ML) => [W * 0.7, H - EDGE * ML, -0.3],
       drive: (c) => fling(c, 0.5, 4000),
       film: { kind: "time", at: 0.5, span: 22, align: "world" },
       checks: [],
@@ -398,7 +436,71 @@
       film: { kind: "stroke", at: 4.5, align: "body" },
       checks: ["arch"],
     },
+    {
+      id: "roam",
+      title: "roam",
+      about: "2 min unprovoked, from the right: it should visit every part of the screen.",
+      seed: 21,
+      secs: 120,
+      place: (W, H) => [W * 0.8, H * 0.5, UP],
+      drive: () => {},
+      film: { kind: "time", at: 0, span: 120, align: "world" },
+      checks: ["cover"],
+    },
+    {
+      id: "panel",
+      title: "open panel",
+      about:
+        "60 s unprovoked with a panel open over the right of the screen (like the tune panel, marked data-sea-avoid), starting behind it.",
+      seed: 22,
+      secs: 60,
+      place: (W, H) => [W * 0.85, H * 0.5, UP],
+      setup: (doc, W, H) => {
+        const p = doc.createElement("div");
+        p.id = "lab-panel";
+        p.dataset.seaAvoid = "";
+        Object.assign(p.style, {
+          position: "fixed",
+          right: "16px",
+          top: "16px",
+          width: Math.round(W * 0.24) + "px",
+          height: Math.round(H * 0.7) + "px",
+          border: "1px dashed #666",
+        });
+        doc.body.append(p);
+      },
+      drive: () => {},
+      film: { kind: "time", at: 0, span: 60, align: "world" },
+      checks: ["panel"],
+    },
+    {
+      id: "resize",
+      title: "window resized",
+      about:
+        "Swimming near the right edge; the window shrinks to 900x640 at 3 s, to a phone's 420x800 at 9 s, and back at 15 s.",
+      seed: 23,
+      secs: 22,
+      place: (W, H) => [W * 0.82, H * 0.6, -0.2],
+      drive: (c) => {
+        for (const [t0, w, h] of [
+          [3, 900, 640],
+          [9, 420, 800],
+          [15, null, null],
+        ])
+          if (at(c, t0)) resizeStage(w, h, c.L);
+      },
+      film: { kind: "time", at: 2, span: 18, align: "world" },
+      checks: [],
+    },
   ];
+  // the stage's frame resized (null: back to its own size), and the animal told at once
+  function resizeStage(w, h, L) {
+    const f = stage.win.frameElement;
+    f.width = w ?? stage.W;
+    f.height = h ?? stage.H;
+    void stage.win.innerWidth; // the frame lays out anew
+    L.resize();
+  }
 
   // --- the stage -------------------------------------------------------------------------------
   // The octopus runs in an iframe (lab/stage.html) of a fixed size, so it sees the same
@@ -416,7 +518,10 @@
       stage = { win, sea: null, unsupported: "this octopus.js has no sea.lab" };
       return stage;
     }
+    // the animal's palette lives on its canvas (the page keeps its own); older copies of
+    // octopus.js read it from the page
     win.document.documentElement.dataset.palette = palette;
+    win.document.getElementById("sea").dataset.palette = palette;
     const applied = sea.set({ ...(sea.defaults || {}), ...tune });
     sea.recolor();
     const canvas = win.document.getElementById("sea");
@@ -429,6 +534,7 @@
       H: s0.H,
       tune: applied,
       palette,
+      ML: s0.ML,
       ...radii(s0.ML, applied.react ?? 1),
     };
     cache.clear();
@@ -442,8 +548,13 @@
     const self = {
       reset() {
         L.pause();
+        const doc = stage.win.document;
+        doc.getElementById("lab-panel")?.remove();
+        const f = stage.win.frameElement;
+        if (f && (+f.width !== stage.W || +f.height !== stage.H)) resizeStage(null, null, L);
+        sc.setup?.(doc, stage.W, stage.H);
         L.seed(sc.seed);
-        const [x, y, th] = sc.place(stage.W, stage.H);
+        const [x, y, th] = sc.place(stage.W, stage.H, stage.ML);
         L.place(x, y, th);
         L.pointer(null);
         st = {};
@@ -566,7 +677,24 @@
       stillFromStart: true,
       jerkArmMax: 0,
       jerkBodyMax: 0,
+      outFrames: 0,
+      outMax: 0,
+      outAt: null,
+      bounces: 0,
+      bounceAt: null,
+      edgeAccMax: 0,
+      edgeAccAt: null,
+      walled0: s0.walled ?? 0,
+      walled: 0,
+      behind: 0,
+      tipSD: [],
+      turnSwim: [],
     };
+    const GX = 6,
+      GY = 4,
+      cover = new Float64Array(GX * GY);
+    const edgeV = { l: 0, r: 0, t: 0, b: 0 },
+      edgeOut = { l: -1e9, r: -1e9, t: -1e9, b: -1e9 };
     const jerkArms = [];
     const restsAny = []; // every rest but the first, cut ones up to the cut
     const body = new Float64Array(nArms * nNodes * 2);
@@ -682,7 +810,7 @@
 
       // speeds of every point relative to the body frame
       let nodeMax = 0;
-      if (prevBody) {
+      if (prevBody && prev && prev.ML === s.ML && prev.W === s.W && prev.H === s.H) {
         for (let k = 0; k < nArms; k++)
           for (let j = 1; j < nNodes; j++) {
             const o = (k * nNodes + j) * 2;
@@ -831,6 +959,55 @@
         (d.bottom < T.edgeNear && h1 > T.facingCos);
       if (off) m.offscreen++;
       if (facing) m.facingS += DT;
+      // the whole body against the viewport (the stage's size now: it may have been resized)
+      {
+        const VW = s.W ?? W,
+          VH = s.H ?? H;
+        let x0 = Math.min(mx, s.x - h0 * ML * 0.5),
+          x1 = Math.max(mx, s.x - h0 * ML * 0.5),
+          y0 = Math.min(my, s.y - h1 * ML * 0.5),
+          y1 = Math.max(my, s.y - h1 * ML * 0.5);
+        for (const p of s.arms)
+          for (let j = 0; j < p.length; j += 2) {
+            if (p[j] < x0) x0 = p[j];
+            if (p[j] > x1) x1 = p[j];
+            if (p[j + 1] < y0) y0 = p[j + 1];
+            if (p[j + 1] > y1) y1 = p[j + 1];
+          }
+        const over = Math.max(-x0, x1 - VW, -y0, y1 - VH);
+        if (over > 0) {
+          m.outFrames++;
+          m.outAt ??= r3(t);
+          flag(i, "out", over / ML, 0, 1 + over / ML);
+        }
+        m.outMax = Math.max(m.outMax, over / ML);
+        // near an edge: a bounce, or a hard shove inward that the heading doesn't explain
+        const cl = { l: x0 / ML, r: (VW - x1) / ML, t: y0 / ML, b: (VH - y1) / ML };
+        const nrm = { l: [-1, 0], r: [1, 0], t: [0, -1], b: [0, 1] };
+        for (const k in cl) {
+          const [nx, ny] = nrm[k];
+          const vn = (s.vx * nx + s.vy * ny) / ML,
+            hn = h0 * nx + h1 * ny;
+          if (cl[k] < T.edgeBand) {
+            if (vn > T.bounceV) edgeOut[k] = t;
+            if (vn < -T.bounceV && hn > 0.2 && t - edgeOut[k] < 0.5) {
+              m.bounces++;
+              m.bounceAt ??= r3(t);
+              flag(i, "bounce", vn, -T.bounceV, 2);
+              edgeOut[k] = -1e9;
+            }
+            const an = -(vn - edgeV[k]) / DT;
+            if (hn >= 0 && i > 1 && an > m.edgeAccMax) [m.edgeAccMax, m.edgeAccAt] = [an, r3(t)];
+          }
+          edgeV[k] = vn;
+        }
+        cover[
+          Math.min(GY - 1, Math.max(0, Math.floor((s.y / VH) * GY))) * GX +
+            Math.min(GX - 1, Math.max(0, Math.floor((s.x / VW) * GX)))
+        ]++;
+        if (s.behind) m.behind++;
+        m.walled = (s.walled ?? 0) - m.walled0;
+      }
       const upside = h1 > T.upsideSin;
       if (resting) {
         m.restFrames++;
@@ -873,10 +1050,16 @@
           tipMax: 0,
           closeMean: Infinity,
           closeMax: Infinity,
+          spanMax: 0,
+          spanMin: Infinity,
+          dist: 0,
+          glide: 0,
         };
       }
       if (stroke) {
         stroke.v.push(v);
+        stroke.dist += v * DT;
+        if ((s.shut ?? 0) > 0.9 && s.phase > (s.pc ?? 0.28)) stroke.glide += DT;
         stroke.fearMax = Math.max(stroke.fearMax, s.fear);
         stroke.hurry ||= s.hurry;
         stroke.hurryAll &&= s.hurry;
@@ -884,6 +1067,25 @@
         stroke.tipMax = Math.max(stroke.tipMax, tipMax);
         stroke.closeMean = Math.min(stroke.closeMean, tipMean);
         stroke.closeMax = Math.min(stroke.closeMax, tipMax);
+        // the tips' span across the axis: widest while open, narrowest at the end of the close
+        let lo = Infinity,
+          hi = -Infinity;
+        for (let k = 0; k < nArms; k++) {
+          const l = body[(k * nNodes + tip) * 2 + 1];
+          lo = Math.min(lo, l);
+          hi = Math.max(hi, l);
+        }
+        stroke.spanMax = Math.max(stroke.spanMax, hi - lo);
+        if (s.phase >= (s.pc ?? 0.28) * 0.6 && s.phase <= (s.pc ?? 0.28) * 2)
+          stroke.spanMin = Math.min(stroke.spanMin, hi - lo);
+      }
+      if (swim && !s.hurry) {
+        m.turnSwim.push(s.w);
+        if (i % 4 === 0) {
+          const ls = [];
+          for (let k = 0; k < nArms; k++) ls.push(Math.abs(body[(k * nNodes + tip) * 2 + 1]));
+          m.tipSD.push(sd(ls));
+        }
       }
 
       // rests: from the end of one swim to the start of the next, unless a fright cut it short
@@ -934,6 +1136,11 @@
         tipMax: r3(k.tipMax),
         closeMean: r3(k.closeMean),
         closeMax: r3(k.closeMax),
+        dist: r3(k.dist),
+        glide: r3(k.glide),
+        spanMax: r3(k.spanMax),
+        spanMin: Number.isFinite(k.spanMin) ? r3(k.spanMin) : null,
+        spanRatio: Number.isFinite(k.spanMin) && k.spanMax ? r3(k.spanMin / k.spanMax) : null,
       };
     }
 
@@ -981,6 +1188,32 @@
         minEdge: Object.fromEntries(Object.entries(m.minEdge).map(([k, x]) => [k, fin(x)])),
         fearOneS: fin(m.fearOneS),
         stillFrac: fin(m.stillFrames / Math.max(1, m.frames)),
+        outFrames: m.outFrames,
+        outMaxML: fin(m.outMax),
+        outAt: m.outAt,
+        bounces: m.bounces,
+        bounceAt: m.bounceAt,
+        edgeAccMax: fin(m.edgeAccMax),
+        edgeAccAt: m.edgeAccAt,
+        walled: m.walled,
+        behindFrac: fin(m.behind / Math.max(1, m.frames)),
+        cover: Array.from(cover, (c) => r3(c / Math.max(1, m.frames))),
+        coverGrid: [GX, GY],
+        thirdsX: [0, 1, 2].map((k) => {
+          let n = 0;
+          for (let y = 0; y < GY; y++)
+            for (let x = k * 2; x < k * 2 + 2; x++) n += cover[y * GX + x];
+          return r3(n / Math.max(1, m.frames));
+        }),
+        thirdsY: [0, 1, 2]
+          .map(
+            (k) =>
+              series.filter((r) => Math.min(2, Math.floor((r[11] / H) * 3)) === k).length /
+              Math.max(1, series.length),
+          )
+          .map(r3),
+        pathTurnSD: fin(sd(m.turnSwim)),
+        armDesync: fin(mean(m.tipSD)),
         stillRunMax: fin(m.stillRunMax),
         restLongest: restsAny.length ? Math.max(...restsAny) : null,
         speedSpark: spark(series.map((r) => r[1])),
@@ -1116,6 +1349,28 @@
         );
       }
     }
+    if (want.has("fleeJet")) {
+      const ks = r.strokes.filter((k) => k.hurryAll && !k.partial && k.flee >= 1);
+      const lo = ks.filter((k) => k.fear0 < T.fearLow),
+        hi = ks.filter((k) => k.fear0 >= T.fearHigh);
+      const rate = (a) => mean(a.map((k) => 1 / (k.t1 - k.t0))),
+        dist = (a) => mean(a.map((k) => k.dist)),
+        glide = (a) => mean(a.map((k) => k.glide));
+      const ok = lo.length && hi.length;
+      const pass = ok && rate(hi) <= rate(lo) * T.fleeRate && dist(hi) >= dist(lo) * T.fleeDist;
+      out.push(
+        check(
+          "fleeJet",
+          "fear makes stronger jets, not faster strokes",
+          !ok ? "n/a" : pass ? "pass" : "fail",
+          ok ? rate(hi) / rate(lo) : null,
+          `strokes/s at fear >= ${T.fearHigh} <= ${T.fleeRate}× fear < ${T.fearLow}; distance/stroke >= ${T.fleeDist}×`,
+          ok
+            ? `strokes/s ${r3(rate(lo))} -> ${r3(rate(hi))}; ML/stroke ${r3(dist(lo))} -> ${r3(dist(hi))}; glide ${r3(glide(lo))} -> ${r3(glide(hi))} s; speed at full fear ${r3(mean(hi.map((k) => k.vMean)) * r.ML)} px/s (${lo.length}/${hi.length} strokes)`
+            : `${lo.length} low-fear, ${hi.length} high-fear flee strokes`,
+        ),
+      );
+    }
     if (want.has("fullFearClose")) {
       const full = r.strokes.filter((k) => k.fear0 >= T.fullFear && !k.partial);
       const base = cruise
@@ -1131,7 +1386,12 @@
           ratio,
           `<= ${T.fullFearCloseRatio}× cruise`,
           full.length
-            ? `${full.length} strokes at fear >= ${T.fullFear}: tips ${r3(mean(full.map((k) => k.closeMean)))} ML off the axis at their closest, cruise ${r3(mean(base))}`
+            ? `${full.length} strokes at fear >= ${T.fullFear}: tips ${r3(mean(full.map((k) => k.closeMean)))} ML off the axis at their closest, cruise ${r3(mean(base))}; span closes to ${r3(
+                quant(
+                  full.filter((k) => k.spanRatio != null).map((k) => k.spanRatio),
+                  0.5,
+                ),
+              )} of open`
             : "no stroke at full fear",
         ),
       );
@@ -1222,6 +1482,104 @@
         M.offscreenS ? `off screen ${M.offscreenS} s in all` : "",
       ),
     );
+    out.push(
+      check(
+        "inView",
+        "the whole body stays in view, every frame",
+        M.outFrames === 0 ? "pass" : "fail",
+        M.outFrames,
+        "0 frames",
+        `${M.outFrames ? `out by up to ${M.outMaxML} ML, first at ${M.outAt} s; ` : ""}${M.walled} arm-point steps held at an edge`,
+      ),
+    );
+    out.push(
+      check(
+        "noBounce",
+        "turns from an edge, never bounces off it",
+        M.bounces === 0 ? "pass" : "fail",
+        M.bounces,
+        "0",
+        `${M.bounceAt != null ? `first at ${M.bounceAt} s; ` : ""}hardest inward push not from its heading within ${T.edgeBand} ML of an edge: ${M.edgeAccMax} ML/s² at ${M.edgeAccAt} s`,
+      ),
+    );
+    out.push(
+      check(
+        "edgeAcc",
+        "no hard shove inward at an edge",
+        leq(M.edgeAccMax, T.edgeAcc),
+        M.edgeAccMax,
+        `<= ${T.edgeAcc} ML/s²`,
+        "inward acceleration while the mantle points along or out",
+      ),
+    );
+    if (want.has("cover")) {
+      const lo = Math.min(...M.thirdsX);
+      out.push(
+        check(
+          "cover",
+          "roams the whole screen",
+          leq(-lo, -T.coverThird),
+          lo,
+          `>= ${T.coverThird * 100}% in every third of the width`,
+          `width thirds ${M.thirdsX.join(" / ")}, height thirds ${M.thirdsY.join(" / ")}`,
+        ),
+      );
+    }
+    if (want.has("panel"))
+      out.push(
+        check(
+          "behindPanel",
+          "doesn't linger behind an open panel",
+          leq(M.behindFrac, T.behindPanel),
+          M.behindFrac,
+          `<= ${T.behindPanel * 100}% of the time`,
+          "the neck within the panel (padded by a mantle length)",
+        ),
+      );
+    if (want.has("closeSpan")) {
+      const ks = r.strokes.filter((k) => !k.hurry && !k.partial && k.spanRatio != null);
+      const v = ks.length
+        ? quant(
+            ks.map((k) => k.spanRatio),
+            0.5,
+          )
+        : null;
+      out.push(
+        check(
+          "closeSpan",
+          "the close draws the tips together",
+          v == null ? "n/a" : leq(v, T.closeSpan),
+          v,
+          `<= ${T.closeSpan} of the open span (median)`,
+          ks.length
+            ? `${ks.length} strokes; narrowest ${r3(
+                quant(
+                  ks.map((k) => k.spanMin),
+                  0.5,
+                ),
+              )} ML vs widest ${r3(
+                quant(
+                  ks.map((k) => k.spanMax),
+                  0.5,
+                ),
+              )} ML (medians)`
+            : "",
+        ),
+      );
+    }
+    if (want.has("variety")) {
+      const ok = M.pathTurnSD >= T.pathTurnSD && M.armDesync >= T.armDesync;
+      out.push(
+        check(
+          "variety",
+          "paths curve and arms move apart",
+          ok ? "pass" : "warn",
+          M.pathTurnSD,
+          `turn SD >= ${T.pathTurnSD} rad/s, arm desync >= ${T.armDesync} ML`,
+          `arm desync ${M.armDesync} ML (warning only)`,
+        ),
+      );
+    }
     out.push(
       check(
         "facingEdge",

@@ -57,17 +57,20 @@
         knobs
           .map(
             ([k, lo, hi, st]) =>
-              `<label>${k} <input type="number" data-k="${k}" min="${lo}" max="${hi}" step="${st}" value="${TUNE[k]}" /></label>`,
+              `<label>${k} <input type="number" data-k="${k}" min="${lo}" max="${hi}" step="${st}" value="${TUNE[k] ?? ""}" placeholder="default" /></label>`,
           )
           .join("") +
-        `<label>glyphs <select data-k="glyphs">${["none", "subtle", "ascii"].map((g) => `<option${g === TUNE.glyphs ? " selected" : ""}>${g}</option>`).join("")}</select></label>` +
-        `<label>palette <select id="palSel">${["ember", "ink", "paper", "onebit"].map((p) => `<option${p === PALETTE ? " selected" : ""}>${p}</option>`).join("")}</select></label>` +
+        `<label>glyphs <select data-k="glyphs">${["", "none", "subtle", "ascii", "luminous"].map((g) => `<option value="${g}"${g === (TUNE.glyphs ?? "") ? " selected" : ""}>${g || "default"}</option>`).join("")}</select></label>` +
+        `<label>palette <select id="palSel">${["abyss", "phosphor", "amber", "biolume", "ice", "ember", "ink", "paper", "onebit"].map((p) => `<option${p === PALETTE ? " selected" : ""}>${p}</option>`).join("")}</select></label>` +
         `<button id="tuneApply">apply and rerun</button><button id="tuneDefault">lab defaults</button>`;
       $("tuneApply").onclick = () => {
         const t = {};
         $("tuneRow")
           .querySelectorAll("[data-k]")
-          .forEach((i) => (t[i.dataset.k] = i.tagName === "SELECT" ? i.value : +i.value));
+          .forEach((i) => {
+            // an empty field keeps the octopus.js default
+            if (i.value !== "") t[i.dataset.k] = i.tagName === "SELECT" ? i.value : +i.value;
+          });
         const u = new URLSearchParams(location.search);
         u.set("tune", JSON.stringify(t));
         u.set("palette", $("palSel").value);

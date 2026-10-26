@@ -14,8 +14,9 @@
 //                               around the body, mantle up, 10 x 10 per sheet; red = flagged
 //   flags/<id>-<kind>.png       the worst event of each flag kind at full size, +-2 and 4 steps
 //
-// Runs use the lab's tuning (LAB.TUNE and LAB.PALETTE in engine.js: the user's chosen settings),
-// set explicitly whatever the octopus.js defaults are; --tune merges sea.set() knobs over it.
+// Runs use the octopus.js's own look (sea.defaults) with the lab's tuning over it (LAB.TUNE and
+// LAB.PALETTE in engine.js: the user's motion settings and body size, set explicitly whatever
+// the octopus.js defaults are); --tune merges sea.set() knobs over that.
 // --octopus serves another copy of octopus.js in place of apps/site/octopus.js, e.g. a tagged one:
 //   git show octopus-v6:apps/site/octopus.js > /tmp/v6.js && ... run.cjs out --octopus /tmp/v6.js
 // The site is served from a private port; `pnpm dev:site` need not be running.

@@ -47,7 +47,6 @@
       [data-theme="light"][data-palette="ink"] {
         --accent: #33618f;
       }
-
       * {
         box-sizing: border-box;
       }
@@ -696,7 +695,7 @@
         right: 16px;
         bottom: 16px;
         z-index: 3;
-        width: 316px;
+        width: 340px;
         max-width: calc(100vw - 32px);
         max-height: calc(100vh - 32px);
         overflow: auto;
@@ -721,7 +720,7 @@
       }
       .tune label {
         display: grid;
-        grid-template-columns: 104px minmax(0, 1fr) 44px;
+        grid-template-columns: 96px minmax(0, 1fr) 44px;
         align-items: center;
         gap: 8px;
       }
@@ -737,9 +736,28 @@
       }
       .tune-row {
         display: grid;
-        grid-template-columns: 104px minmax(0, 1fr);
+        grid-template-columns: 96px minmax(0, 1fr);
         align-items: start;
         gap: 8px;
+      }
+      .tune .tune-presets {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 5px;
+        padding-bottom: 4px;
+      }
+      .tune h3 {
+        margin: 6px 0 -2px;
+        padding-top: 8px;
+        border-top: 1px solid var(--line);
+        color: var(--faint);
+        font: inherit;
+        font-size: 10.5px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      /* the luminous style's knobs, quieter while another style is on */
+      .tune[data-style]:not([data-style="luminous"]) .lum {
+        opacity: 0.4;
       }
       .tune .seg {
         display: flex;
@@ -973,7 +991,8 @@
       <div class="bar glass">
         <span>octodo · your tasks, in plain ink</span>
         <span
-          >octopus: <button data-pal="ember">ember</button> / <button data-pal="ink">ink</button> ·
+          >octopus: <button data-preset="jellyfish">jellyfish</button> /
+          <button data-preset="terminal">terminal</button> ·
           <button id="tuneBtn" aria-expanded="false" aria-controls="tune">tune</button> · click near
           it to startle it</span
         >
@@ -984,35 +1003,84 @@
           <span>tune the octopus</span>
           <button id="tuneClose" aria-label="Close">×</button>
         </div>
-        <label
-          >density
-          <input type="range" data-k="density" min="0.6" max="2" step="0.05" /><output></output
-        ></label>
-        <div class="tune-row">
-          <span>tiles</span>
+        <div class="tune-row tune-presets">
+          <span>presets</span>
           <span class="seg"
-            ><button data-glyphs="none">plain</button><button data-glyphs="subtle">glyphs</button
-            ><button data-glyphs="ascii">tiles + ascii</button></span
+            ><button data-preset="jellyfish">jellyfish</button
+            ><button data-preset="biolume">bioluminescent</button
+            ><button data-preset="terminal">terminal</button
+            ><button data-preset="amber">amber crt</button><button data-preset="ice">ice</button
+            ><button data-preset="minimal">minimal</button
+            ><button data-preset="ember-tiles">ember tiles</button
+            ><button data-preset="ink-tiles">ink tiles</button></span
           >
         </div>
+
+        <h3>look</h3>
+        <div class="tune-row">
+          <span>style</span>
+          <span class="seg"
+            ><button data-glyphs="luminous">luminous</button
+            ><button data-glyphs="ascii">tiles + ascii</button
+            ><button data-glyphs="subtle">glyphs</button
+            ><button data-glyphs="none">plain</button></span
+          >
+        </div>
+        <div class="tune-row lum">
+          <span>ramp</span>
+          <span class="seg"
+            ><button data-ramp="jelly">' : o t % S 8 @</button
+            ><button data-ramp="classic">. : - + * # @</button
+            ><button data-ramp="binary">0 1</button></span
+          >
+        </div>
+        <label
+          >cell size
+          <input type="range" data-k="density" min="0.6" max="2" step="0.05" /><output></output
+        ></label>
+        <label class="lum"
+          >lit cells <input type="range" data-k="lit" min="0" max="1" step="0.05" /><output></output
+        ></label>
+        <label class="lum"
+          >edge dither
+          <input type="range" data-k="dither" min="0" max="1" step="0.05" /><output></output
+        ></label>
+        <label class="lum"
+          >glow <input type="range" data-k="glow" min="0" max="1" step="0.05" /><output></output
+        ></label>
+        <label class="lum"
+          >grid <input type="range" data-k="grid" min="0" max="1" step="0.05" /><output></output
+        ></label>
+
+        <h3>colour</h3>
         <div class="tune-row">
           <span>palette</span>
           <span class="seg"
-            ><button data-pal="ember">ember</button><button data-pal="ink">ink</button
-            ><button data-pal="paper">paper ink</button
+            ><button data-pal="abyss">abyss</button><button data-pal="biolume">biolume</button
+            ><button data-pal="phosphor">phosphor</button><button data-pal="amber">amber</button
+            ><button data-pal="ice">ice</button><button data-pal="ember">ember</button
+            ><button data-pal="ink">ink</button><button data-pal="paper">paper ink</button
             ><button data-pal="onebit">one-bit</button></span
           >
         </div>
+        <label class="lum"
+          >opacity
+          <input type="range" data-k="alpha" min="0.2" max="1" step="0.05" /><output></output
+        ></label>
+        <label class="lum"
+          >hue shift <input type="range" data-k="hue" min="0" max="1" step="0.05" /><output></output
+        ></label>
+
+        <h3>motion</h3>
         <label
-          >size <input type="range" data-k="size" min="0.6" max="1.6" step="0.05" /><output></output
+          >size <input type="range" data-k="size" min="0.6" max="1.8" step="0.05" /><output></output
         ></label>
         <label
           >cruise speed
           <input type="range" data-k="speed" min="0.4" max="2.5" step="0.05" /><output></output
         ></label>
         <label
-          >pointer fright
-          <input type="range" data-k="react" min="0" max="2" step="0.05" /><output></output
+          >fright <input type="range" data-k="react" min="0" max="2" step="0.05" /><output></output
         ></label>
         <label
           >scroll turn
@@ -1045,6 +1113,8 @@
       const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+      let tuned; // the octopus's knobs as last set, see tuneSet()
+
       // theme + palette
       const themeBtn = document.getElementById("theme");
       function setTheme(t) {
@@ -1053,13 +1123,16 @@
         store.set("pond-theme", t);
         sea.recolor();
       }
+      // the octopus's palette lives on its canvas: tuning it never restyles the page
+      const seaCanvas = document.getElementById("sea");
       function setPalette(p) {
-        root.dataset.palette = p;
+        seaCanvas.dataset.palette = p;
         document
           .querySelectorAll("[data-pal]")
           .forEach((b) => b.setAttribute("aria-pressed", b.dataset.pal === p));
         store.set("pond-palette", p);
         sea.recolor();
+        if (tuned) marks();
       }
       themeBtn.onclick = () => setTheme(root.dataset.theme === "dark" ? "light" : "dark");
       document
@@ -1069,15 +1142,117 @@
         store.get("pond-theme") ||
           (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"),
       );
-      setPalette(store.get("pond-palette") || "ink");
+      setPalette(store.get("pond-palette") || "abyss");
 
       // tuning panel: every knob applies at once and is kept, as the changes from the defaults
       const tune = document.getElementById("tune");
       const tuneBtn = document.getElementById("tuneBtn");
       const knobs = tune.querySelectorAll("input[data-k]");
+      const PCT = ["alpha", "glow", "dither", "hue", "grid", "lit"];
       const show = (k, v) =>
-        k === "density" ? Math.max(5, Math.round(20 / v) / 2) + "px" : "×" + v.toFixed(2);
-      let tuned;
+        k === "density"
+          ? Math.max(5, Math.round(20 / v) / 2) + "px"
+          : PCT.includes(k)
+            ? v
+              ? Math.round(v * 100) + "%"
+              : "off"
+            : "×" + v.toFixed(2);
+      // whole looks to compare at a click: a palette, every look knob and the size (the rest of
+      // the motion is left alone)
+      const lum = (o) => ({ density: 0.85, glyphs: "luminous", ramp: "jelly", size: 1.4, ...o });
+      const PRESETS = {
+        jellyfish: lum({
+          pal: "abyss",
+          alpha: 0.85,
+          glow: 0.5,
+          dither: 0.55,
+          hue: 0.55,
+          grid: 0.5,
+          lit: 0.5,
+        }),
+        biolume: lum({
+          pal: "biolume",
+          alpha: 0.9,
+          glow: 0.8,
+          dither: 0.65,
+          hue: 0.8,
+          grid: 0.3,
+          lit: 0.6,
+        }),
+        terminal: lum({
+          pal: "phosphor",
+          density: 1.05,
+          ramp: "binary",
+          alpha: 0.9,
+          glow: 0.65,
+          dither: 0.4,
+          hue: 0.2,
+          grid: 0.8,
+          lit: 0.35,
+        }),
+        amber: lum({
+          pal: "amber",
+          density: 0.95,
+          ramp: "classic",
+          alpha: 0.9,
+          glow: 0.6,
+          dither: 0.45,
+          hue: 0.35,
+          grid: 0.6,
+          lit: 0.4,
+        }),
+        ice: lum({
+          pal: "ice",
+          ramp: "classic",
+          alpha: 0.75,
+          glow: 0.3,
+          dither: 0.7,
+          hue: 0.4,
+          grid: 0.25,
+          lit: 0.3,
+        }),
+        minimal: lum({
+          pal: "ink",
+          ramp: "classic",
+          alpha: 0.9,
+          glow: 0,
+          dither: 0.3,
+          hue: 0,
+          grid: 0,
+          lit: 0,
+        }),
+        "ember-tiles": { pal: "ember", density: 1.8, glyphs: "ascii", size: 1.1 },
+        "ink-tiles": { pal: "ink", density: 1.8, glyphs: "ascii", size: 1.1 },
+      };
+      const LOOK = [
+        "density",
+        "glyphs",
+        "ramp",
+        "size",
+        "alpha",
+        "glow",
+        "dither",
+        "hue",
+        "grid",
+        "lit",
+      ];
+      function marks() {
+        for (const b of document.querySelectorAll("[data-preset]")) {
+          const p = PRESETS[b.dataset.preset];
+          const on =
+            p.pal === seaCanvas.dataset.palette &&
+            Object.keys(p).every((k) => k === "pal" || tuned[k] === p[k]);
+          b.setAttribute("aria-pressed", on);
+        }
+      }
+      function preset(name) {
+        const { pal, ...look } = PRESETS[name];
+        const opts = {};
+        for (const k of LOOK) opts[k] = k in look ? look[k] : sea.defaults[k];
+        tuneSet(opts);
+        setPalette(pal);
+        marks();
+      }
       function tuneSet(opts) {
         tuned = sea.set(opts);
         const changed = {};
@@ -1090,6 +1265,11 @@
         tune
           .querySelectorAll("[data-glyphs]")
           .forEach((b) => b.setAttribute("aria-pressed", b.dataset.glyphs === tuned.glyphs));
+        tune
+          .querySelectorAll("[data-ramp]")
+          .forEach((b) => b.setAttribute("aria-pressed", b.dataset.ramp === tuned.ramp));
+        tune.dataset.style = tuned.glyphs;
+        marks();
       }
       try {
         tuneSet(JSON.parse(store.get("pond-tune") || "{}") || {});
@@ -1100,6 +1280,12 @@
       tune
         .querySelectorAll("[data-glyphs]")
         .forEach((b) => (b.onclick = () => tuneSet({ glyphs: b.dataset.glyphs })));
+      tune
+        .querySelectorAll("[data-ramp]")
+        .forEach((b) => (b.onclick = () => tuneSet({ ramp: b.dataset.ramp })));
+      document
+        .querySelectorAll("[data-preset]")
+        .forEach((b) => (b.onclick = () => preset(b.dataset.preset)));
       function openTune(open) {
         tune.hidden = !open;
         tuneBtn.setAttribute("aria-expanded", open);
@@ -1109,7 +1295,8 @@
       addEventListener("keydown", (e) => e.key === "Escape" && openTune(false));
       document.getElementById("tuneReset").onclick = () => {
         tuneSet(sea.defaults);
-        setPalette("ember");
+        setPalette("abyss");
+        marks();
       };
       document.fonts.ready.then(sea.start);
 

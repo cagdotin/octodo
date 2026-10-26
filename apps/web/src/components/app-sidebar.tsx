@@ -1,4 +1,5 @@
 import type { WorkspaceSnapshot } from "@octodo/core";
+import { isClosedCategory } from "@octodo/core/layout";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -56,7 +57,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { workspacesQuery } from "@/lib/api";
 import { desktop, isDesktopMac } from "@/lib/desktop";
 import { cn } from "@/lib/utils";
-import { filterTasks, isClosedCategory, listCounts, SMART, statusMap } from "@/lib/tasks";
+import { filterTasks, listCounts, SMART, statusMap } from "@/lib/tasks";
 
 export function AppSidebar({
   snapshot,

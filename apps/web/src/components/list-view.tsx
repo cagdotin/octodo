@@ -2,6 +2,7 @@ import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { StatusDefinition, Task, WorkspaceSnapshot } from "@octodo/core";
+import { isClosedCategory } from "@octodo/core/layout";
 import { Link } from "@tanstack/react-router";
 import { InboxIcon, PlusIcon } from "lucide-react";
 import { useState, type ComponentProps, type ReactNode } from "react";
@@ -24,7 +25,7 @@ import {
 } from "@/components/ui/empty";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { isClosedCategory, listViewOrder } from "@/lib/tasks";
+import { listViewOrder } from "@/lib/tasks";
 
 interface Props {
   workspace: string;

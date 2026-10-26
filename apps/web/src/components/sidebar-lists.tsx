@@ -7,6 +7,7 @@ import {
   type Over,
 } from "@dnd-kit/core";
 import type { List, MoveListInput, WorkspaceSnapshot } from "@octodo/core";
+import { inSubtree, listMoveError, movedListId } from "@octodo/core/layout";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import { dragData, dropData, type DragData, type DropData } from "@/components/drag-and-drop";
@@ -21,7 +22,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useMoveList, useMoveTask } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { applyListMove, canNest, listTree, movedListId, type ListNode } from "@/lib/tasks";
+import { applyListMove, listTree, type ListNode } from "@/lib/tasks";
 
 /** Linear-sized nav rows: 28px tall, 13px text. */
 export const ITEM =
@@ -59,27 +60,28 @@ const placementFor = (
   rect: ClientRect,
   y: number | undefined,
 ): Placement | null => {
-  if (over === dragged || over.startsWith(`${dragged}/`)) return null;
+  if (inSubtree(over, dragged)) return null;
+  const fits = (parent: string | null) => listMoveError(lists, dragged, parent) === null;
   const target = lists.find((list) => list.id === over);
   if (!target) return null;
   const ratio = y === undefined ? 0.5 : (y - rect.top) / rect.height;
   const firstChild = lists.find((list) => list.parent === over);
   if (ratio < 1 / 3) {
-    return canNest(lists, dragged, target.parent)
+    return fits(target.parent)
       ? { over, zone: "before", move: { parent: target.parent, before: over } }
       : null;
   }
   if (ratio > 2 / 3) {
     if (firstChild) {
-      return canNest(lists, dragged, over)
+      return fits(over)
         ? { over, zone: "after", move: { parent: over, before: firstChild.id } }
         : null;
     }
-    return canNest(lists, dragged, target.parent)
+    return fits(target.parent)
       ? { over, zone: "after", move: { parent: target.parent, after: over } }
       : null;
   }
-  return canNest(lists, dragged, over) ? { over, zone: "inside", move: { parent: over } } : null;
+  return fits(over) ? { over, zone: "inside", move: { parent: over } } : null;
 };
 
 const sameOrder = (a: ReadonlyArray<List>, b: ReadonlyArray<List>) =>
@@ -152,11 +154,7 @@ export function SidebarLists({
       // A list that changes parent changes id; keep showing it (or the sublist being shown).
       const parent = done.move.parent === undefined ? data.list.parent : done.move.parent;
       const renamed = movedListId(id, parent);
-      if (
-        renamed !== id &&
-        activeList !== undefined &&
-        (activeList === id || activeList.startsWith(`${id}/`))
-      ) {
+      if (renamed !== id && activeList !== undefined && inSubtree(activeList, id)) {
         void navigate({
           to: "/w/$workspace",
           params: { workspace: ws },

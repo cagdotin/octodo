@@ -8,7 +8,7 @@ import type {
   Task,
   WorkspaceSnapshot,
 } from "@octodo/core";
-import { MAX_LIST_DEPTH } from "@octodo/core/layout";
+import { defaultStatus, inSubtree, isClosedCategory, movedListId } from "@octodo/core/layout";
 import {
   addDays,
   format,
@@ -37,12 +37,6 @@ export const PRIORITY_TEXT: Record<Priority, string> = {
   none: "text-muted-foreground",
 };
 
-/** Statuses whose tasks are finished or out of the way. */
-const CLOSED: ReadonlySet<StatusCategory> = new Set(["completed", "canceled", "archived"]);
-
-export const isClosedCategory = (category: StatusCategory | undefined) =>
-  category !== undefined && CLOSED.has(category);
-
 /**
  * The list view's group order, Linear's: the work closest to done first. Started, unstarted and
  * backlog come before the closed categories, and within a category the later status leads (In
@@ -68,11 +62,6 @@ export const statusMap = (statuses: ReadonlyArray<StatusDefinition>) =>
 export const firstStatus = (statuses: ReadonlyArray<StatusDefinition>, category: StatusCategory) =>
   statuses.find((status) => status.category === category);
 
-/** The status new tasks land in: the first unstarted one, else the first that is not closed. */
-export const defaultStatus = (statuses: ReadonlyArray<StatusDefinition>) =>
-  firstStatus(statuses, "unstarted") ??
-  statuses.find((status) => !isClosedCategory(status.category));
-
 // Smart views share the `list` search param with real lists; real list ids never start with "@".
 export const SMART = {
   all: undefined,
@@ -84,7 +73,7 @@ export const SMART = {
 export const isSmartView = (list: string | undefined) => list === undefined || list.startsWith("@");
 
 export const isInList = (task: Task, list: string) =>
-  task.list === list || (task.list?.startsWith(`${list}/`) ?? false);
+  task.list !== null && inSubtree(task.list, list);
 
 /** The filter tabs above the list: Active (unstarted + started), Backlog, and All but archived. */
 export interface DisplayOptions {
@@ -229,38 +218,6 @@ export const listCounts = (snapshot: WorkspaceSnapshot) => {
   }
   return { counts, none, open };
 };
-
-export { MAX_LIST_DEPTH };
-
-export const listDepth = (id: string) => id.split("/").length;
-
-const lastSegment = (id: string) => id.slice(id.lastIndexOf("/") + 1);
-
-const inSubtree = (id: string, root: string) => id === root || id.startsWith(`${root}/`);
-
-/** How many levels a list and its descendants take up: 1 for a list without sublists. */
-export const subtreeHeight = (lists: ReadonlyArray<List>, id: string) =>
-  Math.max(
-    1,
-    ...lists
-      .filter((list) => inSubtree(list.id, id))
-      .map((list) => listDepth(list.id) - listDepth(id) + 1),
-  );
-
-/** Whether `id` may move under `parent` (null for the top level) without breaking the rules. */
-export const canNest = (lists: ReadonlyArray<List>, id: string, parent: string | null) => {
-  if (parent !== null && inSubtree(parent, id)) return false;
-  const depth = parent === null ? 0 : listDepth(parent);
-  if (depth + subtreeHeight(lists, id) > MAX_LIST_DEPTH) return false;
-  const current = lists.find((list) => list.id === id)?.parent ?? null;
-  // Another sibling with the same name would take the same folder.
-  const moved = parent === null ? lastSegment(id) : `${parent}/${lastSegment(id)}`;
-  return current === parent || !lists.some((list) => list.id === moved);
-};
-
-/** The id a list gets under a new parent. */
-export const movedListId = (id: string, parent: string | null) =>
-  parent === null ? lastSegment(id) : `${parent}/${lastSegment(id)}`;
 
 /**
  * Mirrors a list move in a cached snapshot. Lists stay depth first, so the moved list and its

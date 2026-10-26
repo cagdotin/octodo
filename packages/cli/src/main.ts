@@ -1,5 +1,5 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Priority, Workspaces, defaultHome, type Task } from "@octodo/core";
+import { Priority, Workspaces, defaultHome, isClosedCategory, type Task } from "@octodo/core";
 import { stdioLayer } from "@octodo/mcp";
 import { DEFAULT_PORT, startServer } from "@octodo/server";
 import { Console, Effect, FileSystem, Layer, Option, Path } from "effect";
@@ -95,7 +95,7 @@ const listCommand = Command.make(
     const snapshot = yield* (yield* workspace).snapshot;
     const closed = new Set(
       snapshot.statuses
-        .filter((status) => ["completed", "canceled", "archived"].includes(status.category))
+        .filter((status) => isClosedCategory(status.category))
         .map((status) => status.id),
     );
     const order = new Map(snapshot.statuses.map((status, index) => [status.id, index]));

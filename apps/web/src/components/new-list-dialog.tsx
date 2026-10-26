@@ -1,4 +1,5 @@
 import type { List } from "@octodo/core";
+import { listDepth, MAX_LIST_DEPTH } from "@octodo/core/layout";
 import { useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useCreateList } from "@/lib/api";
-import { listLabel, MAX_LIST_DEPTH } from "@/lib/tasks";
+import { listLabel } from "@/lib/tasks";
 
 const TOP_LEVEL = "__top__";
 
@@ -97,7 +98,7 @@ export function NewListDialog({
                   <SelectGroup>
                     <SelectItem value={TOP_LEVEL}>Top level</SelectItem>
                     {lists
-                      .filter((list) => list.id.split("/").length < MAX_LIST_DEPTH)
+                      .filter((list) => listDepth(list.id) < MAX_LIST_DEPTH)
                       .map((list) => (
                         <SelectItem key={list.id} value={list.id}>
                           {listLabel(lists, list.id)}

@@ -1,21 +1,13 @@
 import { Schema } from "effect";
+import { STATUS_CATEGORIES } from "./layout.ts";
 
 export const Priority = Schema.Literals(["none", "low", "medium", "high", "urgent"]);
 export type Priority = typeof Priority.Type;
 
 /**
  * What a status means, independent of its name. Views use it to decide what counts as open,
- * finished or hidden, and statuses are ordered by it: categories always come in this order, and
- * only the statuses inside one category are ordered by the user.
+ * finished or hidden; `STATUS_CATEGORIES` gives the order.
  */
-export const STATUS_CATEGORIES = [
-  "backlog",
-  "unstarted",
-  "started",
-  "completed",
-  "canceled",
-  "archived",
-] as const;
 export const StatusCategory = Schema.Literals(STATUS_CATEGORIES);
 export type StatusCategory = typeof StatusCategory.Type;
 

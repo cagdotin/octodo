@@ -15,7 +15,6 @@ import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
 import {
   DEFAULT_STATUSES,
   InvalidRequest,
-  STATUS_CATEGORIES,
   Priority,
   StorageError,
   TaskNotFound,
@@ -39,11 +38,17 @@ import {
   TASKS_DIR,
   classifyFolder,
   compareFolders,
+  defaultStatus,
   deriveKey,
   humanize,
   idNumber,
+  lastSegment,
+  listDepth,
   listFolder,
+  listMoveError,
+  movedListId,
   slugify,
+  sortStatuses,
   statusFolder,
   taskFileName,
 } from "./layout.ts";
@@ -115,17 +120,6 @@ const compareTasks =
     }
     return (idNumber(a.id, key) ?? Infinity) - (idNumber(b.id, key) ?? Infinity);
   };
-
-const categoryIndex = (status: StatusDefinition) => STATUS_CATEGORIES.indexOf(status.category);
-
-/** Statuses in workflow order: by category, keeping the given order within each category. */
-export const sortStatuses = (statuses: ReadonlyArray<StatusDefinition>): Array<StatusDefinition> =>
-  statuses.toSorted((a, b) => categoryIndex(a) - categoryIndex(b));
-
-const lastSegment = (id: string) => id.slice(id.lastIndexOf("/") + 1);
-
-/** How many levels down a list sits: 1 for a top-level list, 0 for the workspace itself. */
-const depthOf = (list: string | null) => (list === null ? 0 : list.split("/").length);
 
 /**
  * Where folders are on disk, which the snapshot leaves out because it is nobody else's business.
@@ -272,7 +266,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
               path: rel(child),
               message: `Another folder is already list "${slug}"; this one is not read`,
             });
-          } else if (depthOf(list) >= MAX_LIST_DEPTH) {
+          } else if (listDepth(list) >= MAX_LIST_DEPTH) {
             diagnostics.push({
               path: rel(child),
               message: `Lists nest at most ${MAX_LIST_DEPTH} levels deep; this one is not read`,
@@ -468,12 +462,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         const placed = yield* state;
         const { snapshot } = placed;
         const list = input.list ?? null;
-        const status =
-          input.status ??
-          (
-            snapshot.statuses.find((known) => known.category === "unstarted") ??
-            snapshot.statuses[0]
-          )?.id;
+        const status = input.status ?? defaultStatus(snapshot.statuses)?.id;
         if (status === undefined)
           return yield* new InvalidRequest({ message: "The workspace has no statuses" });
         yield* checkPlace(snapshot, status, list);
@@ -627,7 +616,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         const snapshot = yield* current;
         const parent = input.parent ?? null;
         if (parent !== null) yield* findList(snapshot, parent);
-        if (depthOf(parent) >= MAX_LIST_DEPTH) {
+        if (listDepth(parent) >= MAX_LIST_DEPTH) {
           return yield* new InvalidRequest({
             message: `Lists nest at most ${MAX_LIST_DEPTH} levels deep`,
           });
@@ -664,30 +653,13 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         const snapshot = yield* current;
         const list = yield* findList(snapshot, listId);
         const parent = input.parent === undefined ? list.parent : input.parent;
-        if (parent !== null) {
-          yield* findList(snapshot, parent);
-          if (parent === listId || parent.startsWith(`${listId}/`)) {
-            return yield* new InvalidRequest({ message: "A list cannot move inside itself" });
-          }
-        }
-        const height = Math.max(
-          ...snapshot.lists
-            .filter((known) => known.id === listId || known.id.startsWith(`${listId}/`))
-            .map((known) => depthOf(known.id) - depthOf(listId) + 1),
-        );
-        if (depthOf(parent) + height > MAX_LIST_DEPTH) {
-          return yield* new InvalidRequest({
-            message: `Lists nest at most ${MAX_LIST_DEPTH} levels deep`,
-          });
-        }
+        if (parent !== null) yield* findList(snapshot, parent);
+        const refused = listMoveError(snapshot.lists, listId, parent);
+        if (refused !== null) return yield* new InvalidRequest({ message: refused });
         const slug = lastSegment(listId);
-        const movedId = parent === null ? slug : `${parent}/${slug}`;
         const siblings = snapshot.lists
           .filter((known) => known.parent === parent && known.id !== listId)
           .map((known) => lastSegment(known.id));
-        if (parent !== list.parent && siblings.includes(slug)) {
-          return yield* new InvalidRequest({ message: `There is already a list "${movedId}"` });
-        }
         const before =
           input.before === undefined ? -1 : siblings.indexOf(lastSegment(input.before));
         const after = input.after === undefined ? -1 : siblings.indexOf(lastSegment(input.after));
@@ -709,7 +681,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           }
         }).pipe(storage("Could not move the list"));
         yield* invalidate;
-        return yield* rereadList(movedId).pipe(Effect.orDie);
+        return yield* rereadList(movedListId(listId, parent)).pipe(Effect.orDie);
       }),
     );
 

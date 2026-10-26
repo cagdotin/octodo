@@ -16,6 +16,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { StatusCategory, StatusDefinition } from "@octodo/core";
+import { defaultStatus } from "@octodo/core/layout";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { GripVerticalIcon } from "lucide-react";
@@ -24,7 +25,6 @@ import { StatusIcon } from "@/components/task-bits";
 import { Card } from "@/components/ui/card";
 import { snapshotQuery, useReorderStatuses } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { defaultStatus } from "@/lib/tasks";
 
 export const Route = createFileRoute("/w/$workspace_/settings/statuses")({
   component: StatusSettings,

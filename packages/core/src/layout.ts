@@ -8,12 +8,45 @@
  * reordering renames folders without changing what anything refers to. A status folder belongs to
  * the nearest list above it, or to no list when it sits directly in `.octodo/`.
  */
+import type { List, StatusCategory, StatusDefinition } from "./domain.ts";
+
 export const TASKS_DIR = ".octodo";
 export const CONFIG_FILE = "config.json";
 export const STATUS_PREFIX = "s";
 export const LIST_PREFIX = "l";
 /** How deep lists nest: a top-level list, its sublists and theirs. */
 export const MAX_LIST_DEPTH = 3;
+
+/**
+ * What a status can mean. Statuses are ordered by it: categories always come in this order, and
+ * only the statuses inside one category are ordered by the user.
+ */
+export const STATUS_CATEGORIES = [
+  "backlog",
+  "unstarted",
+  "started",
+  "completed",
+  "canceled",
+  "archived",
+] as const;
+
+const CLOSED_CATEGORIES: ReadonlyArray<StatusCategory> = ["completed", "canceled", "archived"];
+
+/** Whether tasks in this category are finished or out of the way. */
+export const isClosedCategory = (category: StatusCategory | undefined): boolean =>
+  category !== undefined && CLOSED_CATEGORIES.includes(category);
+
+const categoryIndex = (status: StatusDefinition) => STATUS_CATEGORIES.indexOf(status.category);
+
+/** Statuses in workflow order: by category, keeping the given order within each category. */
+export const sortStatuses = (statuses: ReadonlyArray<StatusDefinition>): Array<StatusDefinition> =>
+  statuses.toSorted((a, b) => categoryIndex(a) - categoryIndex(b));
+
+/** The status new tasks land in: the first unstarted one, else the first in workflow order. */
+export const defaultStatus = (
+  statuses: ReadonlyArray<StatusDefinition>,
+): StatusDefinition | undefined =>
+  statuses.find((status) => status.category === "unstarted") ?? sortStatuses(statuses)[0];
 
 export type FolderKind =
   | {
@@ -105,4 +138,46 @@ export const idNumber = (id: string, key: string): number | null => {
 export const taskFileName = (id: string, title: string): string => {
   const slug = slugify(title).slice(0, 60).replace(/-+$/, "");
   return slug.length > 0 ? `${id}-${slug}.md` : `${id}.md`;
+};
+
+/** How many levels down a list sits: 1 for a top-level list, 0 for the workspace itself. */
+export const listDepth = (list: string | null): number =>
+  list === null ? 0 : list.split("/").length;
+
+export const lastSegment = (id: string): string => id.slice(id.lastIndexOf("/") + 1);
+
+/** Whether `id` is the list `root` or one of its descendants. */
+export const inSubtree = (id: string, root: string): boolean =>
+  id === root || id.startsWith(`${root}/`);
+
+/** The id a list gets under a new parent (null for the top level). */
+export const movedListId = (id: string, parent: string | null): string =>
+  parent === null ? lastSegment(id) : `${parent}/${lastSegment(id)}`;
+
+/** How many levels a list and its descendants take up: 1 for a list without sublists. */
+const subtreeHeight = (lists: ReadonlyArray<List>, id: string) =>
+  Math.max(
+    1,
+    ...lists
+      .filter((list) => inSubtree(list.id, id))
+      .map((list) => listDepth(list.id) - listDepth(id) + 1),
+  );
+
+/**
+ * Why list `id` may not move under `parent` (null for the top level), or null when it may.
+ * The caller checks that both lists exist.
+ */
+export const listMoveError = (
+  lists: ReadonlyArray<List>,
+  id: string,
+  parent: string | null,
+): string | null => {
+  if (parent !== null && inSubtree(parent, id)) return "A list cannot move inside itself";
+  if (listDepth(parent) + subtreeHeight(lists, id) > MAX_LIST_DEPTH)
+    return `Lists nest at most ${MAX_LIST_DEPTH} levels deep`;
+  const current = lists.find((list) => list.id === id)?.parent ?? null;
+  const moved = movedListId(id, parent);
+  if (current !== parent && lists.some((list) => list.id === moved))
+    return `There is already a list "${moved}"`;
+  return null;
 };

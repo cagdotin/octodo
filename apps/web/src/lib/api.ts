@@ -3,11 +3,11 @@ import type {
   CreateTaskInput,
   MoveListInput,
   MoveTaskInput,
-  StatusCategory,
   Task,
   UpdateTaskInput,
   WorkspaceSnapshot,
 } from "@octodo/core";
+import { sortStatuses } from "@octodo/core/layout";
 import { createClient } from "@octodo/server/client";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -183,15 +183,6 @@ export const useCreateList = (ws: string) =>
     unwrap(api.workspaces[":ws"].lists.$post({ param: { ws }, json: input })),
   );
 
-const CATEGORY_RANK: ReadonlyArray<StatusCategory> = [
-  "backlog",
-  "unstarted",
-  "started",
-  "completed",
-  "canceled",
-  "archived",
-];
-
 export const useMoveList = (ws: string) =>
   useSnapshotMutation(
     ws,
@@ -208,10 +199,8 @@ export const useReorderStatuses = (ws: string) =>
       unwrap(api.workspaces[":ws"].statuses.order.$put({ param: { ws }, json: { order } })),
     (snapshot, order) => ({
       ...snapshot,
-      statuses: snapshot.statuses.toSorted(
-        (a, b) =>
-          CATEGORY_RANK.indexOf(a.category) - CATEGORY_RANK.indexOf(b.category) ||
-          order.indexOf(a.id) - order.indexOf(b.id),
+      statuses: sortStatuses(
+        snapshot.statuses.toSorted((a, b) => order.indexOf(a.id) - order.indexOf(b.id)),
       ),
     }),
   );

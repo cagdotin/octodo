@@ -139,6 +139,7 @@ function WorkspacePage() {
   useHotkeys({
     "mod+k": () => setPaletteOpen((open) => !open),
     "mod+,": () => void navigate({ to: "/w/$workspace/settings", params: { workspace } }),
+    "mod+n": () => compose(),
     n: () => compose(),
     c: () => compose(),
     escape: () => {

@@ -11,8 +11,8 @@ import {
 
 describe("markdown", () => {
   it("parses frontmatter and body", () => {
-    const file = parseTaskFile("---\nid: CT-1\ntitle: Hello\n---\n\nBody text\n");
-    expect(file.data).toEqual({ id: "CT-1", title: "Hello" });
+    const file = parseTaskFile("---\nid: HM-1\ntitle: Hello\n---\n\nBody text\n");
+    expect(file.data).toEqual({ id: "HM-1", title: "Hello" });
     expect(file.body).toBe("Body text\n");
   });
 
@@ -21,17 +21,17 @@ describe("markdown", () => {
   });
 
   it("keeps unknown keys, their order and comments when rewriting", () => {
-    const original = "---\n# owner note\nestimate: 3 # points\nid: CT-1\ntitle: Old\n---\n\nBody\n";
+    const original = "---\n# owner note\nestimate: 3 # points\nid: HM-1\ntitle: Old\n---\n\nBody\n";
     const next = writeTaskFile(original, { title: "New", priority: "high" });
     expect(next).toBe(
-      "---\n# owner note\nestimate: 3 # points\nid: CT-1\ntitle: New\npriority: high\n---\n\nBody\n",
+      "---\n# owner note\nestimate: 3 # points\nid: HM-1\ntitle: New\npriority: high\n---\n\nBody\n",
     );
   });
 
   it("removes keys set to undefined and replaces the body", () => {
     expect(
-      writeTaskFile("---\nid: CT-1\ndue: 2026-01-01\n---\nold\n", { due: undefined }, "new"),
-    ).toBe("---\nid: CT-1\n---\n\nnew\n");
+      writeTaskFile("---\nid: HM-1\ndue: 2026-01-01\n---\nold\n", { due: undefined }, "new"),
+    ).toBe("---\nid: HM-1\n---\n\nnew\n");
   });
 });
 
@@ -75,12 +75,12 @@ describe("layout", () => {
   });
 
   it("derives Linear-style keys", () => {
-    expect(deriveKey("house-move")).toBe("CT");
+    expect(deriveKey("house-move")).toBe("HM");
     expect(deriveKey("Garden")).toBe("GAR");
     expect(deriveKey("My Big Home Project")).toBe("MBHP");
   });
 
   it("names task files after id and title", () => {
-    expect(taskFileName("CT-4", "Fix the Import!")).toBe("CT-4-fix-the-import.md");
+    expect(taskFileName("HM-4", "Fix the Import!")).toBe("HM-4-fix-the-import.md");
   });
 });

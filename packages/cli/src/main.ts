@@ -43,7 +43,7 @@ const list = Flag.String("list").pipe(
   Flag.withDescription("List id, e.g. groceries or garden/seeds"),
   Flag.optional,
 );
-const taskId = Argument.String("id").pipe(Argument.withDescription("Task id, e.g. CT-42"));
+const taskId = Argument.String("id").pipe(Argument.withDescription("Task id, e.g. HM-42"));
 
 /** The workspace named by `--workspace`, or the one containing the current directory. */
 const workspace = Effect.gen(function* () {
@@ -163,7 +163,7 @@ const createCommand = Command.make(
   Command.withAlias("add"),
   Command.withExamples([
     {
-      command: 'octo create "Reconcile Kraken trades" -p high -t exchange',
+      command: 'octo create "Book the movers" -p high -t quotes',
       description: "A high-priority task",
     },
   ]),

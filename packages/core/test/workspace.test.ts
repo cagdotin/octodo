@@ -27,7 +27,7 @@ describe("workspace", () => {
   it("initialises config and default status folders", async () => {
     const root = fresh();
     const snapshot = await run(Effect.flatMap(open(root), (ws) => ws.snapshot));
-    expect(snapshot.workspace).toMatchObject({ name: "House Move", key: "CT" });
+    expect(snapshot.workspace).toMatchObject({ name: "House Move", key: "HM" });
     expect(snapshot.statuses.map((status) => status.id)).toEqual([
       "backlog",
       "todo",
@@ -57,12 +57,12 @@ describe("workspace", () => {
       }),
     );
     expect(a).toMatchObject({
-      id: "CT-1",
+      id: "HM-1",
       status: "todo",
       list: null,
-      path: ".octodo/s01-todo/CT-1-first.md",
+      path: ".octodo/s01-todo/HM-1-first.md",
     });
-    expect(b).toMatchObject({ id: "CT-2", priority: "high" });
+    expect(b).toMatchObject({ id: "HM-2", priority: "high" });
     expect(a!.order < b!.order).toBe(true);
   });
 
@@ -81,11 +81,11 @@ describe("workspace", () => {
     const done = result.snapshot.tasks
       .filter((task) => task.status === "done")
       .map((task) => task.id);
-    expect(done).toEqual(["CT-1", "CT-3", "CT-2"]);
+    expect(done).toEqual(["HM-1", "HM-3", "HM-2"]);
     expect(readdirSync(join(root, ".octodo/s03-done")).toSorted()).toEqual([
-      "CT-1-one.md",
-      "CT-2-two.md",
-      "CT-3-three.md",
+      "HM-1-one.md",
+      "HM-2-two.md",
+      "HM-3-three.md",
     ]);
   });
 
@@ -100,10 +100,10 @@ describe("workspace", () => {
       { id: "groceries", name: "Groceries", parent: null, folder: "l-groceries" },
     ]);
     expect(snapshot.tasks).toMatchObject([
-      { id: "CT-1", title: "Milk", list: "groceries", body: "Buy oat milk\n" },
+      { id: "HM-1", title: "Milk", list: "groceries", body: "Buy oat milk\n" },
     ]);
     expect(readFileSync(join(root, ".octodo/l-groceries/s-todo/milk.md"), "utf8")).toBe(
-      "---\nid: CT-1\n---\n\nBuy oat milk\n",
+      "---\nid: HM-1\n---\n\nBuy oat milk\n",
     );
     expect(snapshot.diagnostics).toEqual([
       { path: ".octodo/stray.md", message: "Task file is not inside a status folder" },
@@ -204,7 +204,7 @@ describe("workspace", () => {
     ]);
     expect(result.task).toMatchObject({
       list: "b/c",
-      path: ".octodo/l01-b/l00-c/s01-todo/CT-1-inside-c.md",
+      path: ".octodo/l01-b/l00-c/s01-todo/HM-1-inside-c.md",
     });
   });
 

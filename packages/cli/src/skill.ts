@@ -17,7 +17,7 @@ files are the source of truth; the octodo app, CLI and MCP server all read and w
 - \`.octodo/l<NN>-<name>/\` folders are lists, nested up to three levels; each holds its own status
   folders. List ids are the names without numbers, joined by \`/\` (\`garden/seeds\`).
 - Changing a task's status moves its file to another status folder.
-- Each task has a stable \`id\` (\`CT-42\`). Refer to tasks by id, never by file path.
+- Each task has a stable \`id\` (\`HM-42\`). Refer to tasks by id, never by file path.
 
 Frontmatter the app manages: \`id\`, \`title\`, \`priority\` (none, low, medium, high, urgent),
 \`tags\`, \`due\` (YYYY-MM-DD), \`created\`, \`updated\`, \`order\`. Any other keys are kept as-is.
@@ -29,11 +29,11 @@ Prefer the \`octodo\` MCP tools when they are available (\`get_workspace\` first
 
 \`\`\`sh
 octo list                          # open tasks in board order (--status, --list, --tag, --json)
-octo show CT-42                    # one task with its body
+octo show HM-42                    # one task with its body
 octo create "Title" --priority high --tag infra --status todo
-octo update CT-42 --body "Notes in markdown"
-octo move CT-42 in-progress        # change status (moves the file)
-octo move CT-42 done
+octo update HM-42 --body "Notes in markdown"
+octo move HM-42 in-progress        # change status (moves the file)
+octo move HM-42 done
 \`\`\`
 
 Editing a file by hand also works; the app notices the change. Keep the frontmatter valid YAML,

@@ -77,7 +77,7 @@ export const humanize = (slug: string): string =>
 
 /**
  * Derives a Linear-style key from a project name: the initials of a multi-word name
- * (`house-move` → `CT`), or the first three letters of a single word (`garden` → `GAR`).
+ * (`house-move` → `HM`), or the first three letters of a single word (`garden` → `GAR`).
  */
 export const deriveKey = (name: string): string => {
   const words = slugify(name)
@@ -96,7 +96,7 @@ export const deriveKey = (name: string): string => {
     .toUpperCase();
 };
 
-/** The number in a task id such as `CT-42`, or null when the id is not in the workspace's format. */
+/** The number in a task id such as `HM-42`, or null when the id is not in the workspace's format. */
 export const idNumber = (id: string, key: string): number | null => {
   const match = new RegExp(`^${key}-(\\d+)$`).exec(id);
   return match === null ? null : Number(match[1]);

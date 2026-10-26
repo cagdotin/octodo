@@ -21,7 +21,7 @@ export const INSTRUCTIONS = `octodo manages tasks stored as markdown files with 
 - A folder named s<NN>-<status> (s01-todo) holds the tasks in that status; moving a task between statuses moves its file.
 - Folders named l<NN>-<name> (l00-groceries) are lists, nested up to 3 levels; their status folders hold their tasks. The number only orders siblings.
 - List ids are the folder names without numbers, joined by slashes: garden/seeds.
-- Every task has a stable id like CT-42 (the workspace key plus a number). Refer to tasks by id, never by path.
+- Every task has a stable id like HM-42 (the workspace key plus a number). Refer to tasks by id, never by path.
 - Call get_workspace first to learn the statuses and lists before creating or moving tasks.
 - The workspace parameter takes a registered workspace id or an absolute folder path; omit it to use the workspace containing the server's working directory.`;
 

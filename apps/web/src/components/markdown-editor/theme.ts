@@ -2,10 +2,15 @@ import { EditorView } from "@codemirror/view";
 
 /** Ink on paper, from the app's CSS variables, so light and dark follow the `.dark` class. */
 export const bodyTheme = EditorView.theme({
-  "&": { color: "var(--foreground)", backgroundColor: "transparent", fontSize: "inherit" },
+  "&": {
+    height: "100%",
+    color: "var(--foreground)",
+    backgroundColor: "transparent",
+    fontSize: "inherit",
+  },
   "&.cm-focused": { outline: "none" },
-  ".cm-scroller": { fontFamily: "var(--font-sans)", lineHeight: "1.65", overflow: "visible" },
-  ".cm-content": { minHeight: "8rem", padding: "0.25rem 0 1rem", caretColor: "var(--foreground)" },
+  ".cm-scroller": { fontFamily: "var(--font-sans)", lineHeight: "1.65" },
+  ".cm-content": { padding: "0.75rem 0.75rem 4rem", caretColor: "var(--foreground)" },
   ".cm-line": { padding: "0 0.5rem" },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--foreground)" },
   "& .cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection": {

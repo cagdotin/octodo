@@ -46,7 +46,6 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { useDeleteTask, useMoveTask, useUpdateTask } from "@/lib/api";
@@ -165,45 +164,43 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
         </div>
       </div>
 
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-1 px-3 pt-3 pb-16">
-          <Textarea
-            aria-label="Title"
-            value={draft.title}
-            rows={1}
-            onChange={(event) =>
-              editor.send({
-                type: "EDIT",
-                field: "title",
-                value: event.target.value.replace(/\n/g, " "),
-              })
+      <div className="flex shrink-0 flex-col gap-1 px-3 pt-3">
+        <Textarea
+          aria-label="Title"
+          value={draft.title}
+          rows={1}
+          onChange={(event) =>
+            editor.send({
+              type: "EDIT",
+              field: "title",
+              value: event.target.value.replace(/\n/g, " "),
+            })
+          }
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              editor.send({ type: "FLUSH" });
             }
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                editor.send({ type: "FLUSH" });
-              }
-              blurOnEscape(event);
-            }}
-            onBlur={() => editor.send({ type: "FLUSH" })}
-            className="min-h-0 resize-none border-transparent bg-transparent px-2 py-1 text-xl leading-snug font-semibold tracking-[-0.02em] shadow-none focus-visible:border-transparent focus-visible:ring-0 md:text-xl dark:bg-transparent"
-          />
+            blurOnEscape(event);
+          }}
+          onBlur={() => editor.send({ type: "FLUSH" })}
+          className="min-h-0 resize-none border-transparent bg-transparent px-2 py-1 text-xl leading-snug font-semibold tracking-[-0.02em] shadow-none focus-visible:border-transparent focus-visible:ring-0 md:text-xl dark:bg-transparent"
+        />
 
-          <TagsEditor
-            tags={task.tags}
-            onChange={(tags) => update.mutate({ id: task.id, patch: { tags } })}
-          />
+        <TagsEditor
+          tags={task.tags}
+          onChange={(tags) => update.mutate({ id: task.id, patch: { tags } })}
+        />
+      </div>
 
-          <MarkdownEditor
-            aria-label="Notes"
-            placeholder="Add notes in markdown…"
-            value={draft.body}
-            onChange={(value) => editor.send({ type: "EDIT", field: "body", value })}
-            onBlur={() => editor.send({ type: "FLUSH" })}
-            className="mt-1 text-base md:text-sm"
-          />
-        </div>
-      </ScrollArea>
+      <MarkdownEditor
+        aria-label="Notes"
+        placeholder="Add notes in markdown…"
+        value={draft.body}
+        onChange={(value) => editor.send({ type: "EDIT", field: "body", value })}
+        onBlur={() => editor.send({ type: "FLUSH" })}
+        className="min-h-0 flex-1 text-base md:text-sm"
+      />
 
       {/* Footer: where the task lives on the left, everything else behind "…". */}
       <div className="flex h-11 shrink-0 items-center gap-1 border-t px-2">

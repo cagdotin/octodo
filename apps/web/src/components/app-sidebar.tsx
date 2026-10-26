@@ -109,7 +109,7 @@ export function AppSidebar({
   };
 
   return (
-    <Sidebar variant="inset" className="select-none desktop-mac:pt-0">
+    <Sidebar className="select-none desktop-mac:pt-0">
       {isDesktopMac && <TitleBar />}
       <SidebarHeader className="flex-row items-center gap-1 pb-1">
         <WorkspaceSwitcher current={snapshot.workspace} />

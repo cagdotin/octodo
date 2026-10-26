@@ -49,7 +49,7 @@ export function SettingsSidebar({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   const close = () => isMobile && setOpenMobile(false);
 
   return (
-    <Sidebar variant="inset" className="select-none desktop-mac:pt-0">
+    <Sidebar className="select-none desktop-mac:pt-0">
       {isDesktopMac && <TitleBar />}
       <SidebarHeader className="pb-1">
         <SidebarMenu>

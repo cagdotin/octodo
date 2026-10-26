@@ -64,17 +64,18 @@ export function TaskComposer({
           : "rounded-lg border bg-card px-3 py-2.5 shadow-xs",
       )}
     >
-      {variant === "row" && (
-        <>
-          <span aria-hidden className="size-6 shrink-0" />
-          <span aria-hidden className="hidden shrink-0 sm:inline" style={{ width: idWidth }} />
-        </>
-      )}
       <span
         className={cn("flex shrink-0 items-center justify-center", variant === "row" && "size-6")}
       >
         <StatusIcon category={category} />
       </span>
+      {variant === "row" && (
+        <span
+          aria-hidden
+          className="box-content hidden shrink-0 pr-2 pl-1 sm:inline"
+          style={{ width: idWidth }}
+        />
+      )}
       <input
         // oxlint-disable-next-line jsx-a11y/no-autofocus -- opened on purpose by a click or `n`.
         autoFocus
@@ -83,7 +84,7 @@ export function TaskComposer({
         autoComplete="off"
         enterKeyHint="done"
         placeholder="Task title, then Enter  (!high  #tag  due:tomorrow)"
-        className="min-w-0 flex-1 bg-transparent pl-0.5 text-base outline-none placeholder:text-muted-foreground md:text-sm"
+        className="min-w-0 flex-1 bg-transparent pl-1 text-base outline-none placeholder:text-muted-foreground md:text-sm"
         onChange={(event) => setText(event.target.value)}
         onBlur={() => text.trim() === "" && onClose()}
         onKeyDown={(event) => {

@@ -63,8 +63,8 @@ export function PageHeader({ title, children }: { title: ReactNode; children?: R
   return (
     <header
       className={cn(
-        "flex h-12 shrink-0 items-center gap-1 border-b pr-2 pl-3 select-none md:pl-4",
-        "desktop-mac:h-13 desktop-mac:app-drag md:desktop-mac:h-11",
+        "flex h-12 shrink-0 items-center gap-1 pr-2 pl-3 select-none md:pl-4",
+        "desktop-mac:h-13 desktop-mac:app-drag",
         chrome.windowed && sidebarHidden && "pl-[78px] md:pl-[70px]",
       )}
     >
@@ -201,13 +201,13 @@ export function ViewBar({
           if (value === "active" || value === "backlog" || value === "all") onTabChange(value);
         }}
         aria-label="Filter tabs"
-        className="rounded-lg bg-muted p-0.5"
+        className="-ml-2 gap-0.5"
       >
         {TABS.map((entry) => (
           <ToggleGroupItem
             key={entry.value}
             value={entry.value}
-            className="h-6 rounded-md px-2.5 text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-xs"
+            className="h-6 rounded-md px-2 font-mono text-xs text-muted-foreground lowercase hover:bg-transparent hover:text-foreground data-[state=on]:bg-accent data-[state=on]:text-foreground"
           >
             {entry.label}
           </ToggleGroupItem>

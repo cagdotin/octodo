@@ -24,7 +24,8 @@ import { cn } from "@/lib/utils";
 import { applyListMove, canNest, listTree, movedListId, type ListNode } from "@/lib/tasks";
 
 /** Linear-sized nav rows: 28px tall, 13px text. */
-export const ITEM = "h-7 gap-2.5 px-2 text-sidebar-foreground/90 data-active:font-medium";
+export const ITEM =
+  "h-7 gap-2.5 px-2 font-mono text-[12.5px] text-sidebar-foreground/90 data-active:text-sidebar-accent-foreground";
 
 const LIST_PREFIX = "list:";
 

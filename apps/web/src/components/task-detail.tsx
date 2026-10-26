@@ -135,6 +135,57 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
           onChange={(value) => editor.send({ type: "EDIT", field: "title", value })}
           onCommit={() => editor.send({ type: "FLUSH" })}
         />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground"
+              aria-label="More actions"
+            >
+              <MoreHorizontalIcon />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuGroup>
+              <DropdownMenuItem onSelect={onClose}>
+                <PanelRightCloseIcon />
+                Close panel
+                <DropdownMenuShortcut>Esc</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 px-1.5 py-1.5 text-xs text-muted-foreground">
+                <dt>ID</dt>
+                <dd className="font-mono text-foreground">{task.id}</dd>
+                <dt>File</dt>
+                <dd className="font-mono break-all">{task.path}</dd>
+                <dt>Created</dt>
+                <dd className="font-mono">{formatTimestamp(task.created)}</dd>
+                <dt>Updated</dt>
+                <dd className="font-mono">{formatTimestamp(task.updated)}</dd>
+              </dl>
+              <DropdownMenuItem
+                onSelect={() =>
+                  void navigator.clipboard
+                    .writeText(task.path)
+                    .then(() => toast.success("File path copied"))
+                }
+              >
+                <CopyIcon />
+                Copy path
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(true)}>
+                <Trash2Icon />
+                Delete task
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <MarkdownEditor
@@ -243,65 +294,12 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
           </PopoverContent>
         </Popover>
 
-        <div className="ml-auto flex shrink-0 items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center">
           <SaveState
             phase={String(phase)}
             error={error}
             onRetry={() => editor.send({ type: "RETRY" })}
           />
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground"
-                aria-label="More actions"
-              >
-                <MoreHorizontalIcon />
-              </Button>
-            </DropdownMenuTrigger>
-            {/* Opens upward, so "Close panel" sits right above the button. */}
-            <DropdownMenuContent align="end" side="top" className="w-64">
-              <DropdownMenuGroup>
-                <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 px-1.5 py-1.5 text-xs text-muted-foreground">
-                  <dt>ID</dt>
-                  <dd className="font-mono text-foreground">{task.id}</dd>
-                  <dt>File</dt>
-                  <dd className="font-mono break-all">{task.path}</dd>
-                  <dt>Created</dt>
-                  <dd className="font-mono">{formatTimestamp(task.created)}</dd>
-                  <dt>Updated</dt>
-                  <dd className="font-mono">{formatTimestamp(task.updated)}</dd>
-                </dl>
-                <DropdownMenuItem
-                  onSelect={() =>
-                    void navigator.clipboard
-                      .writeText(task.path)
-                      .then(() => toast.success("File path copied"))
-                  }
-                >
-                  <CopyIcon />
-                  Copy path
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(true)}>
-                  <Trash2Icon />
-                  Delete task
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuItem onSelect={onClose}>
-                  <PanelRightCloseIcon />
-                  Close panel
-                  <DropdownMenuShortcut>Esc</DropdownMenuShortcut>
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
       </div>
 

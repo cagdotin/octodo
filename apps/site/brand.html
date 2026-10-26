@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>octodo · brand</title>
+    <meta
+      name="description"
+      content="App icon and identity explorations built from the tiled octopus."
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap"
+    />
+    <style>
+      :root {
+        --bg: #171716;
+        --fg: #f0ece5;
+        --muted: color-mix(in srgb, var(--fg) 60%, transparent);
+        --faint: color-mix(in srgb, var(--fg) 36%, transparent);
+        --line: color-mix(in srgb, var(--fg) 9%, transparent);
+        --sheet: color-mix(in srgb, var(--fg) 4%, transparent);
+        --accent: #e5813f;
+        --mono: "Geist Mono", ui-monospace, Menlo, monospace;
+        --sans: "Geist", -apple-system, "Helvetica Neue", sans-serif;
+        color-scheme: dark;
+      }
+      [data-theme="light"] {
+        --bg: #f3f1ed;
+        --fg: #22211f;
+        --accent: #c75f27;
+        color-scheme: light;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font: 13px/1.8 var(--mono);
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: inherit;
+        text-decoration-color: var(--faint);
+        text-underline-offset: 5px;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+      }
+      .wrap {
+        width: min(1120px, 100% - 32px);
+        margin: 0 auto;
+      }
+      header {
+        padding: 56px 0 24px;
+      }
+      header p {
+        color: var(--muted);
+        max-width: 640px;
+        margin: 0;
+      }
+      h1 {
+        font: 500 28px/1.2 var(--sans);
+        letter-spacing: -0.025em;
+        margin: 10px 0 12px;
+      }
+      .crumb {
+        color: var(--faint);
+        font-size: 12px;
+      }
+      .controls {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 24px;
+        align-items: center;
+        padding: 12px 0;
+        background: color-mix(in srgb, var(--bg) 82%, transparent);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .controls label {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .controls input[type="range"] {
+        accent-color: var(--accent);
+        width: 140px;
+      }
+      .controls button {
+        background: none;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 2px 10px;
+        cursor: pointer;
+      }
+      .controls button[aria-pressed="true"] {
+        background: var(--sheet);
+        color: var(--fg);
+      }
+
+      /* overview strip */
+      .strip {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 16px;
+        padding: 32px 0 8px;
+      }
+      .strip a {
+        text-decoration: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      section.dir {
+        padding: 64px 0 24px;
+        border-bottom: 1px solid var(--line);
+      }
+      .dir-head {
+        display: flex;
+        gap: 14px;
+        align-items: baseline;
+        flex-wrap: wrap;
+      }
+      .dir-head b {
+        font-weight: 400;
+        color: var(--accent);
+      }
+      .dir-head h2 {
+        font: 500 22px/1.2 var(--sans);
+        letter-spacing: -0.02em;
+        margin: 0;
+      }
+      .dir-note {
+        color: var(--muted);
+        max-width: 640px;
+        margin: 8px 0 28px;
+      }
+      .dir-body {
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+        gap: 40px;
+        align-items: start;
+      }
+      @media (max-width: 820px) {
+        .dir-body {
+          grid-template-columns: 1fr;
+        }
+      }
+      .stage {
+        display: grid;
+        gap: 20px;
+      }
+      .sizes {
+        display: flex;
+        gap: 22px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+        padding: 18px 20px;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+      }
+      .sizes.on-light {
+        background: #f3f1ed;
+        color: #22211f99;
+      }
+      .sizes.on-dark {
+        background: #111110;
+        color: #f0ece599;
+      }
+      .sizes figure {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        font-size: 10.5px;
+      }
+      .context {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      @media (max-width: 820px) {
+        .context {
+          grid-template-columns: 1fr;
+        }
+      }
+      .dock {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+        justify-content: center;
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: linear-gradient(160deg, #6d7f95, #3d4a5c 60%, #2a3341);
+        min-height: 92px;
+      }
+      .dock .fake {
+        width: 52px;
+        height: 52px;
+        border-radius: 12px;
+        background: linear-gradient(160deg, #e9e9ee, #c9c9d2);
+        opacity: 0.85;
+      }
+      .dock .fake.b {
+        background: linear-gradient(160deg, #57a4ff, #2463d6);
+      }
+      .dock .fake.g {
+        background: linear-gradient(160deg, #6ee08f, #2ea85a);
+      }
+      .tab {
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        overflow: hidden;
+        font: 12px var(--sans);
+      }
+      .tab .bar {
+        display: flex;
+        gap: 8px;
+        padding: 10px 12px 0;
+        background: color-mix(in srgb, var(--fg) 7%, var(--bg));
+      }
+      .tab .t {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 12px;
+        border-radius: 8px 8px 0 0;
+        background: var(--bg);
+        min-width: 180px;
+      }
+      .tab .t.off {
+        background: none;
+        color: var(--faint);
+      }
+      .tab .page {
+        padding: 18px 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: var(--bg);
+      }
+      .lockup {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .lockup .word {
+        font: 500 26px var(--mono);
+        letter-spacing: -0.04em;
+      }
+      .lockup .word.sans {
+        font: 600 26px var(--sans);
+        letter-spacing: -0.03em;
+      }
+      .lockups {
+        display: flex;
+        gap: 36px;
+        flex-wrap: wrap;
+        align-items: center;
+        padding: 20px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+      }
+      footer {
+        padding: 64px 0 48px;
+        color: var(--faint);
+        font-size: 12px;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <header>
+        <div class="crumb"><a href="/">octodo</a> · brand explorations · not shipped</div>
+        <h1>The tiled octopus as an identity</h1>
+        <p>
+          Every mark below is drawn live from the same shape as the octopus on the landing page: a
+          mantle, eyes and eight curling arms, sampled into rounded tiles. Each direction shows the
+          app tile, the small sizes where icons usually fall apart, and how it sits in a dock and a
+          browser tab. The sliders apply to all of them.
+        </p>
+      </header>
+
+      <div class="controls">
+        <label
+          >density <input id="density" type="range" min="12" max="34" value="22" />
+          <span id="densityOut">22</span></label
+        >
+        <label>arms <input id="curl" type="range" min="0" max="100" value="60" /></label>
+        <button id="animate" aria-pressed="false">animate</button>
+        <button id="glyphs" aria-pressed="true">glyphs in tiles</button>
+        <button id="theme">light page</button>
+      </div>
+
+      <div class="strip" id="strip"></div>
+      <div id="dirs"></div>
+
+      <section class="dir">
+        <div class="dir-head">
+          <b>W</b>
+          <h2>Wordmark lockups</h2>
+        </div>
+        <p class="dir-note">
+          The mark next to the name. Geist Mono lowercase keeps the "written down" voice of the app
+          and the site; Geist semibold is the friendlier alternative.
+        </p>
+        <div class="lockups" id="lockups"></div>
+      </section>
+
+      <footer>
+        Current icon for comparison:
+        <img
+          src="/icon.png"
+          alt="current octodo icon"
+          width="20"
+          height="20"
+          style="vertical-align: -5px"
+        />
+        · <a href="/">landing</a> · <a href="/explore.html">direction study</a> ·
+        <a href="/classic.html">first landing</a>
+      </footer>
+    </main>
+
+    <script>
+      const root = document.documentElement;
+      const $ = (id) => document.getElementById(id);
+      const state = { density: 22, curl: 0.6, animate: false, glyphs: true };
+
+      // Each direction: the tile behind the mark, how cells are painted, and its tile palette.
+      const DIRS = [
+        {
+          id: "ember",
+          name: "Ember tiles",
+          note: "The landing page octopus, as is: warm orange tiles with pale highlights on a charcoal tile. Closest to the site; the most character, and the most colour.",
+          tile: ["#262523", "#151514"],
+          pal: {
+            hi: "#efe8df",
+            pale: "#c9c1b7",
+            lt: "#f2a462",
+            mid: "#e2803d",
+            deep: "#b4552c",
+            grey: "#6f6a64",
+            fringe: "#36342f",
+            eye: "#0d0d0c",
+            dot: "#efe8df",
+            glyph: "rgba(18,16,14,.42)",
+          },
+        },
+        {
+          id: "ink",
+          name: "Ink tiles",
+          note: "The same animal in the app's ink blue. Cold and calm, matches the accent in the app rather than the site's orange.",
+          tile: ["#22262c", "#14171b"],
+          pal: {
+            hi: "#eef2f6",
+            pale: "#b4c0cc",
+            lt: "#a9c8e6",
+            mid: "#6f9ac6",
+            deep: "#45698f",
+            grey: "#5e6873",
+            fringe: "#2b3036",
+            eye: "#0b0d10",
+            dot: "#eef2f6",
+            glyph: "rgba(10,14,20,.45)",
+          },
+        },
+        {
+          id: "paper",
+          name: "Paper print",
+          note: "The paper tile you loved, with the octopus printed in ink tiles instead of the vector glyph. Keeps the ink-on-paper feeling and the continuity with today's icon.",
+          tile: ["#f8f4ef", "#ebe3da"],
+          pal: {
+            hi: "#6b7785",
+            pale: "#8d97a3",
+            lt: "#3b4856",
+            mid: "#26313c",
+            deep: "#14202b",
+            grey: "#a7aeb6",
+            fringe: "#ddd5cb",
+            eye: "#f8f4ef",
+            dot: "#14202b",
+            glyph: "rgba(248,244,239,.28)",
+          },
+        },
+        {
+          id: "ember-paper",
+          name: "Ember on paper",
+          note: "Warm tiles on the paper tile: the site's colours, the icon's paper. Bright and friendly in a dock; the orange carries at small sizes.",
+          tile: ["#f8f4ef", "#ebe3da"],
+          pal: {
+            hi: "#f6d2b0",
+            pale: "#e9b98d",
+            lt: "#ee9a55",
+            mid: "#dc7a37",
+            deep: "#a9492a",
+            grey: "#b9aea3",
+            fringe: "#e7ded4",
+            eye: "#22211f",
+            dot: "#f8f4ef",
+            glyph: "rgba(60,30,10,.3)",
+          },
+        },
+        {
+          id: "ascii",
+          name: "Terminal ASCII",
+          note: "No tiles at all: the shape set in Geist Mono characters on charcoal, densest characters where the body is lit. The most 'deep tech', the least legible when tiny.",
+          tile: ["#1d1d1c", "#121211"],
+          mode: "ascii",
+          pal: { ink: "#f0ece5", eye: "#e5813f" },
+        },
+        {
+          id: "onebit",
+          name: "One-bit",
+          note: "A single colour, no shading: every covered cell is a paper tile, the eyes are holes. Reads at 16px, works as a stamp, a favicon, a menu-bar icon.",
+          tile: ["#1f1f1e", "#151514"],
+          mode: "flat",
+          pal: { on: "#f0ece5", eye: "#151514" },
+        },
+      ];
+
+      // --- the shape -------------------------------------------------------------------------
+      // Drawn into a square of side S as two layers: lum (shade, white = lit) and eye centres.
+      function drawShape(g, S, t) {
+        const cx = S / 2;
+        const curl = 0.8 + state.curl * 2.2;
+        g.clearRect(0, 0, S, S);
+        const grey = (v) => `rgb(${v * 255},${v * 255},${v * 255})`;
+
+        // arms first, so the mantle sits on top of their roots
+        const arms = [];
+        for (let i = 0; i < 8; i++) {
+          const s = (i - 3.5) / 3.5;
+          const side = Math.sign(s);
+          const far = i % 2 === 0;
+          const len = S * (0.5 - 0.08 * Math.abs(s));
+          const n = 28;
+          let x = cx + s * S * 0.13;
+          let y = S * 0.48;
+          let ang = Math.PI / 2 - s * 0.62;
+          const pts = [[x, y]];
+          for (let j = 0; j < n; j++) {
+            const u = j / n;
+            const wave = state.animate ? 0.22 * Math.sin(t * 1.4 + i * 1.7 - u * 4) * u : 0;
+            // arms hang, then the tips curl outward and up
+            const turn = (-side * curl * 3.2 * Math.pow(u, 2.2)) / n + wave / n;
+            ang += turn * (Math.abs(s) < 0.2 ? 0.45 : 1);
+            x += (Math.cos(ang) * len) / n;
+            y += (Math.sin(ang) * len) / n;
+            pts.push([x, y]);
+          }
+          arms.push({ pts, far });
+        }
+        for (const pass of [true, false]) {
+          for (const arm of arms) {
+            if (arm.far !== pass) continue;
+            arm.pts.forEach(([x, y], j) => {
+              const u = j / arm.pts.length;
+              const r = S * (0.046 * Math.pow(1 - u, 0.8) + 0.011);
+              g.fillStyle = grey(arm.far ? 0.42 : 0.6);
+              g.beginPath();
+              g.arc(x, y, r, 0, 7);
+              g.fill();
+            });
+          }
+        }
+
+        // head band and mantle
+        const breathe = state.animate ? 1 + 0.025 * Math.sin(t * 1.1) : 1;
+        g.fillStyle = grey(0.55);
+        g.beginPath();
+        g.ellipse(cx, S * 0.45, S * 0.16, S * 0.085, 0, 0, 7);
+        g.fill();
+        const my = S * 0.25;
+        const rx = S * 0.2 * breathe;
+        const ry = (S * 0.215) / breathe;
+        const grad = g.createRadialGradient(cx - rx * 0.4, my - ry * 0.45, 0, cx, my, ry * 1.15);
+        grad.addColorStop(0, grey(1));
+        grad.addColorStop(0.5, grey(0.78));
+        grad.addColorStop(1, grey(0.45));
+        g.fillStyle = grad;
+        g.beginPath();
+        g.ellipse(cx, my, rx, ry, 0, 0, 7);
+        g.fill();
+        return [
+          [cx - S * 0.09, S * 0.435],
+          [cx + S * 0.09, S * 0.435],
+        ];
+      }
+
+      // --- sampling into tiles ---------------------------------------------------------------
+      const work = document.createElement("canvas");
+      const wg = work.getContext("2d", { willReadFrequently: true });
+      const CHARS = [".", ":", "+", "x", "%", "8"];
+      const RAMP = " .:-=+*#%@";
+
+      function sample(N, t) {
+        const SS = 4;
+        const S = N * SS;
+        work.width = work.height = S;
+        const eyes = drawShape(wg, S, t);
+        const d = wg.getImageData(0, 0, S, S).data;
+        const cells = [];
+        for (let r = 0; r < N; r++)
+          for (let c = 0; c < N; c++) {
+            let L = 0,
+              A = 0;
+            for (let y = 0; y < SS; y++)
+              for (let x = 0; x < SS; x++) {
+                const o = ((r * SS + y) * S + c * SS + x) * 4;
+                L += d[o] * d[o + 3];
+                A += d[o + 3];
+              }
+            const k = SS * SS * 255;
+            cells.push({ lum: L / k / 255, cov: A / k });
+          }
+        const eyeCells = new Set(eyes.map(([x, y]) => Math.floor(y / SS) * N + Math.floor(x / SS)));
+        return { cells, eyeCells };
+      }
+
+      function paintCells(g, dir, N, ox, oy, size, t, small) {
+        const { cells, eyeCells } = sample(N, t);
+        const cell = size / N;
+        const gap = Math.max(0.6, cell * 0.12);
+        const rad = cell * 0.2;
+        const P = dir.pal;
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        cells.forEach(({ lum, cov }, i) => {
+          const x = ox + (i % N) * cell;
+          const y = oy + Math.floor(i / N) * cell;
+          const isEye = eyeCells.has(i) && cov > 0.3;
+          if (dir.mode === "ascii") {
+            if (isEye) {
+              g.fillStyle = P.eye;
+              g.font = `600 ${cell * 1.05}px "Geist Mono", monospace`;
+              g.fillText("o", x + cell / 2, y + cell / 2);
+              return;
+            }
+            const v = lum * (0.35 + 0.65 * cov);
+            if (v < 0.06) return;
+            g.fillStyle = P.ink;
+            g.globalAlpha = Math.min(1, 0.45 + v);
+            g.font = `500 ${cell * 1.05}px "Geist Mono", monospace`;
+            g.fillText(RAMP[Math.min(9, Math.floor(v * 10))], x + cell / 2, y + cell / 2);
+            g.globalAlpha = 1;
+            return;
+          }
+          if (cov < 0.22) return;
+          let col;
+          if (dir.mode === "flat") col = isEye ? P.eye : cov > 0.4 ? P.on : null;
+          else if (isEye) col = P.eye;
+          else if (cov < 0.4 || lum < 0.2) col = P.fringe;
+          else if (lum > 0.86) col = P.hi;
+          else if (lum > 0.72) col = P.lt;
+          else if (lum > 0.52) col = P.mid;
+          else if (lum > 0.36) col = P.deep;
+          else col = P.grey;
+          if (!col) return;
+          g.fillStyle = col;
+          g.beginPath();
+          g.roundRect(x + gap / 2, y + gap / 2, cell - gap, cell - gap, rad);
+          g.fill();
+          if (isEye && dir.mode !== "flat" && cell > 5) {
+            g.fillStyle = P.dot;
+            g.beginPath();
+            g.arc(x + cell * 0.5, y + cell * 0.5, cell * 0.16, 0, 7);
+            g.fill();
+          } else if (
+            state.glyphs &&
+            !small &&
+            dir.mode !== "flat" &&
+            col !== P.fringe &&
+            cell >= 9
+          ) {
+            g.fillStyle = P.glyph;
+            g.font = `500 ${cell * 0.62}px "Geist Mono", monospace`;
+            g.fillText(CHARS[Math.min(5, Math.floor(lum * 6))], x + cell / 2, y + cell / 2 + 0.5);
+          }
+        });
+      }
+
+      // An app tile: macOS-style rounded square (824/1024 of the canvas, like the real icon grid)
+      // or a full-bleed favicon square.
+      function drawIcon(canvas, dir, px, t, opts = {}) {
+        const dpr = Math.min(devicePixelRatio || 1, 2);
+        canvas.width = canvas.height = Math.round(px * dpr);
+        canvas.style.width = canvas.style.height = px + "px";
+        const g = canvas.getContext("2d");
+        g.setTransform(dpr, 0, 0, dpr, 0, 0);
+        g.clearRect(0, 0, px, px);
+        const bleed = opts.bleed;
+        const inset = bleed ? 0 : px * (100 / 1024);
+        const side = px - inset * 2;
+        const radius = bleed ? side * 0.22 : side * (185 / 824);
+        if (!bleed && px >= 48) {
+          g.save();
+          g.shadowColor = "rgba(0,0,0,.28)";
+          g.shadowBlur = px * 0.04;
+          g.shadowOffsetY = px * 0.015;
+          g.fillStyle = dir.tile[1];
+          g.beginPath();
+          g.roundRect(inset, inset, side, side, radius);
+          g.fill();
+          g.restore();
+        }
+        const grad = g.createLinearGradient(0, inset, 0, inset + side);
+        grad.addColorStop(0, dir.tile[0]);
+        grad.addColorStop(1, dir.tile[1]);
+        g.fillStyle = grad;
+        g.beginPath();
+        g.roundRect(inset, inset, side, side, radius);
+        g.fill();
+        // Small icons get fewer, bigger cells so the animal survives.
+        const N =
+          px <= 16 ? 8 : px <= 32 ? 11 : px <= 64 ? Math.min(state.density, 16) : state.density;
+        const art = side * (bleed ? 1 : 0.9);
+        g.save();
+        g.beginPath();
+        g.roundRect(inset, inset, side, side, radius);
+        g.clip();
+        paintCells(g, dir, N, inset + (side - art) / 2, inset + (side - art) / 2, art, t, px < 64);
+        g.restore();
+      }
+
+      // --- page ------------------------------------------------------------------------------
+      const strip = $("strip");
+      const dirsEl = $("dirs");
+      const live = []; // [canvas, dir, px, opts]
+
+      DIRS.forEach((dir, k) => {
+        const a = document.createElement("a");
+        a.href = "#" + dir.id;
+        const c = document.createElement("canvas");
+        a.append(c, dir.name.toLowerCase());
+        strip.append(a);
+        live.push([c, dir, 120, {}]);
+
+        const sec = document.createElement("section");
+        sec.className = "dir";
+        sec.id = dir.id;
+        sec.innerHTML = `
+          <div class="dir-head"><b>${String.fromCharCode(65 + k)}</b><h2>${dir.name}</h2></div>
+          <p class="dir-note">${dir.note}</p>
+          <div class="dir-body">
+            <div class="hero"></div>
+            <div class="stage">
+              <div class="sizes on-dark"></div>
+              <div class="sizes on-light"></div>
+              <div class="context">
+                <div class="dock"><span class="fake"></span><span class="fake b"></span><span class="slot"></span><span class="fake g"></span><span class="fake"></span></div>
+                <div class="tab">
+                  <div class="bar"><span class="t"><span class="fav"></span>octodo · All tasks</span><span class="t off">GitHub</span></div>
+                  <div class="page"><span class="mini"></span><span>House Move</span></div>
+                </div>
+              </div>
+            </div>
+          </div>`;
+        dirsEl.append(sec);
+        const hero = document.createElement("canvas");
+        sec.querySelector(".hero").append(hero);
+        live.push([hero, dir, 280, {}]);
+        for (const where of [".on-dark", ".on-light"]) {
+          for (const px of [128, 64, 32, 16]) {
+            const f = document.createElement("figure");
+            const c = document.createElement("canvas");
+            f.append(c, `${px}`);
+            sec.querySelector(where).append(f);
+            live.push([c, dir, px, { bleed: px <= 32 }]);
+          }
+        }
+        const slot = document.createElement("canvas");
+        sec.querySelector(".slot").replaceWith(slot);
+        live.push([slot, dir, 64, {}]);
+        const fav = document.createElement("canvas");
+        sec.querySelector(".fav").replaceWith(fav);
+        live.push([fav, dir, 16, { bleed: true }]);
+        const mini = document.createElement("canvas");
+        sec.querySelector(".mini").replaceWith(mini);
+        live.push([mini, dir, 24, { bleed: true }]);
+      });
+
+      for (const id of ["ember", "ink", "paper", "onebit"]) {
+        const dir = DIRS.find((d) => d.id === id);
+        for (const sans of [false, true]) {
+          const l = document.createElement("div");
+          l.className = "lockup";
+          const c = document.createElement("canvas");
+          const w = document.createElement("span");
+          w.className = "word" + (sans ? " sans" : "");
+          w.textContent = "octodo";
+          l.append(c, w);
+          $("lockups").append(l);
+          live.push([c, dir, 40, { bleed: true }]);
+        }
+      }
+
+      function renderAll(t = 0) {
+        for (const [c, dir, px, opts] of live) drawIcon(c, dir, px, t, opts);
+      }
+
+      let raf = 0;
+      function loop(ms) {
+        renderAll(ms / 1000);
+        raf = requestAnimationFrame(loop);
+      }
+
+      $("density").oninput = (e) => {
+        state.density = +e.target.value;
+        $("densityOut").textContent = state.density;
+        if (!state.animate) renderAll();
+      };
+      $("curl").oninput = (e) => {
+        state.curl = e.target.value / 100;
+        if (!state.animate) renderAll();
+      };
+      $("animate").onclick = (e) => {
+        state.animate = !state.animate;
+        e.target.setAttribute("aria-pressed", state.animate);
+        cancelAnimationFrame(raf);
+        if (state.animate) raf = requestAnimationFrame(loop);
+        else renderAll();
+      };
+      $("glyphs").onclick = (e) => {
+        state.glyphs = !state.glyphs;
+        e.target.setAttribute("aria-pressed", state.glyphs);
+        if (!state.animate) renderAll();
+      };
+      $("theme").onclick = (e) => {
+        const light = root.dataset.theme !== "light";
+        root.dataset.theme = light ? "light" : "dark";
+        e.target.textContent = light ? "dark page" : "light page";
+      };
+
+      document.fonts.ready.then(() => renderAll());
+    </script>
+  </body>
+</html>

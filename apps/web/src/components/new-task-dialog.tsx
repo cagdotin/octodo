@@ -33,6 +33,7 @@ import {
 import { Kbd } from "@/components/ui/kbd";
 import { defaultStatus } from "@octodo/core/layout";
 import { useCreateTask } from "@/lib/api";
+import { parseQuickAdd, withoutRanges, type QuickAddToken } from "@/lib/quick-add";
 import { cn } from "@/lib/utils";
 import {
   allTags,
@@ -40,7 +41,6 @@ import {
   isSmartView,
   listLabel,
   listTree,
-  parseQuickAdd,
   PRIORITIES,
   SMART,
   todayKey,
@@ -63,14 +63,6 @@ const flatLists = (
   depth = 0,
 ): Array<{ list: List; depth: number }> =>
   nodes.flatMap((node) => [{ list: node.list, depth }, ...flatLists(node.children, depth + 1)]);
-
-/** Drops the quick-add tokens a picker has just overridden, so the dialog shows one answer. */
-const stripTokens = (text: string, drop: (word: string) => boolean) =>
-  text
-    .split(/(\s+)/)
-    .filter((word) => !drop(word))
-    .join("")
-    .replace(/\s{2,}/g, " ");
 
 interface Props {
   open: boolean;
@@ -120,6 +112,7 @@ function NewTaskForm({
   const create = useCreateTask(workspace);
   const titleInput = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(initialTitle);
+  const [now] = useState(() => new Date());
   const [notes, setNotes] = useState("");
   // Picks from the buttons; undefined means "whatever the tokens or the view say".
   const [pickedStatus, setPickedStatus] = useState<string>();
@@ -128,17 +121,25 @@ function NewTaskForm({
   const [pickedList, setPickedList] = useState<string | null>();
   const [pickedTags, setPickedTags] = useState<Array<string>>([]);
 
-  const parsed = parseQuickAdd(text);
+  const parsed = parseQuickAdd(text, { lists: snapshot.lists, now });
+  // A pick from the buttons replaces what the tokens said, so the dialog shows one answer.
+  const dropTokens = (drop: (token: QuickAddToken) => boolean) =>
+    setText(
+      withoutRanges(
+        text,
+        parsed.ranges.filter((range) => drop(range.token)),
+      ),
+    );
   const status =
     snapshot.statuses.find((entry) => entry.id === pickedStatus) ??
     defaultStatus(snapshot.statuses);
-  const priority = parsed.priority ?? pickedPriority ?? "none";
+  const priority = parsed.fields.priority ?? pickedPriority ?? "none";
   const due =
-    parsed.due ??
+    parsed.fields.due ??
     (pickedDue === undefined ? (list === SMART.today ? todayKey() : null) : pickedDue);
   const viewList = isSmartView(list) ? null : (list ?? null);
-  const targetList = pickedList === undefined ? viewList : pickedList;
-  const tags = [...new Set([...pickedTags, ...parsed.tags])];
+  const targetList = parsed.fields.list ?? (pickedList === undefined ? viewList : pickedList);
+  const tags = [...new Set([...pickedTags, ...parsed.fields.tags])];
   const knownTags = [...new Set([...allTags(snapshot.tasks), ...tags])].sort((a, b) =>
     a.localeCompare(b),
   );
@@ -146,7 +147,9 @@ function NewTaskForm({
   const ready = parsed.title !== "" && status !== undefined;
 
   const toggleTag = (tag: string) => {
-    if (parsed.tags.includes(tag)) setText(stripTokens(text, (word) => word === `#${tag}`));
+    if (parsed.fields.tags.includes(tag)) {
+      dropTokens((token) => token.kind === "tag" && token.tag === tag);
+    }
     setPickedTags(
       tags.includes(tag) ? pickedTags.filter((entry) => entry !== tag) : [...pickedTags, tag],
     );
@@ -254,11 +257,7 @@ function NewTaskForm({
                 onValueChange={(value) => {
                   const picked = MENU_PRIORITIES.find((entry) => entry === value);
                   if (picked === undefined) return;
-                  if (parsed.priority) {
-                    setText(
-                      stripTokens(text, (word) => parseQuickAdd(word).priority !== undefined),
-                    );
-                  }
+                  if (parsed.fields.priority) dropTokens((token) => token.kind === "priority");
                   setPickedPriority(picked);
                 }}
               >
@@ -278,7 +277,7 @@ function NewTaskForm({
         <DuePicker
           value={due}
           onChange={(next) => {
-            if (parsed.due) setText(stripTokens(text, (word) => /^due:\S+$/i.test(word)));
+            if (parsed.fields.due) dropTokens((token) => token.kind === "due");
             setPickedDue(next);
           }}
           onCloseAutoFocus={refocus}
@@ -305,7 +304,10 @@ function NewTaskForm({
               <DropdownMenuLabel>List</DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={targetList ?? ""}
-                onValueChange={(value) => setPickedList(value === "" ? null : value)}
+                onValueChange={(value) => {
+                  if (parsed.fields.list) dropTokens((token) => token.kind === "list");
+                  setPickedList(value === "" ? null : value);
+                }}
               >
                 <DropdownMenuRadioItem value="">No list</DropdownMenuRadioItem>
                 {flatLists(listTree(snapshot.lists)).map(({ list: entry, depth }) => (

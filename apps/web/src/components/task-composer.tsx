@@ -4,7 +4,8 @@ import { PriorityIcon, StatusIcon, TagChip } from "@/components/task-bits";
 import { Kbd } from "@/components/ui/kbd";
 import { useCreateTask } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { dueInfo, isSmartView, parseQuickAdd, SMART, todayKey } from "@/lib/tasks";
+import { parseQuickAdd } from "@/lib/quick-add";
+import { dueInfo, isSmartView, SMART, todayKey } from "@/lib/tasks";
 
 interface Props {
   workspace: string;
@@ -33,22 +34,23 @@ export function TaskComposer({
   idWidth,
 }: Props) {
   const [text, setText] = useState("");
+  const [now] = useState(() => new Date());
   const create = useCreateTask(workspace);
-  const parsed = parseQuickAdd(text);
+  const { title, fields } = parseQuickAdd(text, { lists: snapshot.lists, now });
   const category = snapshot.statuses.find((entry) => entry.id === status)?.category;
-  const due = dueInfo(parsed.due ?? null);
+  const due = dueInfo(fields.due ?? null);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (parsed.title === "") return;
+    if (title === "") return;
     const input: CreateTaskInput = {
-      title: parsed.title,
-      tags: parsed.tags,
+      title,
+      tags: fields.tags,
       status,
-      ...(parsed.priority ? { priority: parsed.priority } : {}),
+      ...(fields.priority ? { priority: fields.priority } : {}),
       // Adding from Today means due today unless the text says otherwise.
-      ...(parsed.due ? { due: parsed.due } : list === SMART.today ? { due: todayKey() } : {}),
-      ...(isSmartView(list) ? {} : { list: list ?? null }),
+      ...(fields.due ? { due: fields.due } : list === SMART.today ? { due: todayKey() } : {}),
+      ...(fields.list ? { list: fields.list } : isSmartView(list) ? {} : { list: list ?? null }),
     };
     create.mutate(input);
     setText("");
@@ -96,10 +98,10 @@ export function TaskComposer({
         }}
       />
       <span className="flex shrink-0 items-center gap-1.5">
-        {parsed.priority && parsed.priority !== "none" && (
-          <PriorityIcon priority={parsed.priority} />
+        {fields.priority && fields.priority !== "none" && (
+          <PriorityIcon priority={fields.priority} />
         )}
-        {parsed.tags.map((tag) => (
+        {fields.tags.map((tag) => (
           <TagChip key={tag} tag={tag} />
         ))}
         {due && (

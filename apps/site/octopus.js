@@ -17,10 +17,8 @@
     const SS = 2; // supersampling per cell
     const shade = document.createElement("canvas");
     const pat = document.createElement("canvas");
-    const inkC = document.createElement("canvas");
     const sx = shade.getContext("2d", { willReadFrequently: true });
     const px = pat.getContext("2d", { willReadFrequently: true });
-    const ix = inkC.getContext("2d", { willReadFrequently: true });
     let W = 0,
       H = 0,
       cols = 0,
@@ -108,7 +106,6 @@
       for (const [c, x] of [
         [shade, sx],
         [pat, px],
-        [inkC, ix],
       ]) {
         c.width = cols * SS;
         c.height = rows * SS;
@@ -146,18 +143,14 @@
       period: 1.6,
       strokes: 0,
       thrust: 1,
-      brace: 0, // seconds of turning and inhaling before an escape jet
-      flee: 0, // escape heading while bracing
+      hurry: false, // startled: heading for the far side of the screen
       rest: 3,
       wx: 0,
       wy: 0,
       wpAge: 0,
       wander: 0,
       cool: 0,
-      blanch: 0,
-      inkLeft: 0,
       flowY: 0,
-      inkT: 0,
     };
     // the muscle pose the arms are pulled toward, shaped by the stroke cycle
     const pose = { spread: 0.6, curl: 1, relax: 1, wave: 0.6, squeeze: 0, tilt: 0 };
@@ -321,7 +314,6 @@
 
     // --- the world around it ----------------------------------------------------------------
     const wake = [];
-    const inks = [];
     const snow = Array.from({ length: 46 }, () => ({
       x: Math.random() * 2000,
       y: Math.random() * 1400,
@@ -340,7 +332,13 @@
     function update(dt, t) {
       O.cool -= dt;
       O.wpAge += dt;
-      if (Math.hypot(O.wx - O.x, O.wy - O.y) < 80 * S || O.wpAge > 16) pickWaypoint();
+      const togo = Math.hypot(O.wx - O.x, O.wy - O.y);
+      if (O.hurry && (togo < 60 * S || O.wpAge > 14)) {
+        // far enough: finish this stroke and settle down
+        O.hurry = false;
+        O.strokes = Math.min(O.strokes, 1);
+      }
+      if (!O.hurry && (togo < 80 * S || O.wpAge > 16)) pickWaypoint();
       let want = desiredHeading(dt);
       let turnRate;
 
@@ -352,30 +350,21 @@
         waveT,
         squeezeT = 0;
       power = 0;
-      if (O.brace > 0) {
-        // startled: inhale, flare and turn to face away before the first jet
-        O.brace -= dt;
-        want = O.flee;
-        turnRate = 2.4;
-        spreadT = 0.85;
-        curlT = 0.4;
-        relaxT = 0;
-        waveT = 0.15;
-        squeezeT = -0.7;
-      } else if (O.mode === "swim") {
+      if (O.mode === "swim") {
         O.phase += dt / O.period;
         if (O.phase >= 1) {
           O.phase -= 1;
-          if (--O.strokes <= 0) {
+          if (O.hurry) O.period = 1.05;
+          // a hurrying octopus keeps stroking until it gets there
+          if (!O.hurry && --O.strokes <= 0) {
             O.mode = "drift";
             O.rest = rnd(3, 7);
             O.thrust = 1;
             O.period = 1.6;
-            O.inkLeft = 0;
           }
         }
         const p = O.phase;
-        const flare = O.thrust > 1 ? 0.45 : 0.62;
+        const flare = 0.62;
         if (p < 0.28) {
           const u = p / 0.28;
           power = Math.sin(u * Math.PI);
@@ -390,7 +379,7 @@
         }
         relaxT = 0;
         waveT = 0.35;
-        turnRate = (p < 0.28 ? 0.45 : 0.95) * (O.thrust > 1 ? 1.8 : 1);
+        turnRate = (p < 0.28 ? 0.45 : 0.95) * (O.hurry ? 1.3 : 1);
       } else {
         // drifting: slow breathing, the web half open, every arm tip doing its own thing
         O.rest -= dt;
@@ -400,18 +389,18 @@
         relaxT = 1;
         waveT = 0.55;
         squeezeT = 0.12 * Math.sin(t * 2.4);
-        turnRate = 0.42;
+        turnRate = O.hurry ? 1.3 : 0.42;
         // hanging in the water the mantle floats up; it only lines up with where it is going
         // in the moment before it sets off
         if (O.rest > 1.5) {
           const up = -Math.PI / 2;
           want = up + clamp(wrapA(O.th - up), -0.7, 0.7) * 0.9;
         }
-        if (O.rest < 0 && (Math.abs(wrapA(want - O.th)) < 0.45 || O.rest < -5)) {
+        if (O.rest < 0 && (Math.abs(wrapA(want - O.th)) < (O.hurry ? 0.8 : 0.45) || O.rest < -5)) {
           O.mode = "swim";
           O.phase = 0;
           O.strokes = Math.round(rnd(2, 4));
-          O.period = rnd(1.4, 1.8);
+          O.period = O.hurry ? 1.05 : rnd(1.4, 1.8);
         }
       }
       pose.spread = approach(pose.spread, spreadT, O.mode === "swim" ? 14 : 2.5, dt);
@@ -424,22 +413,21 @@
 
       // turning, smoothed so the heading never snaps
       const diff = wrapA(want - O.th);
-      O.w = approach(O.w, clamp(diff * 2, -turnRate, turnRate), O.brace > 0 ? 8 : 2.6, dt);
+      O.w = approach(O.w, clamp(diff * 2, -turnRate, turnRate), 2.6, dt);
       O.th += O.w * dt;
 
       // the jet pushes the mantle forward; the water slows everything down
       const f0 = Math.cos(O.th),
         f1 = Math.sin(O.th);
-      const acc = power * 340 * S * O.thrust * (O.thrust > 1 ? 1.6 : 1);
+      const acc = power * 340 * S * O.thrust;
       O.vx += f0 * acc * dt;
       O.vy += f1 * acc * dt;
-      // a streamlined body: it slips forward easily, sideways hardly at all, and a flared web
-      // brakes it
+      // a streamlined body: it slips forward easily, sideways hardly at all
       const sp = Math.hypot(O.vx, O.vy);
       const vf = O.vx * f0 + O.vy * f1;
       const vl = -O.vx * f1 + O.vy * f0;
-      const dF = 1.25 + (sp * 0.004) / S + (O.brace > 0 ? 6 : 0),
-        dL = 4 + (O.brace > 0 ? 6 : 0);
+      const dF = 1.25 + (sp * 0.004) / S,
+        dL = 4;
       const nf = vf * Math.max(0, 1 - dF * dt),
         nl = vl * Math.max(0, 1 - dL * dt);
       O.vx = f0 * nf - f1 * nl;
@@ -447,7 +435,6 @@
       if (O.mode === "drift") O.vy += (5 * S - O.vy) * 0.3 * dt; // slowly sinks
       O.x += O.vx * dt;
       O.y += O.vy * dt;
-      O.blanch = Math.max(0, O.blanch - dt * 0.7);
 
       // scrolling moves the water (and everything in it) a little, eased in over a few frames
       const fy = O.flowY * Math.min(1, dt * 7);
@@ -460,14 +447,13 @@
             a.p[j] += fy;
             a.q[j] += fy;
           }
-        for (const k of inks) k.y += fy;
         for (const b of wake) b.y += fy;
       }
 
       const steps = Math.max(1, Math.ceil(dt / (1 / 100)));
       for (let i = 0; i < steps; i++) stepArms(dt / steps, t - dt + ((i + 1) * dt) / steps);
 
-      // jet water: faint specks and stirred marine snow behind the funnel, ink if alarmed
+      // jet water: faint specks and stirred marine snow behind the funnel
       const [jx, jy] = siphon();
       if (power > 0.3 && Math.random() < dt * 26 * O.thrust)
         wake.push({
@@ -477,24 +463,6 @@
           vy: -f1 * rnd(60, 130) * O.thrust + rnd(-15, 15),
           life: rnd(0.5, 0.9),
         });
-      // ink leaves the funnel with the first jet: a dense blob, then a thinning streak
-      if (O.inkLeft > 0 && power > 0.1) {
-        O.inkT -= dt;
-        if (O.inkT <= 0) {
-          O.inkT = 0.025;
-          const k = O.inkLeft / 14;
-          O.inkLeft--;
-          inks.push({
-            x: jx,
-            y: jy,
-            r: (3 + 6 * k) * S,
-            vr: (10 + 26 * k) * S * rnd(0.7, 1.2),
-            vx: -f0 * rnd(50, 170) + rnd(-55, 55),
-            vy: -f1 * rnd(50, 170) + rnd(-55, 55),
-            life: 0.6 + 0.4 * k,
-          });
-        }
-      }
       for (const b of wake) {
         b.x += b.vx * dt;
         b.y += b.vy * dt;
@@ -503,16 +471,6 @@
         b.life -= dt;
       }
       for (let i = wake.length - 1; i >= 0; i--) if (wake[i].life <= 0) wake.splice(i, 1);
-      for (const k of inks) {
-        k.r += k.vr * dt;
-        k.vr *= 1 - dt * 0.55;
-        k.x += k.vx * dt;
-        k.y += k.vy * dt + 3 * dt;
-        k.vx *= 1 - dt * 2.4;
-        k.vy *= 1 - dt * 2.4;
-        k.life -= dt / 8;
-      }
-      for (let i = inks.length - 1; i >= 0; i--) if (inks[i].life <= 0) inks.splice(i, 1);
       for (const s of snow) {
         if (power > 0.3) {
           const dx = s.x - jx,
@@ -533,33 +491,31 @@
       }
     }
 
-    // Startle: turn away, inhale, then a burst of hard jets; with `ink`, a cloud first.
-    function startle(x, y, ink) {
-      if (!running || O.cool > 0) return;
-      const away = Math.atan2(O.y - y, O.x - x);
+    // Startle: pick a spot on the far side of the screen from the pointer, clear of the text,
+    // and swim there with the ordinary jet cycle, just a little quicker and for longer.
+    function startle(x, y) {
+      if (!running || O.cool > 0 || O.hurry) return;
       let best = -1e9;
-      for (let k = -4; k <= 4; k++) {
-        const a = away + k * 0.32;
-        const tx = O.x + Math.cos(a) * 380 * S,
-          ty = O.y + Math.sin(a) * 380 * S;
-        const sc = appeal(tx, ty) - Math.abs(k) * 0.3 - Math.abs(wrapA(a - O.th)) * 0.8;
+      for (let i = 0; i < 40; i++) {
+        // with room beside the text column, stay on that side rather than cross under it
+        const tx = rnd(band ? colR + 60 : 0, W),
+          ty = rnd(0, H);
+        const dir = Math.atan2(ty - O.y, tx - O.x);
+        const sc =
+          appeal(tx, ty) * 1.5 +
+          (Math.hypot(tx - x, ty - y) / Math.hypot(W, H)) * 8 -
+          Math.max(0, Math.sin(dir) - 0.3) * 0.3;
         if (sc > best) {
           best = sc;
-          O.flee = a;
-          O.wx = clamp(tx, 60, W - 60);
-          O.wy = clamp(ty, 60, H - 60);
+          O.wx = tx;
+          O.wy = ty;
         }
       }
       O.wpAge = 0;
-      O.mode = "swim";
-      O.brace = 0.12 + Math.abs(wrapA(O.flee - O.th)) * 0.2;
-      O.phase = 0;
-      O.strokes = ink ? 4 : 3;
-      O.period = 0.85;
-      O.thrust = 2.2;
-      O.blanch = ink ? 1 : 0.7;
-      O.inkLeft = ink ? 14 : 0;
-      O.cool = 2.5;
+      O.hurry = true;
+      O.thrust = 1.7;
+      O.cool = 4;
+      if (O.mode === "drift") O.rest = 0;
     }
 
     // --- drawing ----------------------------------------------------------------------------
@@ -633,18 +589,6 @@
       const [f0, f1, n0, n1] = frame0();
       sx.clearRect(0, 0, W, H);
       px.clearRect(0, 0, W, H);
-      ix.clearRect(0, 0, W, H);
-
-      for (const k of inks) {
-        const gr = ix.createRadialGradient(k.x, k.y, 0, k.x, k.y, k.r);
-        gr.addColorStop(0, `rgba(255,255,255,${Math.min(1, k.life * 1.3) * 0.85})`);
-        gr.addColorStop(0.6, `rgba(255,255,255,${Math.min(1, k.life * 1.3) * 0.45})`);
-        gr.addColorStop(1, "rgba(255,255,255,0)");
-        ix.fillStyle = gr;
-        ix.beginPath();
-        ix.arc(k.x, k.y, k.r, 0, 7);
-        ix.fill();
-      }
 
       // webbing between neighbouring arms, a sagging skin that shows when they open
       const wk = Math.max(1, Math.round(N * (0.04 + 0.12 * clamp(pose.spread, 0, 1))));
@@ -700,26 +644,6 @@
         );
         px.fill();
       }
-      // alarmed octopuses blanch
-      if (O.blanch > 0) {
-        px.save();
-        px.beginPath();
-        px.ellipse(mx, my, mlen, mwid, mt, 0, 7);
-        px.ellipse(hx, hy, ML * 0.28, MW * 0.33, O.th, 0, 7);
-        px.clip();
-        px.beginPath();
-        const st = 12 * S,
-          r = st * 0.26 * Math.min(1, O.blanch * 1.4);
-        for (let a = -1.3; a <= 1.3; a += st / mlen / 1.1)
-          for (let b = -1.2; b <= 1.2; b += st / mwid / 1.1) {
-            const qx = mx + m0 * a * mlen - m1 * b * mwid,
-              qy = my + m1 * a * mlen + m0 * b * mwid;
-            px.moveTo(qx + r, qy);
-            px.arc(qx, qy, r, 0, 7);
-          }
-        px.fill();
-        px.restore();
-      }
 
       eyes = [-1, 1].map((side) => [
         hx + n0 * side * MW * 0.32 - f0 * ML * 0.02,
@@ -735,7 +659,7 @@
         px.fill();
       }
 
-      // only the cells around the animal (and its ink) are sampled
+      // only the cells around the animal are sampled
       let x0 = Infinity,
         y0 = Infinity,
         x1 = -Infinity,
@@ -749,7 +673,6 @@
       grow(O.x, O.y, ML * 1.3);
       grow(mx, my, ML);
       for (const a of ARMS) for (let j = 0; j < a.p.length; j += 2) grow(a.p[j], a.p[j + 1], 12);
-      for (const k of inks) grow(k.x, k.y, k.r);
       return {
         c0: Math.max(0, Math.floor(x0 / CELL)),
         r0: Math.max(0, Math.floor(y0 / CELL)),
@@ -789,7 +712,6 @@
       if (bw <= 0 || bh <= 0) return;
       const sd = sx.getImageData(box.c0 * SS, box.r0 * SS, bw * SS, bh * SS).data;
       const pd = px.getImageData(box.c0 * SS, box.r0 * SS, bw * SS, bh * SS).data;
-      const id = ix.getImageData(box.c0 * SS, box.r0 * SS, bw * SS, bh * SS).data;
       const rowW = bw * SS * 4;
       const buckets = {};
       const glyphs = [];
@@ -803,20 +725,17 @@
         for (let c = 0; c < bw; c++) {
           let L = 0,
             A = 0,
-            P = 0,
-            I = 0;
+            P = 0;
           for (let yy = 0; yy < SS; yy++)
             for (let xx = 0; xx < SS; xx++) {
               const o = (r * SS + yy) * rowW + (c * SS + xx) * 4;
               L += sd[o] * sd[o + 3];
               A += sd[o + 3];
               P += pd[o + 3];
-              I += id[o + 3];
             }
           const lum = L / k / 255; // shade × coverage
           A /= k;
           P /= k;
-          I /= k;
           const gx = (box.c0 + c) * CELL,
             gy = (box.r0 + r) * CELL;
           if (eyeCells.has(box.c0 + c + "," + (box.r0 + r))) {
@@ -824,11 +743,7 @@
             glyphs.push(gx, gy, "o", C.hi);
             continue;
           }
-          if (lum < 0.08) {
-            if (I > 0.1)
-              add(C.ink, gx, gy, (Math.round(Math.min(0.85, I * 1.2) * 20) / 20).toFixed(2));
-            continue;
-          }
+          if (lum < 0.08) continue;
           let col;
           if (A < 0.35 || lum < 0.2) col = C.fringe;
           else if (P > 0.45) col = lum > 0.62 ? C.hi : C.pale;
@@ -890,14 +805,11 @@
       const dx = e.clientX - O.x,
         dy = e.clientY - O.y;
       if (Math.hypot(dx, dy) < 95 * S + Math.max(0, Math.cos(Math.atan2(dy, dx) - O.th)) * ML)
-        startle(e.clientX, e.clientY, false);
+        startle(e.clientX, e.clientY);
     });
     addEventListener("pointerdown", (e) => {
       if (e.target.closest("a,button,.card")) return;
-      if (Math.hypot(e.clientX - O.x, e.clientY - O.y) < 260 * S) {
-        O.cool = 0;
-        startle(e.clientX, e.clientY, true);
-      }
+      if (Math.hypot(e.clientX - O.x, e.clientY - O.y) < 260 * S) startle(e.clientX, e.clientY);
     });
 
     // Lay the arms on their pose and let them hang in still water for a moment.

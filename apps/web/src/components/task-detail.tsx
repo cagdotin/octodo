@@ -6,6 +6,7 @@ import {
   CalendarIcon,
   CopyIcon,
   FlagIcon,
+  HashIcon,
   LayersIcon,
   MoreHorizontalIcon,
   PanelRightCloseIcon,
@@ -22,6 +23,7 @@ import {
   PriorityMenu,
   StatusIcon,
   StatusMenu,
+  TagChips,
 } from "@/components/task-bits";
 import { TagsEditor } from "@/components/tags-editor";
 import {
@@ -46,8 +48,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { useDeleteTask, useMoveTask, useUpdateTask } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -115,8 +116,9 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* TickTick-style header: done-ness and when on the left, priority on the right. */}
-      <div className="flex h-13 shrink-0 items-center gap-1 border-b px-3 desktop-mac:app-drag">
+      {/* The buttons and the title's line box are all 28px tall, so the controls center on the
+          title's first line however many lines it wraps to. */}
+      <div className="flex shrink-0 items-start gap-1 border-b px-3.5 py-3 desktop-mac:app-drag">
         <StatusMenu workspace={workspace} snapshot={snapshot} task={task}>
           <Button
             variant="ghost"
@@ -127,86 +129,49 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
             <StatusIcon category={currentStatus?.category} className="size-4" />
           </Button>
         </StatusMenu>
-        <Separator
-          orientation="vertical"
-          className="mx-1 data-vertical:h-4 data-vertical:self-center"
+        <Textarea
+          aria-label="Title"
+          value={draft.title}
+          rows={1}
+          onChange={(event) =>
+            editor.send({
+              type: "EDIT",
+              field: "title",
+              value: event.target.value.replace(/\n/g, " "),
+            })
+          }
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              editor.send({ type: "FLUSH" });
+            }
+            blurOnEscape(event);
+          }}
+          onBlur={() => editor.send({ type: "FLUSH" })}
+          className="min-h-7 min-w-0 flex-1 resize-none rounded-none border-0 bg-transparent px-0.5 py-0 text-lg leading-7 font-semibold tracking-[-0.015em] shadow-none focus-visible:ring-0 md:text-lg dark:bg-transparent"
         />
-        <DuePicker value={task.due} onChange={setDue}>
-          <Button
-            variant="ghost"
-            size="sm"
-            title={task.due ? `Due ${format(parseISO(task.due), "EEE, MMM d, yyyy")}` : undefined}
-            className={cn(
-              "px-2 font-mono text-xs font-normal",
-              due === null && "text-muted-foreground",
-              due?.overdue && "text-destructive hover:text-destructive",
+        <PriorityMenu workspace={workspace} task={task}>
+          <Button variant="ghost" size="icon-sm" aria-label={`Priority: ${priorityLabel}`}>
+            {/* The "none" glyph reads as a "…" button up here, so an unset priority is a flag. */}
+            {task.priority === "none" ? (
+              <FlagIcon className="text-muted-foreground" />
+            ) : (
+              <PriorityIcon priority={task.priority} className="size-4" />
             )}
-          >
-            <CalendarIcon data-icon="inline-start" />
-            {due ? due.label : "Due date"}
           </Button>
-        </DuePicker>
-        <div className="ml-auto flex items-center gap-1">
-          <SaveState
-            phase={String(phase)}
-            error={error}
-            onRetry={() => editor.send({ type: "RETRY" })}
-          />
-          <PriorityMenu workspace={workspace} task={task}>
-            <Button variant="ghost" size="icon-sm" aria-label={`Priority: ${priorityLabel}`}>
-              {/* The "none" glyph reads as a "…" button up here, so an unset priority is a flag. */}
-              {task.priority === "none" ? (
-                <FlagIcon className="text-muted-foreground" />
-              ) : (
-                <PriorityIcon priority={task.priority} />
-              )}
-            </Button>
-          </PriorityMenu>
-        </div>
+        </PriorityMenu>
       </div>
 
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-1 px-3 pt-3 pb-16">
-          <Textarea
-            aria-label="Title"
-            value={draft.title}
-            rows={1}
-            onChange={(event) =>
-              editor.send({
-                type: "EDIT",
-                field: "title",
-                value: event.target.value.replace(/\n/g, " "),
-              })
-            }
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                editor.send({ type: "FLUSH" });
-              }
-              blurOnEscape(event);
-            }}
-            onBlur={() => editor.send({ type: "FLUSH" })}
-            className="min-h-0 resize-none border-transparent bg-transparent px-2 py-1 text-xl leading-snug font-semibold tracking-[-0.02em] shadow-none focus-visible:border-transparent focus-visible:ring-0 md:text-xl dark:bg-transparent"
-          />
+      <MarkdownEditor
+        aria-label="Notes"
+        placeholder="Add notes in markdown…"
+        value={draft.body}
+        onChange={(value) => editor.send({ type: "EDIT", field: "body", value })}
+        onBlur={() => editor.send({ type: "FLUSH" })}
+        className="min-h-0 flex-1 text-base md:text-sm"
+      />
 
-          <TagsEditor
-            tags={task.tags}
-            onChange={(tags) => update.mutate({ id: task.id, patch: { tags } })}
-          />
-
-          <MarkdownEditor
-            aria-label="Notes"
-            placeholder="Add notes in markdown…"
-            value={draft.body}
-            onChange={(value) => editor.send({ type: "EDIT", field: "body", value })}
-            onBlur={() => editor.send({ type: "FLUSH" })}
-            className="mt-1 text-base md:text-sm"
-          />
-        </div>
-      </ScrollArea>
-
-      {/* Footer: where the task lives on the left, everything else behind "…". */}
-      <div className="flex h-11 shrink-0 items-center gap-1 border-t px-2">
+      <div className="flex h-11 shrink-0 items-center gap-0.5 border-t pr-3.5 pl-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -243,58 +208,110 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        <DuePicker value={task.due} onChange={setDue}>
+          <Button
+            variant="ghost"
+            size="sm"
+            title={task.due ? `Due ${format(parseISO(task.due), "EEE, MMM d, yyyy")}` : undefined}
+            className={cn(
+              "font-mono text-xs font-normal text-muted-foreground",
+              due && "text-foreground",
+              due?.overdue && "text-destructive hover:text-destructive",
+            )}
+          >
+            <CalendarIcon data-icon="inline-start" />
+            {due ? due.label : "Due"}
+          </Button>
+        </DuePicker>
+
+        <Popover>
+          <PopoverTrigger asChild>
             <Button
               variant="ghost"
-              size="icon-sm"
-              className="ml-auto text-muted-foreground"
-              aria-label="More actions"
+              size="sm"
+              className="min-w-0 font-normal text-muted-foreground"
+              aria-label={task.tags.length === 0 ? "Add tags" : `Tags: ${task.tags.join(", ")}`}
+              title={task.tags.map((tag) => `#${tag}`).join(" ") || undefined}
             >
-              <MoreHorizontalIcon />
+              {task.tags.length === 0 ? (
+                <>
+                  <HashIcon data-icon="inline-start" />
+                  Tags
+                </>
+              ) : (
+                <TagChips tags={task.tags} />
+              )}
             </Button>
-          </DropdownMenuTrigger>
-          {/* Opens upward, so "Close panel" sits right above the button. */}
-          <DropdownMenuContent align="end" side="top" className="w-64">
-            <DropdownMenuGroup>
-              <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 px-1.5 py-1.5 text-xs text-muted-foreground">
-                <dt>ID</dt>
-                <dd className="font-mono text-foreground">{task.id}</dd>
-                <dt>File</dt>
-                <dd className="font-mono break-all">{task.path}</dd>
-                <dt>Created</dt>
-                <dd className="font-mono">{formatTimestamp(task.created)}</dd>
-                <dt>Updated</dt>
-                <dd className="font-mono">{formatTimestamp(task.updated)}</dd>
-              </dl>
-              <DropdownMenuItem
-                onSelect={() =>
-                  void navigator.clipboard
-                    .writeText(task.path)
-                    .then(() => toast.success("File path copied"))
-                }
+          </PopoverTrigger>
+          <PopoverContent align="start" side="top" collisionPadding={8} className="w-72 p-1.5">
+            <TagsEditor
+              autoFocus
+              tags={task.tags}
+              onChange={(tags) => update.mutate({ id: task.id, patch: { tags } })}
+            />
+          </PopoverContent>
+        </Popover>
+
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <SaveState
+            phase={String(phase)}
+            error={error}
+            onRetry={() => editor.send({ type: "RETRY" })}
+          />
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+                aria-label="More actions"
               >
-                <CopyIcon />
-                Copy path
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(true)}>
-                <Trash2Icon />
-                Delete task
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem onSelect={onClose}>
-                <PanelRightCloseIcon />
-                Close panel
-                <DropdownMenuShortcut>Esc</DropdownMenuShortcut>
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+                <MoreHorizontalIcon />
+              </Button>
+            </DropdownMenuTrigger>
+            {/* Opens upward, so "Close panel" sits right above the button. */}
+            <DropdownMenuContent align="end" side="top" className="w-64">
+              <DropdownMenuGroup>
+                <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 px-1.5 py-1.5 text-xs text-muted-foreground">
+                  <dt>ID</dt>
+                  <dd className="font-mono text-foreground">{task.id}</dd>
+                  <dt>File</dt>
+                  <dd className="font-mono break-all">{task.path}</dd>
+                  <dt>Created</dt>
+                  <dd className="font-mono">{formatTimestamp(task.created)}</dd>
+                  <dt>Updated</dt>
+                  <dd className="font-mono">{formatTimestamp(task.updated)}</dd>
+                </dl>
+                <DropdownMenuItem
+                  onSelect={() =>
+                    void navigator.clipboard
+                      .writeText(task.path)
+                      .then(() => toast.success("File path copied"))
+                  }
+                >
+                  <CopyIcon />
+                  Copy path
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(true)}>
+                  <Trash2Icon />
+                  Delete task
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem onSelect={onClose}>
+                  <PanelRightCloseIcon />
+                  Close panel
+                  <DropdownMenuShortcut>Esc</DropdownMenuShortcut>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>

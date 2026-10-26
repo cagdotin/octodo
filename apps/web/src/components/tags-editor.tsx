@@ -5,9 +5,11 @@ import { useState } from "react";
 export function TagsEditor({
   tags,
   onChange,
+  autoFocus = false,
 }: {
   tags: ReadonlyArray<string>;
   onChange: (tags: Array<string>) => void;
+  autoFocus?: boolean;
 }) {
   const [text, setText] = useState("");
 
@@ -37,6 +39,7 @@ export function TagsEditor({
       ))}
       <input
         aria-label="Add tag"
+        autoFocus={autoFocus}
         value={text}
         placeholder={tags.length === 0 ? "#add tag" : "#tag"}
         className="w-16 min-w-12 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground/70 md:text-xs"

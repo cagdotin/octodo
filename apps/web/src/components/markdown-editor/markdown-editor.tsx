@@ -15,7 +15,10 @@ interface Props {
   className?: string;
 }
 
-/** An always-editable markdown editor with Obsidian-style live preview over the exact text. */
+/**
+ * An always-editable markdown editor with Obsidian-style live preview over the exact text. It fills
+ * its container and scrolls itself, so a click anywhere in it lands in the text.
+ */
 export function MarkdownEditor({
   value,
   onChange,

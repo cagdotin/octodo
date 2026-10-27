@@ -12,7 +12,7 @@ import {
   Workspaces,
   type Workspace,
 } from "@octodo/core";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Layer, Logger, Schema } from "effect";
 import { McpProtocol, McpServer, Tool, Toolkit } from "effect/ai";
 
 export const SERVER_NAME = "octodo";
@@ -298,9 +298,15 @@ const serverOptions = {
 const registerTools = (options: { readonly defaultDir?: string | undefined }) =>
   McpServer.toolkit(TasksToolkit).pipe(Layer.provide(toolkitLayer(options)));
 
-/** MCP over stdio, for agents that launch `octo mcp` as a subprocess. Requires `Stdio` and `Workspaces`. */
+/**
+ * MCP over stdio, for agents that launch `octo mcp` as a subprocess. Requires `Stdio` and
+ * `Workspaces`. Logs go to stderr, since stdout carries the protocol.
+ */
 export const stdioLayer = (options: { readonly defaultDir?: string | undefined }) =>
-  registerTools(options).pipe(Layer.provide(McpServer.layerStdio(serverOptions)));
+  registerTools(options).pipe(
+    Layer.provide(McpServer.layerStdio(serverOptions)),
+    Layer.provide(Logger.layer([Logger.withConsoleError(Logger.formatSimple)])),
+  );
 
 /** Streamable HTTP MCP endpoint registered on an `HttpRouter`. Requires `Workspaces`. */
 export const httpLayer = (options: {

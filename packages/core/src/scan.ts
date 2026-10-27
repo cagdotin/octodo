@@ -285,18 +285,23 @@ export const scanWorkspace = (
           });
       });
 
-    /** Task folders read and waiting to be served, in reading order. */
-    const waiting: Array<{
+    interface Waiting {
       dir: string;
       list: string | null;
       parent: string | null;
       read: Exclude<TaskFileRead, { _tag: "Invalid" }>;
-      /**
-       * Of several folders with one id, the lowest rank is the task: 0 for a folder named after its
-       * id and title, 1 for another name, 2 for a sync tool's copy. The first read breaks a tie.
-       */
-      rank: number;
-    }> = [];
+    }
+    /**
+     * Task folders read and waiting to be served, by rank, each rank in reading order. Of several
+     * folders with one id, the lowest rank is the task: 0 for a folder named after its id and
+     * title, 1 for another name, 2 for a sync tool's copy. The first read breaks a tie.
+     */
+    const waiting: readonly [Array<Waiting>, Array<Waiting>, Array<Waiting>] = [[], [], []];
+    const served = [0, 0, 0];
+    const nextWaiting = (): Waiting | undefined => {
+      const rank = waiting.findIndex((queue, rank) => served[rank]! < queue.length);
+      return rank === -1 ? undefined : waiting[rank]![served[rank]!++];
+    };
 
     const readTask = (
       dir: string,
@@ -335,14 +340,14 @@ export const scanWorkspace = (
             : read._tag === "Read" && folder !== taskFolderName(read.value.id, read.value.title)
               ? 1
               : 0;
-        waiting.push({ dir, list, parent, read, rank });
+        waiting[rank].push({ dir, list, parent, read });
       });
 
     const serveTask = ({
       dir,
       list,
       read,
-    }: (typeof waiting)[number]): Effect.Effect<void, never, FileSystem.FileSystem | Path.Path> =>
+    }: Waiting): Effect.Effect<void, never, FileSystem.FileSystem | Path.Path> =>
       Effect.gen(function* () {
         const file = path.join(dir, TASK_FILE);
         let id: string | null = null;
@@ -456,11 +461,7 @@ export const scanWorkspace = (
       });
 
     yield* readList(tasksDir, null);
-    while (waiting.length > 0) {
-      const next = waiting.reduce((best, task) => (task.rank < best.rank ? task : best));
-      waiting.splice(waiting.indexOf(next), 1);
-      yield* serveTask(next);
-    }
+    for (let next = nextWaiting(); next !== undefined; next = nextWaiting()) yield* serveTask(next);
 
     // Files made by hand or by another tool get an id the first time the app sees them.
     if (missingId.length > 0) {

@@ -1,4 +1,4 @@
-import { EditorState } from "@codemirror/state";
+import { EditorState, type TransactionSpec } from "@codemirror/state";
 import { EditorView, keymap, placeholder as placeholderText } from "@codemirror/view";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { toast } from "sonner";
@@ -19,6 +19,7 @@ interface Anchor {
 interface Props {
   /** The text to show; a new value that differs from the editor's is applied as a minimal change. */
   value: string;
+  /** Also called after unmount, when an image upload started before then finishes. */
   onChange: (value: string) => void;
   onBlur?: () => void;
   placeholder?: string;
@@ -54,19 +55,27 @@ export function MarkdownEditor({
   useEffect(() => {
     const { value: doc, placeholder: hint, label, attachments: files } = initial.current;
 
-    /** Uploads the images one by one, each landing where the anchor has moved to by then. */
+    /**
+     * Uploads the images one by one, each on its own line after the last, starting where the
+     * anchor has moved to by then. Once the editor is gone, the text goes straight to onChange.
+     */
     const attach = async (target: EditorView, images: ReadonlyArray<File>, pos: number) => {
       if (files === undefined) return;
       const anchor: Anchor = { pos };
       anchors.current.add(anchor);
+      let closed: EditorState | undefined;
       try {
-        for (const image of images) {
-          const insert = imageMarkdown(await files.upload(image));
-          target.dispatch({
-            changes: { from: anchor.pos, insert },
-            selection: { anchor: anchor.pos + insert.length },
-            userEvent: "input.paste",
-          });
+        for (const [index, image] of images.entries()) {
+          const path = await files.upload(image);
+          const from = anchor.pos;
+          const insert = `${index === 0 ? "" : "\n"}${imageMarkdown(path)}`;
+          const spec: TransactionSpec = { changes: { from, insert }, userEvent: "input.paste" };
+          if (view.current === target) target.dispatch(spec);
+          else {
+            closed = (closed ?? target.state).update(spec).state;
+            handlers.current.onChange(closed.doc.toString());
+          }
+          anchor.pos = from + insert.length;
         }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not save the image");

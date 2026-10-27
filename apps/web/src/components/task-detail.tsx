@@ -102,13 +102,15 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
   }, [editor, task.title, task.body]);
 
   // Closing the pane mid-debounce still saves what was typed.
-  useEffect(
-    () => () => {
+  const open = useRef(true);
+  useEffect(() => {
+    open.current = true;
+    return () => {
+      open.current = false;
       const patch = changes(editor.getSnapshot().context);
       if (Object.keys(patch).length > 0) void save({ id: task.id, patch }).catch(() => {});
-    },
-    [editor, task.id],
-  );
+    };
+  }, [editor, task.id]);
 
   const setDue = (due: string | null) => update.mutate({ id: task.id, patch: { due } });
   const due = dueInfo(task.due);
@@ -196,7 +198,11 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
         placeholder="Add notes in markdown…"
         attachments={taskAttachments(workspace, task.id)}
         value={draft.body}
-        onChange={(value) => editor.send({ type: "EDIT", field: "body", value })}
+        onChange={(value) =>
+          open.current
+            ? editor.send({ type: "EDIT", field: "body", value })
+            : void save({ id: task.id, patch: { body: value } }).catch(() => {})
+        }
         onBlur={() => editor.send({ type: "FLUSH" })}
         className="min-h-0 flex-1 text-base md:text-sm"
       />

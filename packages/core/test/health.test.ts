@@ -370,6 +370,26 @@ describe("file health", () => {
     expect(read(root, "HM-2-b/task.md")).toBe("---\nid: HM-2\nblocked_by: [HM-1, 7]\n---\n");
   });
 
+  it("reads the ids in a hand-written string of blockers and writes them as a list", async () => {
+    const root = await fresh({
+      "HM-1-a/task.md": "---\nid: HM-1\nblocked_by: HM-2, HM-3\n---\n",
+      "HM-2-b/task.md": "---\nid: HM-2\n---\n",
+      "HM-3-c/task.md": "---\nid: HM-3\nblocked_by: HM-2 after lunch\n---\n",
+    });
+    expect((await snapshot(root)).tasks.map((task) => [task.id, task.blockedBy])).toEqual([
+      ["HM-1", ["HM-2", "HM-3"]],
+      ["HM-2", []],
+      ["HM-3", ["HM-2"]],
+    ]);
+    expect(await diagnostics(root)).toEqual([
+      one("HM-1-a/task.md", "malformed-link", "blocked_by", "normalize-links"),
+      one("HM-3-c/task.md", "malformed-link", "blocked_by", null),
+    ]);
+    await inWorkspace(root, (ws) => ws.fixAll);
+    expect(read(root, "HM-1-a/task.md")).toBe("---\nid: HM-1\nblocked_by: [HM-2, HM-3]\n---\n");
+    expect(read(root, "HM-3-c/task.md")).toBe("---\nid: HM-3\nblocked_by: HM-2 after lunch\n---\n");
+  });
+
   it("never reports or serves octodo's own claim and pending-id files", async () => {
     const root = await fresh({
       ".claim-HM-7": "",

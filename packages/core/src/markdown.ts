@@ -17,6 +17,7 @@ import {
   humanize,
   isLinkField,
   isTaskId,
+  taskIdsIn,
   type LinkField,
 } from "./layout.ts";
 
@@ -128,17 +129,19 @@ const readOrder = (value: unknown): string => {
 
 /**
  * The task ids in a link field. Anything but a list of ids is malformed; the ids found in it
- * (a lone id, or ids in nested lists from `[[HM-3]]`) are still read. `lossless` says the ids are
- * all it holds, so writing them as a list keeps everything.
+ * (a lone id, ids in a string such as `HM-2, HM-3`, or ids in nested lists from `[[HM-3]]`) are
+ * still read. `lossless` says the ids are all it holds, so writing them as a list keeps everything.
  */
 const readLinkField = (value: unknown) => {
   if (value === undefined || value === null) return { ids: [], malformed: false, lossless: true };
-  const isId = (id: unknown): id is string => typeof id === "string" && id.length > 0;
-  const found = [value].flat(Infinity);
+  const isId = (item: unknown): item is string => typeof item === "string" && isTaskId(item);
+  const found = [value]
+    .flat(Infinity)
+    .map((item) => (typeof item === "string" ? taskIdsIn(item) : { ids: [], only: false }));
   return {
-    ids: [...new Set(found.filter(isId))],
+    ids: [...new Set(found.flatMap((item) => item.ids))],
     malformed: !Array.isArray(value) || !value.every(isId),
-    lossless: found.every(isId),
+    lossless: found.every((item) => item.only),
   };
 };
 

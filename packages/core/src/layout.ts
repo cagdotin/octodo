@@ -108,6 +108,20 @@ const WHOLE_TASK_ID = new RegExp(`^${TASK_ID}$`);
 export const isTaskId = (id: string): boolean => WHOLE_TASK_ID.test(id);
 
 /**
+ * The task ids written in `text`, and whether they are all it says: `HM-2, HM-3` is two ids,
+ * `HM-2 after lunch` one id and some words.
+ */
+export const taskIdsIn = (
+  text: string,
+): { readonly ids: Array<string>; readonly only: boolean } => {
+  const pattern = new RegExp(TASK_ID, "g");
+  return {
+    ids: text.match(pattern) ?? [],
+    only: text.replace(pattern, "").replace(/[\s,;]+/g, "") === "",
+  };
+};
+
+/**
  * The name a sync tool's conflict copy was made from: iCloud names a second copy of `task.md`
  * `task 2.md` and of a folder `HM-3-paint 2`. Null for a name that is not such a copy.
  */

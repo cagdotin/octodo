@@ -1,4 +1,4 @@
-import { Effect, FileSystem, Option, Path, Schema } from "effect";
+import { Effect, FileSystem, Option, Path, PlatformError, Result, Schema, Semaphore } from "effect";
 import { diagnostic, type DiagnosticOptions } from "./diagnostics.ts";
 import {
   DEFAULT_STATUSES,
@@ -93,6 +93,149 @@ const compareTasks =
           : 0;
   };
 
+/** What a scan reads of a folder before it judges any of it. */
+interface Listing {
+  /** The folder's entries in name order, dot entries and entries gone since aside. */
+  readonly entries: Result.Result<ReadonlyArray<Entry>, PlatformError.PlatformError>;
+  /** Whether the folder holds a `.pending-id` marker. */
+  readonly pendingId: boolean;
+}
+
+type Entry = { readonly name: string; readonly path: string } & (
+  | { readonly type: "file" }
+  | { readonly type: "both" }
+  | { readonly type: "folder" }
+  | {
+      readonly type: "task";
+      readonly file: Result.Result<
+        { readonly text: string; readonly mtime: Date | null },
+        PlatformError.PlatformError
+      >;
+      readonly listing: Listing;
+    }
+  | {
+      readonly type: "list";
+      readonly file: Result.Result<string, PlatformError.PlatformError>;
+      readonly listing: Listing;
+    }
+  | { readonly type: "symlink"; readonly target: string }
+  | { readonly type: "unreadable"; readonly error: PlatformError.PlatformError }
+);
+
+/** How many entries of one folder a scan reads at once. */
+const ENTRIES_AT_ONCE = 32;
+/**
+ * How many files a scan reads at once. Only a file read holds a descriptor across several system
+ * calls; listing a folder or a stat holds one within a single call.
+ */
+const OPEN_FILES = 32;
+
+/**
+ * Reads the folder tree under `dir` that a scan walks, many folders at once: each folder's entries,
+ * and the `task.md` or `list.md` of each task and list folder.
+ */
+const readListing = (
+  dir: string,
+): Effect.Effect<Listing, never, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const openFiles = yield* Semaphore.make(OPEN_FILES);
+
+    /**
+     * The marker file `file` read, or null when the folder does not have it. A failed read asks
+     * `exists`, so a dangling link or an unlistable folder decides as it would.
+     */
+    const readMarker = <A>(
+      names: Result.Result<ReadonlyArray<string>, PlatformError.PlatformError>,
+      file: string,
+      read: Effect.Effect<A, PlatformError.PlatformError>,
+    ) =>
+      Effect.gen(function* () {
+        if (Result.isSuccess(names) && !names.success.includes(path.basename(file))) return null;
+        const result = yield* Effect.result(openFiles.withPermits(1)(read));
+        if (Result.isSuccess(result)) return result;
+        return (yield* fs.exists(file)) ? result : null;
+      });
+
+    const entry = (
+      dir: string,
+      name: string,
+    ): Effect.Effect<Entry | null, never, FileSystem.FileSystem | Path.Path> => {
+      const child = path.join(dir, name);
+      return Effect.gen(function* () {
+        const info = yield* fs.lstat(child);
+        if (info.type === "SymbolicLink")
+          return {
+            name,
+            path: child,
+            type: "symlink" as const,
+            target: yield* fs.readLink(child),
+          };
+        if (info.type === "File") return { name, path: child, type: "file" as const };
+        if (info.type !== "Directory") return null;
+        const names = yield* Effect.result(fs.readDirectory(child));
+        const taskFile = path.join(child, TASK_FILE);
+        const task = yield* readMarker(
+          names,
+          taskFile,
+          Effect.all([fs.readFileString(taskFile), fs.stat(taskFile)]),
+        );
+        const list = yield* readMarker(
+          names,
+          path.join(child, LIST_FILE),
+          fs.readFileString(path.join(child, LIST_FILE)),
+        );
+        if (task !== null && list !== null) return { name, path: child, type: "both" as const };
+        if (task !== null)
+          return {
+            name,
+            path: child,
+            type: "task" as const,
+            file: Result.map(task, ([text, stat]) => ({
+              text,
+              mtime: Option.getOrNull(stat.mtime),
+            })),
+            listing: yield* listing(child, names),
+          };
+        if (list !== null)
+          return {
+            name,
+            path: child,
+            type: "list" as const,
+            file: list,
+            listing: yield* listing(child, names),
+          };
+        return { name, path: child, type: "folder" as const };
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.succeed<Entry | null>(
+            isNotFound(error) ? null : { name, path: child, type: "unreadable", error },
+          ),
+        ),
+      );
+    };
+
+    const listing = (
+      dir: string,
+      names: Result.Result<ReadonlyArray<string>, PlatformError.PlatformError>,
+    ): Effect.Effect<Listing, never, FileSystem.FileSystem | Path.Path> =>
+      Result.isFailure(names)
+        ? Effect.succeed({ entries: Result.fail(names.failure), pendingId: false })
+        : Effect.forEach(
+            names.success.filter((name) => !name.startsWith(".")).toSorted(),
+            (name) => entry(dir, name),
+            { concurrency: ENTRIES_AT_ONCE },
+          ).pipe(
+            Effect.map((found) => ({
+              entries: Result.succeed(found.filter((entry) => entry !== null)),
+              pendingId: names.success.includes(tempName.pendingId),
+            })),
+          );
+
+    return yield* listing(dir, yield* Effect.result(fs.readDirectory(dir)));
+  });
+
 /** Reads `.octodo/` by its grammar: folders with `task.md` are tasks, folders with `list.md` lists. */
 export const scanWorkspace = (
   id: string,
@@ -117,12 +260,24 @@ export const scanWorkspace = (
     const attempt = <A, E, R>(
       absolute: string,
       effect: Effect.Effect<A, E, R>,
-      failure = "Could not read it",
     ): Effect.Effect<A | null, never, R> =>
       Effect.catch(effect, (error) => {
-        if (!isNotFound(error)) report("unreadable", absolute, `${failure}: ${String(error)}`);
+        unreadable(absolute, error);
         return Effect.succeed(null);
       });
+    const unreadable = (absolute: string, error: unknown, failure = "Could not read it") => {
+      if (!isNotFound(error)) report("unreadable", absolute, `${failure}: ${String(error)}`);
+    };
+    /** What a read ahead of the scan got, or null after reporting why it got nothing. */
+    const readAhead = <A>(
+      absolute: string,
+      result: Result.Result<A, PlatformError.PlatformError>,
+      failure?: string,
+    ): A | null => {
+      if (Result.isSuccess(result)) return result.success;
+      unreadable(absolute, result.failure, failure);
+      return null;
+    };
 
     const config = yield* fs.readFileString(path.join(tasksDir, CONFIG_FILE)).pipe(
       Effect.flatMap(decodeConfig),
@@ -186,36 +341,21 @@ export const scanWorkspace = (
         }
       }).pipe(Effect.ignore);
 
-    const entries = (dir: string) =>
-      Effect.gen(function* () {
-        const found: Array<{
-          name: string;
-          path: string;
-          type: "file" | "task" | "list" | "both" | "folder";
-        }> = [];
-        for (const name of ((yield* attempt(dir, fs.readDirectory(dir))) ?? []).toSorted()) {
-          if (name === tempName.pendingId) markerDirs.add(dir);
-          if (name.startsWith(".")) continue;
-          const child = path.join(dir, name);
-          const type = yield* attempt(
-            child,
-            Effect.gen(function* () {
-              const info = yield* fs.lstat(child);
-              if (info.type === "SymbolicLink") {
-                report("symlink", child, `This is a link to ${yield* fs.readLink(child)}`);
-                return null;
-              }
-              if (info.type === "File") return "file";
-              if (info.type !== "Directory") return null;
-              const task = yield* fs.exists(path.join(child, TASK_FILE));
-              const list = yield* fs.exists(path.join(child, LIST_FILE));
-              return task && list ? "both" : task ? "task" : list ? "list" : "folder";
-            }),
-          );
-          if (type !== null) found.push({ name, path: child, type });
-        }
-        return found;
-      });
+    /** The entries of the folder `dir` the scan judges, after reporting the ones it cannot. */
+    const entries = (
+      dir: string,
+      listing: Listing,
+    ): Array<Exclude<Entry, { type: "symlink" | "unreadable" }>> => {
+      if (listing.pendingId) markerDirs.add(dir);
+      const judged = [];
+      for (const entry of readAhead(dir, listing.entries) ?? []) {
+        if (entry.type === "symlink")
+          report("symlink", entry.path, `This is a link to ${entry.target}`);
+        else if (entry.type === "unreadable") unreadable(entry.path, entry.error);
+        else judged.push(entry);
+      }
+      return judged;
+    };
 
     /** Removes the id `taskId` from the task in `dir` if it still has it. */
     const takeBackId = (dir: string, taskId: string) =>
@@ -287,8 +427,8 @@ export const scanWorkspace = (
 
     interface Waiting {
       readonly dir: string;
+      readonly listing: Listing;
       readonly list: string | null;
-      readonly parent: string | null;
       readonly read: Exclude<TaskFileRead, { _tag: "Invalid" }>;
     }
     /**
@@ -299,20 +439,20 @@ export const scanWorkspace = (
     const waiting: readonly [Array<Waiting>, Array<Waiting>, Array<Waiting>] = [[], [], []];
 
     const readTask = (
-      dir: string,
+      task: Extract<Entry, { type: "task" }>,
       list: string | null,
       parent: string | null,
     ): Effect.Effect<void, never, FileSystem.FileSystem | Path.Path> =>
       Effect.gen(function* () {
+        const dir = task.path;
         const file = path.join(dir, TASK_FILE);
-        const contents = yield* attempt(
+        const contents = readAhead(
           file,
-          Effect.all([fs.readFileString(file), fs.stat(file)]),
+          task.file,
           `Could not read it; this task and its subtasks are not read`,
         );
         if (contents === null) return;
-        const [text, info] = contents;
-        const mtime = Option.getOrNull(info.mtime);
+        const { text, mtime } = contents;
         const folder = path.basename(dir);
         const read = readTaskFile(text, {
           list,
@@ -335,11 +475,12 @@ export const scanWorkspace = (
             : read._tag === "Read" && folder !== taskFolderName(read.value.id, read.value.title)
               ? 1
               : 0;
-        waiting[rank].push({ dir, list, parent, read });
+        waiting[rank].push({ dir, listing: task.listing, list, read });
       });
 
     const serveTask = ({
       dir,
+      listing,
       list,
       read,
     }: Waiting): Effect.Effect<void, never, FileSystem.FileSystem | Path.Path> =>
@@ -370,8 +511,8 @@ export const scanWorkspace = (
               },
             );
         }
-        for (const entry of yield* entries(dir)) {
-          if (entry.type === "task") yield* readTask(entry.path, list, id);
+        for (const entry of entries(dir, listing)) {
+          if (entry.type === "task") yield* readTask(entry, list, id);
           else if (entry.type === "list") {
             report("list-in-task", entry.path, "This folder has list.md inside a task");
             yield* takeIdsUnder(entry.path);
@@ -394,11 +535,18 @@ export const scanWorkspace = (
 
     const readList = (
       dir: string,
+      listing: Listing,
       list: string | null,
     ): Effect.Effect<void, never, FileSystem.FileSystem | Path.Path> =>
       Effect.gen(function* () {
-        const children: Array<{ name: string; path: string; order: string; list: List }> = [];
-        for (const entry of yield* entries(dir)) {
+        const children: Array<{
+          name: string;
+          path: string;
+          listing: Listing;
+          order: string;
+          list: List;
+        }> = [];
+        for (const entry of entries(dir, listing)) {
           if (entry.type === "file") {
             if (entry.name.endsWith(".md") && (list === null || entry.name !== LIST_FILE)) {
               const copyOf = list !== null && conflictCopyOf(entry.name) === LIST_FILE;
@@ -410,7 +558,7 @@ export const scanWorkspace = (
               yield* takeIdsUnder(entry.path);
             }
           } else if (entry.type === "task") {
-            yield* readTask(entry.path, list, null);
+            yield* readTask(entry, list, null);
           } else if (entry.type === "both") {
             report("both-markers", entry.path, "This folder has both task.md and list.md");
             yield* takeIdsUnder(entry.path);
@@ -425,7 +573,7 @@ export const scanWorkspace = (
             yield* takeIdsUnder(entry.path);
           } else {
             const file = path.join(entry.path, LIST_FILE);
-            const text = yield* attempt(file, fs.readFileString(file));
+            const text = readAhead(file, entry.file);
             const read = text === null ? null : readListFile(text);
             if (read?._tag === "Invalid")
               report(
@@ -438,6 +586,7 @@ export const scanWorkspace = (
             children.push({
               name: entry.name,
               path: entry.path,
+              listing: entry.listing,
               order: listFile?.order ?? "",
               list: {
                 id: listId,
@@ -451,11 +600,11 @@ export const scanWorkspace = (
         for (const child of children.toSorted(compareOrder)) {
           lists.push(child.list);
           listDirs.set(child.list.id, { dir: child.path, order: child.order });
-          yield* readList(child.path, child.list.id);
+          yield* readList(child.path, child.listing, child.list.id);
         }
       });
 
-    yield* readList(tasksDir, null);
+    yield* readList(tasksDir, yield* readListing(tasksDir), null);
     const nextWaiting = () => waiting.find((queue) => queue.length > 0)?.shift();
     for (let next = nextWaiting(); next !== undefined; next = nextWaiting()) yield* serveTask(next);
 

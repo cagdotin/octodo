@@ -102,7 +102,7 @@ interface Listing {
 }
 
 type Entry = { readonly name: string; readonly path: string } & (
-  | { readonly type: "file" }
+  | { readonly type: "file"; readonly mtime: Date | null }
   | { readonly type: "both" }
   | { readonly type: "folder" }
   | {
@@ -172,32 +172,38 @@ const readListing = (
             type: "symlink" as const,
             target: yield* fs.readLink(child),
           };
-        if (info.type === "File") return { name, path: child, type: "file" as const };
+        if (info.type === "File")
+          return { name, path: child, type: "file" as const, mtime: Option.getOrNull(info.mtime) };
         if (info.type !== "Directory") return null;
         const names = yield* Effect.result(fs.readDirectory(child));
         const taskFile = path.join(child, TASK_FILE);
-        const task = yield* readMarker(
-          names,
-          taskFile,
-          Effect.all([fs.readFileString(taskFile), fs.stat(taskFile)]),
-        );
+        const task = yield* readMarker(names, taskFile, fs.readFileString(taskFile));
         const list = yield* readMarker(
           names,
           path.join(child, LIST_FILE),
           fs.readFileString(path.join(child, LIST_FILE)),
         );
         if (task !== null && list !== null) return { name, path: child, type: "both" as const };
-        if (task !== null)
+        if (task !== null) {
+          const taskListing = yield* listing(child, names);
+          const listed = Result.isSuccess(taskListing.entries)
+            ? taskListing.entries.success.find((entry) => entry.name === TASK_FILE)
+            : undefined;
+          // A task.md that is a link has the modification time of the file it links to.
+          const mtime =
+            listed?.type === "file"
+              ? Result.succeed(listed.mtime)
+              : Result.map(yield* Effect.result(fs.stat(taskFile)), (stat) =>
+                  Option.getOrNull(stat.mtime),
+                );
           return {
             name,
             path: child,
             type: "task" as const,
-            file: Result.map(task, ([text, stat]) => ({
-              text,
-              mtime: Option.getOrNull(stat.mtime),
-            })),
-            listing: yield* listing(child, names),
+            file: Result.flatMap(task, (text) => Result.map(mtime, (mtime) => ({ text, mtime }))),
+            listing: taskListing,
           };
+        }
         if (list !== null)
           return {
             name,

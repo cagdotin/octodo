@@ -1,6 +1,6 @@
 import { NodeServices } from "@effect/platform-node";
 import { Effect, FileSystem, Layer } from "effect";
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -10,7 +10,18 @@ import { initWorkspace } from "../src/workspace.ts";
 const run = <A>(effect: Effect.Effect<A, unknown, any>, layer = NodeServices.layer) =>
   Effect.runPromise(effect.pipe(Effect.scoped, Effect.provide(layer)) as Effect.Effect<A>);
 
-/** A file system whose reads of `path` finish after a delay that the path picks, not the call order. */
+const fresh = async (files: Record<string, string>) => {
+  const root = join(mkdtempSync(join(tmpdir(), "octodo-")), "house-move");
+  mkdirSync(root);
+  await run(initWorkspace(root));
+  for (const [file, content] of Object.entries(files)) {
+    mkdirSync(dirname(join(root, ".octodo", file)), { recursive: true });
+    writeFileSync(join(root, ".octodo", file), content);
+  }
+  return root;
+};
+
+/** A file system whose reads of a path finish after a delay that the path picks, not the call order. */
 const shuffledReads = Layer.effect(
   FileSystem.FileSystem,
   Effect.gen(function* () {
@@ -19,10 +30,8 @@ const shuffledReads = Layer.effect(
       <Args extends [string, ...Array<any>], A, E, R>(
         call: (...args: Args) => Effect.Effect<A, E, R>,
       ) =>
-      (...args: Args) => {
-        const delay = args[0].length % 7;
-        return Effect.delay(call(...args), `${delay} millis`);
-      };
+      (...args: Args) =>
+        Effect.delay(call(...args), `${args[0].length % 7} millis`);
     return {
       ...fs,
       readDirectory: late(fs.readDirectory),
@@ -36,10 +45,7 @@ const shuffledReads = Layer.effect(
 
 describe("scanWorkspace", () => {
   it("reads the same snapshot, diagnostics in the same order, whatever order its reads finish in", async () => {
-    const root = join(mkdtempSync(join(tmpdir(), "octodo-")), "house-move");
-    mkdirSync(root);
-    await run(initWorkspace(root));
-    const files: Record<string, string> = {
+    const root = await fresh({
       "home/list.md": "---\nname: Home\norder: a1\n---\n",
       "home/kitchen/list.md": "---\nname: Kitchen\norder: a0\n---\n",
       "garden/list.md": "---\nname: [broken\n---\n",
@@ -55,18 +61,14 @@ describe("scanWorkspace", () => {
       "garden/empty/readme.txt": "nothing here\n",
       "both/task.md": "---\nid: HM-6\n---\n",
       "both/list.md": "---\nname: Both\n---\n",
-    };
-    for (const [file, content] of Object.entries(files)) {
-      mkdirSync(dirname(join(root, ".octodo", file)), { recursive: true });
-      writeFileSync(join(root, ".octodo", file), content);
-    }
+    });
     symlinkSync("/nonexistent", join(root, ".octodo/home/link"));
 
     const inOrder = await run(scanWorkspace("test", root));
     const shuffled = await run(scanWorkspace("test", root), shuffledReads);
     expect(
       inOrder.snapshot.diagnostics.map((diagnostic) => [diagnostic.path, diagnostic.kind]),
-      "folders are judged in name order, lists before the tasks they hold, links last",
+      "the diagnostics come in the order the scan judges the tree",
     ).toEqual([
       [".octodo/both", "both-markers"],
       [".octodo/garden/list.md", "invalid-frontmatter"],
@@ -84,5 +86,20 @@ describe("scanWorkspace", () => {
     expect(shuffled.snapshot, "reads finishing out of order change nothing").toEqual(
       inOrder.snapshot,
     );
+  });
+
+  it("dates a task.md that is a link by the file it links to", async () => {
+    const root = await fresh({});
+    const target = join(dirname(root), "elsewhere.md");
+    writeFileSync(target, "---\nid: HM-1\ntitle: Linked\n---\n");
+    utimesSync(target, new Date("2020-01-01T00:00:00Z"), new Date("2020-01-01T00:00:00Z"));
+    mkdirSync(join(root, ".octodo/HM-1-linked"));
+    symlinkSync(target, join(root, ".octodo/HM-1-linked/task.md"));
+
+    const { snapshot } = await run(scanWorkspace("test", root));
+    expect(snapshot.tasks.map((task) => [task.id, task.updated])).toEqual([
+      ["HM-1", "2020-01-01T00:00:00.000Z"],
+    ]);
+    expect(snapshot.diagnostics.map((diagnostic) => diagnostic.kind)).toEqual(["symlink"]);
   });
 });

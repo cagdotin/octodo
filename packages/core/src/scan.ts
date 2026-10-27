@@ -116,7 +116,7 @@ export const scanWorkspace = (
     const listDirs = new Map<string, { dir: string; order: string }>();
     const taskDirs = new Map<string, string>();
     const missingId: Array<{ file: string; text: string }> = [];
-    let legacy = false;
+    const legacyFolders: Array<string> = [];
     let highestId = 0;
     const takeId = (taskId: string | null) => {
       if (taskId !== null) highestId = Math.max(highestId, idNumber(taskId, config.key) ?? 0);
@@ -235,7 +235,8 @@ export const scanWorkspace = (
             report(entry.path, "Folder has both task.md and list.md; it is not read");
             yield* takeIdsUnder(entry.path);
           } else if (entry.type === "folder") {
-            if ((yield* attempt(entry.path, oldLayoutFolder(entry.path))) !== null) legacy = true;
+            if ((yield* attempt(entry.path, oldLayoutFolder(entry.path))) !== null)
+              legacyFolders.push(path.basename(entry.path));
             else report(entry.path, "Folder has neither task.md nor list.md; it is not read");
             yield* takeIdsUnder(entry.path);
           } else if (listDepth(list) >= MAX_LIST_DEPTH) {
@@ -290,11 +291,10 @@ export const scanWorkspace = (
     // Assigning ids rewrites files, so the scan repeats to read them back.
     if (assignedAny) return yield* scanWorkspace(id, root);
 
-    if (legacy) {
+    if (legacyFolders.length > 0) {
       diagnostics.push({
         path: TASKS_DIR,
-        message:
-          "This workspace has folders from the old layout (s01-todo, l00-groceries), which are not read. Run `octo migrate` to convert them.",
+        message: `This workspace has folders from the old layout (${legacyFolders.slice(0, 3).join(", ")}${legacyFolders.length > 3 ? ", ..." : ""}), which are not read. Run \`octo migrate\` to convert them.`,
       });
     }
     for (const task of tasks) {
@@ -317,6 +317,6 @@ export const scanWorkspace = (
       },
       dirs: { lists: listDirs, tasks: taskDirs },
       nextIdNumber: highestId + 1,
-      oldLayout: legacy,
+      oldLayout: legacyFolders.length > 0,
     };
   });

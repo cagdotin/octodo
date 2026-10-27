@@ -354,6 +354,10 @@ describe("workspace", () => {
     expect(error).toMatchObject({ _tag: "InvalidRequest" });
     expect(error.message).toContain("octo migrate");
     expect(read(root, "milk/task.md")).toContain("id: HM-5\n");
+    const snapshot = await run(Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot));
+    expect(snapshot.diagnostics.map((diagnostic) => diagnostic.message)).toContainEqual(
+      expect.stringContaining("old layout (s01-todo)"),
+    );
   });
 
   it("takes old-layout names for old layout only when the folder holds the old layout", async () => {

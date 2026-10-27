@@ -8,6 +8,7 @@ import {
   readFileSync,
   readdirSync,
   statSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -348,6 +349,40 @@ describe("file health", () => {
     ]);
     expect(read(root, "HM-1-a/task.md")).toBe("---\nid: HM-1\nblocked_by: [HM-2]\n---\n");
     expect(read(root, "HM-2-b/task.md")).toBe("---\nid: HM-2\nblocked_by: [HM-1, 7]\n---\n");
+  });
+
+  it("never reports or serves octodo's own claim and pending-id files", async () => {
+    const root = await fresh({
+      ".claim-HM-7": "",
+      "HM-1-a/task.md": "---\nid: HM-1\n---\n",
+      "HM-1-a/.pending-id": "HM-1\n",
+      "HM-1-a 2/task.md": "---\nid: HM-1\n---\n",
+      "home/list.md": "",
+      "home/.claim-HM-8": "",
+      "empty/.pending-id": "HM-9\n",
+    });
+    expect(await diagnostics(root)).toEqual([
+      one("HM-1-a 2", "conflict-copy", null, "remove-copy"),
+      one("empty", "unmarked-folder", null, null),
+    ]);
+    const served = await inWorkspace(root, (ws) =>
+      Effect.flip(ws.attachmentPath("HM-1", ".pending-id")),
+    );
+    expect(served).toMatchObject({ _tag: "InvalidRequest" });
+  });
+
+  it("removes a pending-id marker a crash left beside a task that has its id", async () => {
+    const root = await fresh({
+      "HM-1-a/task.md": "---\nid: HM-1\n---\n",
+      "HM-1-a/.pending-id": "HM-1\n",
+      "HM-2-b/task.md": "---\nid: HM-2\n---\n",
+      "HM-2-b/.pending-id": "HM-2\n",
+    });
+    const twoMinutesAgo = new Date(Date.now() - 120_000);
+    utimesSync(join(root, ".octodo/HM-1-a/.pending-id"), twoMinutesAgo, twoMinutesAgo);
+    expect(await diagnostics(root)).toEqual([]);
+    expect(existsSync(join(root, ".octodo/HM-1-a/.pending-id"))).toBe(false);
+    expect(existsSync(join(root, ".octodo/HM-2-b/.pending-id")), "a fresh marker stays").toBe(true);
   });
 
   it("reports folder-grammar problems without a fix", async () => {

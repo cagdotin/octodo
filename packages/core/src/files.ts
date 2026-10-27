@@ -1,8 +1,9 @@
 import { Effect, FileSystem, Option, Path, PlatformError } from "effect";
 
 /**
- * Names of the temporary files and folders that writes build and rename into place. Each holds a
- * random UUID, so `removeLeftovers` takes only octodo's own.
+ * Names of octodo's own bookkeeping files and folders: the temporary ones writes build and rename
+ * into place, id claims and pending-id markers. All are dot names, which a scan never reads, and
+ * each is distinct enough that `removeLeftovers` takes only octodo's own.
  */
 export const tempName = {
   file: (name: string) => `.${name}.${crypto.randomUUID()}.tmp`,
@@ -11,11 +12,13 @@ export const tempName = {
   migration: (run: string, name: string) => `.migrate-${run}-${name}`,
   /** The file in `.octodo/` whose exclusive creation reserves task id `id` for one process. */
   claim: (id: string) => `.claim-${id}`,
+  /** The file in a task folder naming the id being written into its `task.md`. */
+  pendingId: ".pending-id",
 };
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const LEFTOVER = new RegExp(
-  `^\\.(?:.+\\.${UUID}\\.tmp|new-${UUID}|migrate-${UUID}-.+|claim-.+-\\d+)$`,
+  `^\\.(?:.+\\.${UUID}\\.tmp|new-${UUID}|migrate-${UUID}-.+|claim-.+-\\d+|pending-id)$`,
 );
 
 /** How old a temporary file must be before it is taken as a crash's leftover, not a write in progress. */

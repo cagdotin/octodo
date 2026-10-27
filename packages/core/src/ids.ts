@@ -3,9 +3,6 @@ import { tempName, writeFileAtomic } from "./files.ts";
 import { TASK_FILE } from "./layout.ts";
 import { frontmatterId, patchFrontmatter } from "./markdown.ts";
 
-/** The file in a task folder naming the id being written into its `task.md`. */
-const PENDING_ID = ".pending-id";
-
 const alreadyExists = (error: PlatformError.PlatformError) => error.reason._tag === "AlreadyExists";
 
 /**
@@ -73,7 +70,7 @@ export const pendingId = (
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const marker = yield* Effect.option(fs.readFileString(path.join(dir, PENDING_ID)));
+    const marker = yield* Effect.option(fs.readFileString(path.join(dir, tempName.pendingId)));
     if (Option.isSome(marker)) return marker.value.trim();
     return frontmatterId(yield* fs.readFileString(path.join(dir, TASK_FILE)));
   }).pipe(Effect.orElseSucceed(() => null));
@@ -90,8 +87,8 @@ export const giveId = (
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const marker = path.join(dir, PENDING_ID);
-    const temp = path.join(dir, tempName.file(PENDING_ID));
+    const marker = path.join(dir, tempName.pendingId);
+    const temp = path.join(dir, tempName.file(tempName.pendingId));
     yield* fs.writeFileString(temp, `${candidate}\n`);
     const won = yield* fs.link(temp, marker).pipe(
       Effect.as(true),

@@ -61,8 +61,15 @@ describe("subtasks in views", () => {
     expect(listCounts(snapshot(tasks)).counts.get("home")).toBe(1);
   });
 
-  it("counts direct subtasks in a completed status as done", () => {
-    const progress = subtaskProgress(snapshot(TASKS));
+  it("counts direct subtasks in a completed status as done, and leaves canceled ones out", () => {
+    const progress = subtaskProgress({
+      ...snapshot([
+        ...TASKS,
+        task("HM-6", { parent: "HM-1", status: "canceled" }),
+        task("HM-7", { parent: "HM-5", status: "canceled" }),
+      ]),
+      statuses: [...DEFAULT_STATUSES, { id: "canceled", name: "Canceled", category: "canceled" }],
+    });
     expect(progress.get("HM-1")).toEqual({ done: 1, total: 2 });
     expect(progress.get("HM-3")).toEqual({ done: 1, total: 1 });
     expect(progress.has("HM-5")).toBe(false);

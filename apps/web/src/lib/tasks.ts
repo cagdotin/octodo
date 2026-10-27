@@ -397,14 +397,15 @@ export interface Progress {
   readonly total: number;
 }
 
-/** Direct subtasks per parent id, counting those in a completed status as done. */
+/** Direct subtasks per parent id, counting those in a completed status as done; canceled ones don't count. */
 export const subtaskProgress = (snapshot: WorkspaceSnapshot): ReadonlyMap<string, Progress> => {
   const statuses = statusMap(snapshot.statuses);
   const progress = new Map<string, Progress>();
   for (const task of snapshot.tasks) {
-    if (task.parent === null) continue;
+    const category = statuses.get(task.status)?.category;
+    if (task.parent === null || category === "canceled") continue;
     const { done, total } = progress.get(task.parent) ?? { done: 0, total: 0 };
-    const completed = statuses.get(task.status)?.category === "completed";
+    const completed = category === "completed";
     progress.set(task.parent, { done: done + (completed ? 1 : 0), total: total + 1 });
   }
   return progress;

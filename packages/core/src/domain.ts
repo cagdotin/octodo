@@ -123,8 +123,9 @@ export type UpdateTaskInput = typeof UpdateTaskInput.Type;
 /**
  * Moves a task to another status, list or parent task, optionally placing it between two
  * neighbours. `list` and a non-null `parent` are exclusive; `parent: null` lifts a subtask into
- * its list. `before` and `after` are task ids in the destination column (same container, same
- * status); omitting both puts it last.
+ * its list. Order holds among the tasks of one container, whatever their status: `before` and
+ * `after` are task ids there. Without either, a task keeps its place when only its status changes
+ * and goes last when it changes container.
  */
 export const MoveTaskInput = Schema.Struct({
   status: Schema.optionalKey(Schema.String),

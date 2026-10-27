@@ -63,7 +63,14 @@ const compareTasks =
       if (b.order === "") return -1;
       return a.order < b.order ? -1 : 1;
     }
-    return (idNumber(a.id, key) ?? Infinity) - (idNumber(b.id, key) ?? Infinity);
+    const byNumber = (idNumber(a.id, key) ?? Infinity) - (idNumber(b.id, key) ?? Infinity);
+    return byNumber !== 0 && !Number.isNaN(byNumber)
+      ? byNumber
+      : a.id < b.id
+        ? -1
+        : a.id > b.id
+          ? 1
+          : 0;
   };
 
 /** Reads `.octodo/` by its grammar: folders with `task.md` are tasks, folders with `list.md` lists. */

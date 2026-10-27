@@ -119,20 +119,20 @@ const storage =
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
 const orderBetween = (
-  column: ReadonlyArray<{ readonly id: string; readonly order: string }>,
+  siblings: ReadonlyArray<{ readonly id: string; readonly order: string }>,
   input: { readonly before?: string | undefined; readonly after?: string | undefined },
 ) => {
   if (input.before !== undefined) {
-    const index = column.findIndex((item) => item.id === input.before);
+    const index = siblings.findIndex((item) => item.id === input.before);
     if (index !== -1)
-      return generateKeyBetween(column[index - 1]?.order ?? null, column[index]!.order);
+      return generateKeyBetween(siblings[index - 1]?.order ?? null, siblings[index]!.order);
   }
   if (input.after !== undefined) {
-    const index = column.findIndex((item) => item.id === input.after);
+    const index = siblings.findIndex((item) => item.id === input.after);
     if (index !== -1)
-      return generateKeyBetween(column[index]!.order, column[index + 1]?.order ?? null);
+      return generateKeyBetween(siblings[index]!.order, siblings[index + 1]?.order ?? null);
   }
-  return generateKeyBetween(column.at(-1)?.order ?? null, null);
+  return generateKeyBetween(siblings.at(-1)?.order ?? null, null);
 };
 
 /** Creates `.octodo/` with a config. Leaves an existing one alone. */
@@ -234,20 +234,6 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         ? dirs.lists.get(list)!.dir
         : tasksDir;
 
-  const column = (
-    snapshot: WorkspaceSnapshot,
-    status: string,
-    { list, parent }: Container,
-    except?: string,
-  ) =>
-    snapshot.tasks.filter(
-      (task) =>
-        task.status === status &&
-        task.list === list &&
-        task.parent === parent &&
-        task.id !== except,
-    );
-
   /**
    * Gives sorted items distinct, ascending order keys, renumbering them all when some have none or
    * share one, so a new key can be placed between any two.
@@ -272,14 +258,17 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       return ordered;
     });
 
-  const orderedColumn = (
+  /** The tasks in `container`, whatever their status, with their order keys. */
+  const orderedTasks = (
     snapshot: WorkspaceSnapshot,
-    status: string,
-    container: Container,
+    { list, parent }: Container,
     except?: string,
   ) =>
-    ensureOrdered(column(snapshot, status, container, except), (task) =>
-      path.join(root, task.path),
+    ensureOrdered(
+      snapshot.tasks.filter(
+        (task) => task.list === list && task.parent === parent && task.id !== except,
+      ),
+      (task) => path.join(root, task.path),
     );
 
   /** Sibling lists under `parent` with their order keys, which the snapshot leaves out. */
@@ -349,7 +338,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         const { key } = snapshot.workspace;
         const taskId = `${key}-${scan.nextIdNumber}`;
         yield* Effect.gen(function* () {
-          const siblings = yield* orderedColumn(snapshot, status, container);
+          const siblings = yield* orderedTasks(snapshot, container);
           const content = newTaskFile(input, {
             id: taskId,
             status,
@@ -396,13 +385,16 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         if (container.parent !== null && inTaskSubtree(snapshot.tasks, container.parent, taskId))
           return yield* invalid("A task cannot move inside itself or its subtasks");
         yield* Effect.gen(function* () {
-          const order = orderBetween(
-            yield* orderedColumn(snapshot, status, container, taskId),
-            input,
-          );
+          const changes: Record<string, string> = {};
+          if (input.status !== undefined) changes["status"] = input.status;
+          const placed = input.before !== undefined || input.after !== undefined;
+          if (placed || container.list !== task.list || container.parent !== task.parent)
+            changes["order"] = orderBetween(
+              yield* orderedTasks(snapshot, container, taskId),
+              input,
+            );
           const dir = scan.dirs.tasks.get(taskId)!;
           const file = path.join(dir, TASK_FILE);
-          const changes = input.status === undefined ? { order } : { order, status };
           yield* writeAtomic(file, patchFrontmatter(yield* fs.readFileString(file), changes));
           yield* moveFolder(dir, containerDir(scan, container));
         }).pipe(storage("Could not move the task"));

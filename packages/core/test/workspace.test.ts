@@ -427,6 +427,31 @@ describe("workspace", () => {
     expect(read(root, "HM-3-three/task.md")).toContain("status: done\n");
   });
 
+  it("keeps a task's place among its siblings when only its status changes", async () => {
+    const root = fresh();
+    const result = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        const parent = yield* ws.createTask({ title: "Parent" });
+        const [a, b, c] = [
+          yield* ws.createTask({ title: "A", parent: parent.id }),
+          yield* ws.createTask({ title: "B", parent: parent.id }),
+          yield* ws.createTask({ title: "C", parent: parent.id }),
+        ];
+        const done = yield* ws.moveTask(c!.id, { status: "done" });
+        yield* ws.moveTask(a!.id, { status: "done", after: b!.id });
+        const subtasks = (yield* ws.snapshot).tasks.filter((task) => task.parent === parent.id);
+        return { c, done, subtasks };
+      }),
+    );
+    expect(result.done.order).toBe(result.c!.order);
+    expect(result.subtasks.map((task) => [task.title, task.status])).toEqual([
+      ["B", "todo"],
+      ["A", "done"],
+      ["C", "done"],
+    ]);
+  });
+
   it("places tasks and lists among siblings with duplicate or hand-written order keys", async () => {
     const root = fresh();
     await run(initWorkspace(root));

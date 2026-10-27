@@ -92,22 +92,32 @@ describe("link fields in task.md", () => {
     expect(result.value.blockedBy).toEqual(["HM-3", "HM-7"]);
     expect(result.value.mentions).toEqual(["HM-5", "HM-2"]);
     expect(result.value.extra).toEqual({});
-    expect(result.malformedLinks).toEqual([]);
+    expect(result.problems).toEqual([]);
   });
 
-  it.each(["blocked_by: [[HM-3]]\n", "blocked_by: HM-3\n", "blocked_by: [HM-3, 4]\n"])(
-    "reads the ids out of the malformed field %j and says it is malformed",
-    (field) => {
-      const result = readTask(taskFile("HM-1", field));
-      expect(result.value.blockedBy).toEqual(["HM-3"]);
-      expect(result.malformedLinks).toEqual(["blocked_by"]);
-    },
-  );
+  it.each([
+    ["blocked_by: [[HM-3]]\n", true],
+    ["blocked_by: HM-3\n", true],
+    ["blocked_by: [HM-3, 4]\n", false],
+  ])("reads the ids out of the malformed field %j and says it is malformed", (field, fixable) => {
+    const result = readTask(taskFile("HM-1", field));
+    expect(result.value.blockedBy).toEqual(["HM-3"]);
+    expect(result.problems).toMatchObject([{ kind: "malformed-link", field: "blocked_by" }]);
+    expect(result.problems[0]!.fix !== null, "a rewrite is offered when it loses nothing").toBe(
+      fixable,
+    );
+  });
 
-  it("reads no ids out of a field that holds none", () => {
+  it("reads no ids out of a field that holds none, and offers no rewrite that would lose it", () => {
     const result = readTask(taskFile("HM-1", "blocked_by: {a: 1}\n"));
     expect(result.value.blockedBy).toEqual([]);
-    expect(result.malformedLinks).toEqual(["blocked_by"]);
+    expect(result.problems).toMatchObject([{ kind: "malformed-link", fix: null }]);
+  });
+
+  it("leaves the task itself out of its links and says so", () => {
+    const result = readTask(taskFile("HM-1", "blocked_by: [HM-1, HM-2]\n"));
+    expect(result.value.blockedBy).toEqual(["HM-2"]);
+    expect(result.problems).toMatchObject([{ kind: "self-link", field: "blocked_by" }]);
   });
 
   it("writes blocked_by as a flow list of ids and removes the key when empty", () => {
@@ -188,10 +198,12 @@ describe("links in a workspace", () => {
     expect(byId.get("HM-1")!.mentions).toEqual(["HM-98"]);
     expect(byId.get("HM-2")).toMatchObject({ blockedBy: ["HM-1"], blocked: true });
     expect(byId.get("HM-3")).toMatchObject({ blockedBy: [], blocked: false, blocks: [] });
-    expect(snapshot.diagnostics.map(({ path, message }) => [path, message.split(",")[0]])).toEqual([
-      [".octodo/HM-1/task.md", "blocked_by lists HM-99"],
-      [".octodo/HM-2/task.md", "blocked_by must be a list of task ids"],
-      [".octodo/HM-3/task.md", "blocked_by lists the task itself"],
+    expect(
+      snapshot.diagnostics.map(({ path, kind, field, fix }) => [path, kind, field, fix?.action]),
+    ).toEqual([
+      [".octodo/HM-2/task.md", "malformed-link", "blocked_by", "normalize-links"],
+      [".octodo/HM-3/task.md", "self-link", "blocked_by", "drop-self-link"],
+      [".octodo/HM-1/task.md", "broken-link", "blocked_by", "drop-unknown-links"],
     ]);
   });
 

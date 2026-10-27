@@ -1,21 +1,7 @@
 import { diagnostic } from "./diagnostics.ts";
 import type { Diagnostic, StatusDefinition, Task } from "./domain.ts";
-import { isClosedCategory, type LinkField } from "./layout.ts";
+import { LINK_KINDS, isClosedCategory } from "./layout.ts";
 import type { TaskFile } from "./markdown.ts";
-
-export interface ReadTask {
-  readonly task: TaskFile;
-  readonly malformedLinks: ReadonlyArray<LinkField>;
-}
-
-/** Every diagnostic about links, so each kind of problem is worded in one place. */
-const linkProblem = {
-  malformed: (field: LinkField) =>
-    `${field} must be a list of task ids, such as [HM-3]; the ids found in it are used`,
-  unknown: (field: LinkField, id: string) =>
-    `${field} lists ${id}, which matches no task; the task counts as blocked until it is removed`,
-  self: (field: LinkField) => `${field} lists the task itself, which is ignored`,
-};
 
 /** For each task id, the tasks whose `pick` lists it, in snapshot order. */
 const reverseIndex = (
@@ -36,26 +22,29 @@ const reverseIndex = (
 
 /**
  * Completes the tasks of a snapshot with what other tasks say about them: `blocks`,
- * `mentionedIn` and `blocked`, which no file stores. Links that do not hold are diagnostics and
- * never stop a task from being read. A blocker that matches no task keeps its task blocked.
+ * `mentionedIn` and `blocked`, which no file stores. A link to an id that matches no task is a
+ * diagnostic, never a reason not to read the task, and a blocker that matches none keeps it blocked.
  */
 export const linkTasks = (
-  read: ReadonlyArray<ReadTask>,
+  files: ReadonlyArray<TaskFile>,
   statuses: ReadonlyArray<StatusDefinition>,
 ): { readonly tasks: Array<Task>; readonly diagnostics: Array<Diagnostic> } => {
-  const diagnostics: Array<Diagnostic> = [];
-  const report = (task: TaskFile, message: string) =>
-    diagnostics.push(diagnostic("broken-link", task.path, message, { fix: null }));
-  const known = new Set(read.map(({ task }) => task.id));
-
-  const files = read.map(({ task, malformedLinks }): TaskFile => {
-    for (const field of malformedLinks) report(task, linkProblem.malformed(field));
-    if (task.blockedBy.includes(task.id)) report(task, linkProblem.self("blocked_by"));
-    for (const id of task.blockedBy) {
-      if (!known.has(id) && id !== task.id) report(task, linkProblem.unknown("blocked_by", id));
-    }
-    return { ...task, blockedBy: task.blockedBy.filter((id) => id !== task.id) };
-  });
+  const known = new Set(files.map((task) => task.id));
+  const diagnostics = files.flatMap((task) =>
+    LINK_KINDS.flatMap((kind) => {
+      const unknown = task[kind.forward].filter((id) => !known.has(id));
+      if (unknown.length === 0) return [];
+      const which = unknown.length === 1 ? "which matches" : "which match";
+      return [
+        diagnostic(
+          "broken-link",
+          task.path,
+          `${kind.field} lists ${unknown.join(", ")}, ${which} no task`,
+          { field: kind.field },
+        ),
+      ];
+    }),
+  );
 
   const byId = new Map(files.map((task) => [task.id, task]));
   const category = new Map(statuses.map((status) => [status.id, status.category]));

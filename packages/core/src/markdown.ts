@@ -7,6 +7,7 @@ import {
   Tags,
   type CreateTaskInput,
   type DiagnosticKind,
+  type FixAction,
   type Task,
   type UpdateTaskInput,
 } from "./domain.ts";
@@ -38,6 +39,8 @@ export interface Problem {
   readonly kind: DiagnosticKind;
   readonly field: string | null;
   readonly detail: string;
+  /** Null when the kind's fix does not apply to this case. */
+  readonly fix?: FixAction | null;
 }
 
 export type FrontmatterRead<A> =
@@ -56,8 +59,6 @@ export type TaskFileRead =
       readonly _tag: "Read";
       readonly value: TaskFile;
       readonly problems: ReadonlyArray<Problem>;
-      /** Link fields that are not a list of task ids; `value` holds the ids found in them. */
-      readonly malformedLinks: ReadonlyArray<LinkField>;
     }
   | { readonly _tag: "Invalid"; readonly problem: Problem }
   | { readonly _tag: "MissingId" };
@@ -127,17 +128,39 @@ const readOrder = (value: unknown): string => {
 
 /**
  * The task ids in a link field. Anything but a list of ids is malformed; the ids found in it
- * (a lone id, or ids in nested lists from `[[HM-3]]`) are still read.
+ * (a lone id, or ids in nested lists from `[[HM-3]]`) are still read. `lossless` says the ids are
+ * all it holds, so writing them as a list keeps everything.
  */
-const readLinkField = (
-  value: unknown,
-): { readonly ids: ReadonlyArray<string>; readonly malformed: boolean } => {
-  if (value === undefined || value === null) return { ids: [], malformed: false };
+const readLinkField = (value: unknown) => {
+  if (value === undefined || value === null) return { ids: [], malformed: false, lossless: true };
+  const isId = (id: unknown): id is string => typeof id === "string" && id.length > 0;
   const found = [value].flat(Infinity);
-  const ids = found.filter((id): id is string => typeof id === "string" && id.length > 0);
-  const malformed =
-    !Array.isArray(value) || value.some((id) => typeof id !== "string" || id.length === 0);
-  return { ids: [...new Set(ids)], malformed };
+  return {
+    ids: [...new Set(found.filter(isId))],
+    malformed: !Array.isArray(value) || !value.every(isId),
+    lossless: found.every(isId),
+  };
+};
+
+/** The ids in link field `field` other than the task's own, with a problem for each way it is wrong. */
+const readLinks = (
+  data: Readonly<Record<string, unknown>>,
+  field: LinkField,
+  id: string,
+  problems: Array<Problem>,
+): Array<string> => {
+  const value = data[field];
+  const { ids, malformed, lossless } = readLinkField(value);
+  if (malformed)
+    problems.push({
+      kind: "malformed-link",
+      field,
+      detail: `${field} is ${JSON.stringify(value)}, not a list of task ids such as [HM-3]`,
+      ...(lossless ? {} : { fix: null }),
+    });
+  if (ids.includes(id))
+    problems.push({ kind: "self-link", field, detail: `${field} lists the task itself` });
+  return ids.filter((other) => other !== id);
 };
 
 const splitFrontmatter = (
@@ -239,11 +262,9 @@ export const readTaskFile = (text: string, place: TaskPlace): TaskFileRead => {
     };
   const id = rawId;
   const problems: Array<Problem> = [];
-  const link = (field: LinkField) => readLinkField(data[field]);
   return {
     _tag: "Read",
     problems,
-    malformedLinks: LINK_KINDS.map((kind) => kind.field).filter((field) => link(field).malformed),
     value: {
       id,
       title: stringOrNull(data["title"]) ?? folderTitle(place.folder, id),
@@ -289,7 +310,7 @@ export const readTaskFile = (text: string, place: TaskPlace): TaskFileRead => {
       body,
       path: place.path,
       extra: Object.fromEntries(Object.entries(data).filter(([key]) => !MANAGED.has(key))),
-      blockedBy: link("blocked_by").ids,
+      blockedBy: readLinks(data, "blocked_by", id, problems),
       mentions: [...new Set(findMentions(body).map((mention) => mention.id))],
     },
   };

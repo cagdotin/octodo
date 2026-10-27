@@ -299,6 +299,57 @@ describe("file health", () => {
     expect(read(root, "frozen/task.md")).toBe("---\nid: HM-1\n---\n\nNo id yet\n");
   });
 
+  it("drops a blocker that matches no task, and the next run finds nothing to do", async () => {
+    const root = await fresh({
+      "HM-1-a/task.md": "---\nid: HM-1\nblocked_by: [HM-2, HM-9] # waits\nnote: kept\n---\n",
+      "HM-2-b/task.md": "---\nid: HM-2\n---\n",
+    });
+    expect((await snapshot(root)).tasks[0]).toMatchObject({ id: "HM-1", blocked: true });
+    expect(await diagnostics(root)).toEqual([
+      one("HM-1-a/task.md", "broken-link", "blocked_by", "drop-unknown-links"),
+    ]);
+    const result = await fixTwice(root, { path: ".octodo/HM-1-a/task.md", kind: "broken-link" });
+    expect(result.fixed.map(summary)).toEqual([
+      one("HM-1-a/task.md", "broken-link", "blocked_by", "drop-unknown-links"),
+    ]);
+    expect(result.diagnostics).toEqual([]);
+    expect(read(root, "HM-1-a/task.md")).toBe(
+      "---\nid: HM-1\nblocked_by: [HM-2]\nnote: kept\n---\n",
+    );
+  });
+
+  it("drops a task's link to itself, and the next run finds nothing to do", async () => {
+    const root = await fresh({
+      "HM-1-a/task.md": "---\nid: HM-1\nblocked_by: [HM-1]\n---\nBody\n",
+    });
+    expect((await snapshot(root)).tasks[0]).toMatchObject({ blockedBy: [], blocked: false });
+    expect(await diagnostics(root)).toEqual([
+      one("HM-1-a/task.md", "self-link", "blocked_by", "drop-self-link"),
+    ]);
+    const result = await fixTwice(root, { path: ".octodo/HM-1-a/task.md", kind: "self-link" });
+    expect(result.fixed.map(summary)).toEqual([
+      one("HM-1-a/task.md", "self-link", "blocked_by", "drop-self-link"),
+    ]);
+    expect(read(root, "HM-1-a/task.md")).toBe("---\nid: HM-1\n---\n\nBody\n");
+  });
+
+  it("rewrites a link field as a list of ids only when that loses nothing", async () => {
+    const root = await fresh({
+      "HM-1-a/task.md": "---\nid: HM-1\nblocked_by: [[HM-2]]\n---\n",
+      "HM-2-b/task.md": "---\nid: HM-2\nblocked_by: [HM-1, 7]\n---\n",
+    });
+    expect(await diagnostics(root)).toEqual([
+      one("HM-1-a/task.md", "malformed-link", "blocked_by", "normalize-links"),
+      one("HM-2-b/task.md", "malformed-link", "blocked_by", null),
+    ]);
+    const result = await inWorkspace(root, (ws) => ws.fixAll);
+    expect(result.fixed.map(summary)).toEqual([
+      one("HM-1-a/task.md", "malformed-link", "blocked_by", "normalize-links"),
+    ]);
+    expect(read(root, "HM-1-a/task.md")).toBe("---\nid: HM-1\nblocked_by: [HM-2]\n---\n");
+    expect(read(root, "HM-2-b/task.md")).toBe("---\nid: HM-2\nblocked_by: [HM-1, 7]\n---\n");
+  });
+
   it("reports folder-grammar problems without a fix", async () => {
     const root = await fresh({
       "random/readme.txt": "",

@@ -69,6 +69,28 @@ const adopt = (file: string, container: string, context: FixContext) =>
     yield* fs.remove(file);
   });
 
+/** Rewrites the link field a diagnostic names as a list of the ids in it that `keep` accepts. */
+const keepLinksWhere =
+  (
+    keep: (
+      id: string,
+      task: { readonly own: string | null; readonly known: ReadonlySet<string> },
+    ) => boolean,
+  ): Handler =>
+  ({ target, diagnostic, scan }) =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { field } = diagnostic;
+      if (field === null || !isLinkField(field)) return;
+      const text = yield* fs.readFileString(target);
+      const task = {
+        own: frontmatterId(text),
+        known: new Set(scan.snapshot.tasks.map((known) => known.id)),
+      };
+      const changed = keepLinks(text, field, (id) => keep(id, task));
+      if (changed !== null) yield* writeFileAtomic(target, changed);
+    });
+
 const FIXES: Record<FixAction, Handler> = {
   "fresh-id": (context) => giveFreshId(context.target, context),
   "keep-copy": (context) =>
@@ -90,15 +112,9 @@ const FIXES: Record<FixAction, Handler> = {
       const fs = yield* FileSystem.FileSystem;
       yield* fs.remove(target, { recursive: true });
     }),
-  "drop-unknown-links": ({ target, diagnostic, scan }) =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      if (diagnostic.field === null || !isLinkField(diagnostic.field)) return;
-      const known = new Set(scan.snapshot.tasks.map((task) => task.id));
-      const text = yield* fs.readFileString(target);
-      const changed = keepLinks(text, diagnostic.field, (id) => known.has(id));
-      if (changed !== null) yield* writeFileAtomic(target, changed);
-    }),
+  "drop-unknown-links": keepLinksWhere((id, { known }) => known.has(id)),
+  "drop-self-link": keepLinksWhere((id, { own }) => id !== own),
+  "normalize-links": keepLinksWhere(() => true),
   migrate: ({ root }) => Effect.asVoid(migrateWorkspace(root)),
   "add-status": ({ root, diagnostic, scan }) =>
     Effect.gen(function* () {

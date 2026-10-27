@@ -25,9 +25,15 @@ import {
   listDepth,
   sortStatuses,
 } from "./layout.ts";
-import { linkTasks, type ReadTask } from "./links.ts";
+import { linkTasks } from "./links.ts";
 import { oldLayoutFolder } from "./migrate.ts";
-import { frontmatterId, readFrontmatter, readListFile, readTaskFile } from "./markdown.ts";
+import {
+  frontmatterId,
+  readFrontmatter,
+  readListFile,
+  readTaskFile,
+  type TaskFile,
+} from "./markdown.ts";
 import { claimIds, giveId, pendingId } from "./ids.ts";
 
 /** A snapshot plus where its lists and tasks are on disk, which is nobody else's business. */
@@ -122,7 +128,7 @@ export const scanWorkspace = (
     const fallbackStatus = defaultStatus(statuses)?.id ?? "todo";
 
     const lists: Array<List> = [];
-    const taskFiles: Array<ReadTask> = [];
+    const taskFiles: Array<TaskFile> = [];
     const listDirs = new Map<string, { dir: string; order: string }>();
     const taskDirs = new Map<string, string>();
     const missingId: Array<string> = [];
@@ -276,9 +282,8 @@ export const scanWorkspace = (
           id = read.value.id;
           takeId(id);
           taskDirs.set(id, dir);
-          taskFiles.push({ task: read.value, malformedLinks: read.malformedLinks });
-          for (const { kind, field, detail } of read.problems)
-            report(kind, file, detail, { field });
+          taskFiles.push(read.value);
+          for (const problem of read.problems) report(problem.kind, file, problem.detail, problem);
           if (idNumber(id, config.key) === null)
             report(
               "foreign-id",
@@ -423,7 +428,7 @@ export const scanWorkspace = (
         `This workspace has folders from the old layout (${legacyFolders.slice(0, 3).join(", ")}${legacyFolders.length > 3 ? ", ..." : ""})`,
       );
     }
-    for (const { task } of taskFiles) {
+    for (const task of taskFiles) {
       if (statuses.some((known) => known.id === task.status)) continue;
       statuses.push({ id: task.status, name: humanize(task.status), category: "unstarted" });
       report(
@@ -438,7 +443,7 @@ export const scanWorkspace = (
 
     const compare = compareTasks(config.key);
     const { tasks, diagnostics: linkDiagnostics } = linkTasks(
-      taskFiles.toSorted((a, b) => compare(a.task, b.task)),
+      taskFiles.toSorted(compare),
       statuses,
     );
     diagnostics.push(...linkDiagnostics);

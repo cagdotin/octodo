@@ -109,6 +109,8 @@ export const DiagnosticKind = Schema.Literals([
   "invalid-due",
   "invalid-tags",
   "broken-link",
+  "self-link",
+  "malformed-link",
   "loose-markdown",
   "conflict-copy",
   "unmarked-folder",
@@ -127,6 +129,8 @@ export const FixAction = Schema.Literals([
   "keep-copy",
   "remove-copy",
   "drop-unknown-links",
+  "drop-self-link",
+  "normalize-links",
   "migrate",
   "add-status",
 ]);

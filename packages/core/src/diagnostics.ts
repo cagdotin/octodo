@@ -53,8 +53,16 @@ export const PROBLEMS = {
     fixes: [],
   },
   "broken-link": {
-    remedy: "Link only to tasks that exist",
+    remedy: "Link only to tasks that exist; until then a missing blocker keeps the task blocked",
     fixes: ["drop-unknown-links"],
+  },
+  "self-link": {
+    remedy: "A task cannot link to itself, so the link is ignored",
+    fixes: ["drop-self-link"],
+  },
+  "malformed-link": {
+    remedy: "Until it is a list of ids, the ids found in it are used",
+    fixes: ["normalize-links"],
   },
   "loose-markdown": {
     remedy: "A task is a folder with task.md, so this file is not read",
@@ -98,6 +106,8 @@ export const FIX_LABELS: Record<FixAction, string> = {
   "keep-copy": "Keep it as a new task",
   "remove-copy": "Delete the copy",
   "drop-unknown-links": "Remove the unknown ids",
+  "drop-self-link": "Remove the link to itself",
+  "normalize-links": "Write it as a list of ids",
   migrate: "Convert the old layout",
   "add-status": "Add the status to config.json",
 };

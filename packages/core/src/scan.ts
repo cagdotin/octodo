@@ -10,7 +10,7 @@ import {
   type Task,
   type WorkspaceSnapshot,
 } from "./domain.ts";
-import { isNotFound, sameTree, tempName } from "./files.ts";
+import { isNotFound, sameTree, tempName, writeFileAtomic } from "./files.ts";
 import {
   CONFIG_FILE,
   LIST_FILE,
@@ -29,6 +29,7 @@ import { linkTasks } from "./links.ts";
 import { oldLayoutFolder } from "./migrate.ts";
 import {
   frontmatterId,
+  patchFrontmatter,
   readFrontmatter,
   readListFile,
   readTaskFile,
@@ -45,6 +46,8 @@ export interface Scan {
     /** Each task's absolute folder. */
     readonly tasks: ReadonlyMap<string, string>;
   };
+  /** Ids that more than one task folder has. */
+  readonly idClashes: ReadonlySet<string>;
   /** The number of the next new task id: past every id on disk, in tasks read or not. */
   readonly nextIdNumber: number;
   /** Whether folders of the old layout are left, which `octo migrate` converts. */
@@ -131,6 +134,7 @@ export const scanWorkspace = (
     const taskFiles: Array<TaskFile> = [];
     const listDirs = new Map<string, { dir: string; order: string }>();
     const taskDirs = new Map<string, string>();
+    const idClashes = new Set<string>();
     const missingId: Array<string> = [];
     /** Folders holding a `.pending-id` marker. */
     const markerDirs = new Set<string>();
@@ -186,6 +190,15 @@ export const scanWorkspace = (
         }
         return found;
       });
+
+    /** Removes the id `taskId` from the task in `dir` if it still has it. */
+    const takeBackId = (dir: string, taskId: string) =>
+      Effect.gen(function* () {
+        const file = path.join(dir, TASK_FILE);
+        const text = yield* fs.readFileString(file);
+        if (frontmatterId(text) === taskId)
+          yield* writeFileAtomic(file, patchFrontmatter(text, { id: undefined }));
+      }).pipe(Effect.ignore);
 
     const readText = (file: string) =>
       fs.readFileString(file).pipe(Effect.orElseSucceed(() => null));
@@ -278,6 +291,7 @@ export const scanWorkspace = (
           missingId.push(dir);
           takeId(yield* pendingId(dir));
         } else if (taskDirs.has(read.value.id)) {
+          idClashes.add(read.value.id);
           yield* reportDuplicate(dir, read.value.id);
           yield* takeIdsUnder(dir);
           return;
@@ -395,6 +409,8 @@ export const scanWorkspace = (
             { field: "id" },
           );
       };
+      /** The folders this scan wrote an id into, by that id. */
+      const given = new Map<string, string>();
       const assignedAny = yield* Effect.gen(function* () {
         let assigned = false;
         const ids = yield* claimIds(
@@ -404,7 +420,6 @@ export const scanWorkspace = (
           missingId.length,
           nextOnDisk,
         );
-        const given = new Set<string>();
         const taken = (taskId: string) => taskDirs.has(taskId) || given.has(taskId);
         for (const [index, dir] of missingId.entries()) {
           const id = yield* giveId(dir, ids[index]!, taken).pipe(
@@ -415,7 +430,7 @@ export const scanWorkspace = (
           if (id === undefined) continue;
           assigned = true;
           if (id === null) continue;
-          given.add(id);
+          given.set(id, dir);
           yield* Effect.logInfo(`Assigned ${id} to ${rel(path.join(dir, TASK_FILE))}`);
         }
         return assigned;
@@ -429,7 +444,14 @@ export const scanWorkspace = (
         ),
       );
       // Every file it settled now has an id, written here or by another process: read them back.
-      if (assignedAny) return yield* scanWorkspace(id, root);
+      if (assignedAny) {
+        const reread = yield* scanWorkspace(id, root);
+        const clashing = [...given].filter(([taskId]) => reread.idClashes.has(taskId));
+        if (clashing.length === 0) return reread;
+        // A task with the same id appeared while it was written: take ours back for a new one.
+        for (const [taskId, dir] of clashing) yield* takeBackId(dir, taskId);
+        return yield* scanWorkspace(id, root);
+      }
     }
 
     for (const stray of strays) yield* reportStray(stray);
@@ -468,6 +490,7 @@ export const scanWorkspace = (
         diagnostics,
       },
       dirs: { lists: listDirs, tasks: taskDirs },
+      idClashes,
       nextIdNumber: highestId + 1,
       oldLayout: legacyFolders.length > 0,
     };

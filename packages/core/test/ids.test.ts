@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { initWorkspace, makeWorkspace, type Workspace } from "../src/workspace.ts";
 
@@ -50,6 +50,46 @@ const lateReader = (
       };
     }),
   ).pipe(Layer.provideMerge(NodeServices.layer));
+
+/**
+ * A file system that holds the first rename publishing a hidden name under a visible one (a new
+ * folder or file moving into place) until `open` is called.
+ */
+const publishGate = () => {
+  let reach!: () => void;
+  let open!: () => void;
+  const reached = new Promise<void>((resolve) => (reach = resolve));
+  const opened = new Promise<void>((resolve) => (open = resolve));
+  let held = false;
+  const layer: typeof NodeServices.layer = Layer.effect(
+    FileSystem.FileSystem,
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      return {
+        ...fs,
+        rename: (from, to) => {
+          if (held || !basename(from).startsWith(".") || basename(to).startsWith("."))
+            return fs.rename(from, to);
+          held = true;
+          reach();
+          return Effect.andThen(
+            Effect.promise(() => opened),
+            fs.rename(from, to),
+          );
+        },
+      };
+    }),
+  ).pipe(Layer.provideMerge(NodeServices.layer));
+  return { layer, reached, open };
+};
+
+/** Sets the hidden files in `.octodo/` back `ms`, as if the process owning them were slow. */
+const age = (root: string, ms: number) => {
+  const then = new Date(Date.now() - ms);
+  for (const entry of readdirSync(join(root, ".octodo"), { withFileTypes: true }))
+    if (entry.isFile() && entry.name.startsWith("."))
+      utimesSync(join(root, ".octodo", entry.name), then, then);
+};
 
 const fresh = async () => {
   const root = join(mkdtempSync(join(tmpdir(), "octodo-")), "house-move");
@@ -188,6 +228,58 @@ describe("task ids across processes", () => {
       (entry) => entry.split("/").some((part) => part.startsWith(".")),
     );
     expect(hidden, "a task with its id keeps no marker").toEqual([]);
+  });
+
+  it("never hands out the id of a create that has run for more than a minute", async () => {
+    const root = await fresh();
+    const gate = publishGate();
+    const slow = run(
+      Effect.flatMap(makeWorkspace("slow", root), (ws) => ws.createTask({ title: "Slow" })),
+      gate.layer,
+    );
+    await gate.reached;
+    age(root, 120_000);
+    const quick = await run(
+      Effect.flatMap(makeWorkspace("quick", root), (ws) => ws.createTask({ title: "Quick" })),
+    );
+    gate.open();
+    expect([(await slow).id, quick.id]).toEqual(["HM-1", "HM-2"]);
+    expect(await ids(root)).toEqual({ ids: ["HM-1", "HM-2"], diagnostics: [] });
+  });
+
+  it("gives a new task another id when a task with its id appears while it is written", async () => {
+    const root = await fresh();
+    const gate = publishGate();
+    const slow = run(
+      Effect.flatMap(makeWorkspace("slow", root), (ws) => ws.createTask({ title: "Slow" })),
+      gate.layer,
+    );
+    await gate.reached;
+    write(root, "HM-1-synced/task.md", "---\nid: HM-1\n---\n");
+    gate.open();
+    const created = await slow;
+    expect(created.id).toBe("HM-2");
+    expect(created.path).toBe(".octodo/HM-2-slow/task.md");
+    expect(await ids(root)).toEqual({ ids: ["HM-1", "HM-2"], diagnostics: [] });
+  });
+
+  it("gives a hand-made file another id when a task with its id appears while it is written", async () => {
+    const root = await fresh();
+    write(root, "milk/task.md", "Buy milk\n");
+    const gate = publishGate();
+    const reading = run(
+      Effect.flatMap(makeWorkspace("app", root), (ws) => ws.snapshot),
+      gate.layer,
+    );
+    await gate.reached;
+    write(root, "HM-1-synced/task.md", "---\nid: HM-1\n---\n");
+    gate.open();
+    const snapshot = await reading;
+    expect(snapshot.tasks.map((task) => [task.title, task.id])).toEqual([
+      ["Synced", "HM-1"],
+      ["Milk", "HM-2"],
+    ]);
+    expect(snapshot.diagnostics).toEqual([]);
   });
 
   it("leaves nothing behind in .octodo once creates finish", async () => {

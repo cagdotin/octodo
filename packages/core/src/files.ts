@@ -1,4 +1,5 @@
 import { Effect, FileSystem, Option, Path, PlatformError } from "effect";
+import { hostname } from "node:os";
 
 /**
  * Names of octodo's own bookkeeping files and folders: the temporary ones writes build and rename
@@ -24,9 +25,25 @@ const LEFTOVER = new RegExp(
 /** How old a temporary file must be before it is taken as a crash's leftover, not a write in progress. */
 const STALE_AFTER_MS = 60_000;
 
+/** What a claim file holds: the process that owns it and its machine. */
+export const claimOwner = (): string => `${process.pid} ${hostname()}\n`;
+
+/** Whether a claim's owner still runs, or null when this machine cannot tell. */
+const ownerRuns = (claim: string): boolean | null => {
+  const match = /^(\d+) (.+)$/.exec(claim.trim());
+  if (match === null || match[2] !== hostname()) return null;
+  try {
+    process.kill(Number(match[1]), 0);
+    return true;
+  } catch (error) {
+    return (error as { code?: string }).code === "EPERM";
+  }
+};
+
 /**
- * Removes the temporary files and folders under `dir` that a crashed write or migration left,
- * once they are old enough that no live writer in another process still owns them.
+ * Removes the temporary files and folders under `dir` that a crashed write or migration left: a
+ * claim once its owner has stopped, anything else (and a claim from another machine) once it is
+ * old enough that no live writer still owns it.
  */
 export const removeLeftovers = (
   dir: string,
@@ -39,8 +56,12 @@ export const removeLeftovers = (
       yield* Effect.gen(function* () {
         const info = yield* fs.lstat(child);
         if (LEFTOVER.test(name)) {
+          const runs = name.startsWith(".claim-")
+            ? ownerRuns(yield* fs.readFileString(child).pipe(Effect.orElseSucceed(() => "")))
+            : null;
           const modified = Option.getOrElse(info.mtime, () => new Date());
-          if (Date.now() - modified.getTime() > STALE_AFTER_MS)
+          const stale = Date.now() - modified.getTime() > STALE_AFTER_MS;
+          if (runs === false || (runs === null && stale))
             yield* fs.remove(child, { recursive: true });
         } else if (!name.startsWith(".") && info.type === "Directory") {
           yield* removeLeftovers(child);

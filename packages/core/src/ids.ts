@@ -1,5 +1,5 @@
 import { Effect, FileSystem, Option, Path, PlatformError, Scope } from "effect";
-import { tempName, writeFileAtomic } from "./files.ts";
+import { claimOwner, tempName, writeFileAtomic } from "./files.ts";
 import { TASK_FILE, isTaskId } from "./layout.ts";
 import { frontmatterId, needsId, patchFrontmatter } from "./markdown.ts";
 
@@ -7,9 +7,10 @@ const alreadyExists = (error: PlatformError.PlatformError) => error.reason._tag 
 
 /**
  * Reserves `count` new task ids from `floor` up until the scope closes, against every process on
- * this machine: each id is a claim file created exclusively, then checked against `nextOnDisk` read
- * after the claim, which sees every task created before it. Devices that sync `.octodo/` (iCloud,
- * git) do not see each other's claims; their clashes stay a duplicate-id diagnostic.
+ * this machine: each id is a claim file created exclusively, naming its owner, then checked
+ * against `nextOnDisk` read after the claim, which sees every task created before it. Devices that
+ * sync `.octodo/` (iCloud, git) do not see each other's claims; their clashes stay a duplicate-id
+ * diagnostic.
  */
 export const claimIds = <R>(
   tasksDir: string,
@@ -36,7 +37,7 @@ export const claimIds = <R>(
         const numbers: Array<number> = [];
         for (let number = start; numbers.length < count; number++) {
           const created = yield* fs
-            .writeFileString(claim(`${key}-${number}`), "", { flag: "wx" })
+            .writeFileString(claim(`${key}-${number}`), claimOwner(), { flag: "wx" })
             .pipe(
               Effect.as(true),
               Effect.catchIf(alreadyExists, () => Effect.succeed(false)),

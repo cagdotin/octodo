@@ -380,7 +380,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         if (status === undefined) return yield* invalid("The workspace has no statuses");
         yield* checkStatus(snapshot, status);
         const container = yield* destination(snapshot, input, TOP);
-        yield* Effect.gen(function* () {
+        let folder = yield* Effect.gen(function* () {
           const siblings = yield* orderedTasks(snapshot, container);
           const content = newTaskFile(input, {
             id: taskId,
@@ -391,9 +391,21 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           const dir = containerDir(scan, container);
           const name = yield* freeName(dir, taskFolderName(taskId, input.title));
           yield* createFolder(dir, name, TASK_FILE, content);
+          return path.join(dir, name);
         }).pipe(storage("Could not write the task"));
+        let id = taskId;
         yield* invalidate;
-        return yield* reread(taskId).pipe(readBack);
+        // A task with the same id appeared while this one was written: this one takes a new id.
+        while ((yield* state).idClashes.has(id)) {
+          id = yield* claimId.pipe(storage("Could not claim an id for the task"));
+          folder = yield* Effect.gen(function* () {
+            const file = path.join(folder, TASK_FILE);
+            yield* writeAtomic(file, patchFrontmatter(yield* fs.readFileString(file), { id }));
+            return yield* renameFolder(folder, taskFolderName(id, input.title));
+          }).pipe(storage("Could not write the task"));
+          yield* invalidate;
+        }
+        return yield* reread(id).pipe(readBack);
       }).pipe(Effect.scoped),
     );
 

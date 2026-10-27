@@ -292,6 +292,24 @@ describe("task ids across processes", () => {
     expect(await ids(root)).toEqual({ ids: ["HM-1", "HM-2"], diagnostics: [] });
   });
 
+  it("gives a new task another id when a task with its id appears in another list while it is written", async () => {
+    const root = await fresh();
+    write(root, "garden/list.md", "---\nname: Garden\n---\n");
+    const gate = publishGate();
+    const slow = run(
+      Effect.flatMap(makeWorkspace("slow", root), (ws) =>
+        Effect.andThen(ws.snapshot, ws.createTask({ title: "Slow" })),
+      ),
+      gate.layer,
+    );
+    await gate.reached;
+    write(root, "garden/HM-1-synced/task.md", "---\nid: HM-1\n---\n");
+    gate.open();
+    const created = await slow;
+    expect(created.id).toBe("HM-2");
+    expect(await ids(root)).toEqual({ ids: ["HM-1", "HM-2"], diagnostics: [] });
+  });
+
   it("gives a hand-made file another id when a task with its id appears while it is written", async () => {
     const root = await fresh();
     write(root, "milk/task.md", "Buy milk\n");

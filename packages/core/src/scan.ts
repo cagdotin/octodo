@@ -40,6 +40,7 @@ import {
   type TaskFileRead,
 } from "./markdown.ts";
 import { claimIds, giveId, nextIdOnDisk, pendingId } from "./ids.ts";
+import type { ScanCache } from "./scan-cache.ts";
 
 /** A snapshot plus where its lists and tasks are on disk, which is nobody else's business. */
 export interface Scan {
@@ -93,14 +94,20 @@ const compareTasks =
           : 0;
   };
 
-/** Reads `.octodo/` by its grammar: folders with `task.md` are tasks, folders with `list.md` lists. */
+/**
+ * Reads `.octodo/` by its grammar: folders with `task.md` are tasks, folders with `list.md` lists.
+ * With a `cache`, it reads only the folders and files that changed since the scans that filled it.
+ */
 export const scanWorkspace = (
   id: string,
   root: string,
+  cache?: ScanCache,
 ): Effect.Effect<Scan, never, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+    const cached = <A, E, R>(at: string, aspect: string, read: Effect.Effect<A, E, R>) =>
+      cache === undefined ? read : cache.read(at, aspect, read);
     const tasksDir = path.join(root, TASKS_DIR);
     const rel = (absolute: string) => path.relative(root, absolute);
     const diagnostics: Array<Diagnostic> = [];
@@ -186,6 +193,17 @@ export const scanWorkspace = (
         }
       }).pipe(Effect.ignore);
 
+    const entryType = (child: string) =>
+      Effect.gen(function* () {
+        const info = yield* fs.lstat(child);
+        if (info.type === "SymbolicLink") return "link";
+        if (info.type === "File") return "file";
+        if (info.type !== "Directory") return null;
+        const task = yield* fs.exists(path.join(child, TASK_FILE));
+        const list = yield* fs.exists(path.join(child, LIST_FILE));
+        return task && list ? "both" : task ? "task" : list ? "list" : "folder";
+      });
+
     const entries = (dir: string) =>
       Effect.gen(function* () {
         const found: Array<{
@@ -193,26 +211,16 @@ export const scanWorkspace = (
           path: string;
           type: "file" | "task" | "list" | "both" | "folder";
         }> = [];
-        for (const name of ((yield* attempt(dir, fs.readDirectory(dir))) ?? []).toSorted()) {
+        const names = yield* attempt(dir, cached(dir, "names", fs.readDirectory(dir)));
+        for (const name of (names ?? []).toSorted()) {
           if (name === tempName.pendingId) markerDirs.add(dir);
           if (name.startsWith(".")) continue;
           const child = path.join(dir, name);
-          const type = yield* attempt(
-            child,
-            Effect.gen(function* () {
-              const info = yield* fs.lstat(child);
-              if (info.type === "SymbolicLink") {
-                report("symlink", child, `This is a link to ${yield* fs.readLink(child)}`);
-                return null;
-              }
-              if (info.type === "File") return "file";
-              if (info.type !== "Directory") return null;
-              const task = yield* fs.exists(path.join(child, TASK_FILE));
-              const list = yield* fs.exists(path.join(child, LIST_FILE));
-              return task && list ? "both" : task ? "task" : list ? "list" : "folder";
-            }),
-          );
-          if (type !== null) found.push({ name, path: child, type });
+          const type = yield* attempt(child, cached(child, "type", entryType(child)));
+          if (type === "link") {
+            const target = yield* attempt(child, fs.readLink(child));
+            if (target !== null) report("symlink", child, `This is a link to ${target}`);
+          } else if (type !== null) found.push({ name, path: child, type });
         }
         return found;
       });
@@ -310,24 +318,28 @@ export const scanWorkspace = (
     ): Effect.Effect<void, never, FileSystem.FileSystem | Path.Path> =>
       Effect.gen(function* () {
         const file = path.join(dir, TASK_FILE);
-        const contents = yield* attempt(
-          file,
-          Effect.all([fs.readFileString(file), fs.stat(file)]),
-          `Could not read it; this task and its subtasks are not read`,
-        );
-        if (contents === null) return;
-        const [text, info] = contents;
-        const mtime = Option.getOrNull(info.mtime);
         const folder = path.basename(dir);
-        const read = readTaskFile(text, {
+        const place = {
           list,
           parent,
           path: rel(file),
           folder,
           defaultStatus: fallbackStatus,
-          updated: mtime === null ? null : mtime.toISOString(),
           key: config.key,
-        });
+        };
+        const read = yield* attempt(
+          file,
+          cached(
+            dir,
+            JSON.stringify(place),
+            Effect.map(Effect.all([fs.readFileString(file), fs.stat(file)]), ([text, info]) => {
+              const mtime = Option.getOrNull(info.mtime);
+              return readTaskFile(text, { ...place, updated: mtime?.toISOString() ?? null });
+            }),
+          ),
+          `Could not read it; this task and its subtasks are not read`,
+        );
+        if (read === null) return;
         if (read._tag === "Invalid") {
           const { kind, field, detail } = read.problem;
           report(kind, file, `${detail}; this task and its subtasks are not read`, { field });
@@ -430,7 +442,10 @@ export const scanWorkspace = (
             yield* takeIdsUnder(entry.path);
           } else {
             const file = path.join(entry.path, LIST_FILE);
-            const text = yield* attempt(file, fs.readFileString(file));
+            const text = yield* attempt(
+              file,
+              cached(entry.path, LIST_FILE, fs.readFileString(file)),
+            );
             const read = text === null ? null : readListFile(text);
             if (read?._tag === "Invalid")
               report(

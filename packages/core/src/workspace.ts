@@ -6,7 +6,6 @@ import {
   Option,
   Path,
   PubSub,
-  Ref,
   Scope,
   Semaphore,
   Stream,
@@ -60,9 +59,10 @@ import {
   taskSubtree,
 } from "./layout.ts";
 import { editTaskFile, newListFile, newTaskFile, patchFrontmatter, keepLinks } from "./markdown.ts";
-import { claimIds, nextIdOnDisk } from "./ids.ts";
+import { claimIds, idElsewhereOnDisk, nextIdOnDisk } from "./ids.ts";
 import { applyFix } from "./fixes.ts";
 import { scanWorkspace, type Scan } from "./scan.ts";
+import { makeScanCache, reportingChanges } from "./scan-cache.ts";
 
 /** One workspace on disk: a folder with a `.octodo/` directory. The files are the source of truth. */
 export interface Workspace {
@@ -199,11 +199,11 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   root: string,
   options: { readonly watch?: boolean } = {},
 ) {
-  const fs = yield* FileSystem.FileSystem;
+  const reads = makeScanCache();
+  const fs = reportingChanges(yield* FileSystem.FileSystem, reads);
   const path = yield* Path.Path;
   const tasksDir = path.join(root, TASKS_DIR);
   const lock = yield* Semaphore.make(1);
-  const cache = yield* Ref.make(Option.none<Scan>());
   const changes = yield* PubSub.sliding<void>(16);
   const withPlatform = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     effect.pipe(
@@ -217,16 +217,19 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   const writeAtomic = (file: string, content: string | Uint8Array) =>
     withPlatform(writeFileAtomic(file, content));
 
+  /** The last scan, until a file changes. */
+  let kept: { readonly version: number; readonly scan: Scan } | undefined;
   const state = Effect.gen(function* () {
-    const cached = yield* Ref.get(cache);
-    if (Option.isSome(cached)) return cached.value;
-    const fresh = yield* withPlatform(scanWorkspace(id, root));
-    yield* Ref.set(cache, Option.some(fresh));
-    return fresh;
+    const version = reads.version();
+    if (kept?.version === version) return kept.scan;
+    const scan = yield* withPlatform(scanWorkspace(id, root, reads));
+    kept = { version, scan };
+    return scan;
   });
   const current = Effect.map(state, ({ snapshot }) => snapshot);
 
-  const invalidate = Ref.set(cache, Option.none());
+  /** Forgets every read, for when the files may have changed in ways nobody reported. */
+  const forgetAll = Effect.sync(() => reads.clear());
 
   const findTask = (snapshot: WorkspaceSnapshot, taskId: string) => {
     const task = snapshot.tasks.find((candidate) => candidate.id === taskId);
@@ -342,9 +345,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       return renamed;
     });
 
-  /** Serialises writes and drops the cache afterwards, whatever happened. */
-  const write = <A, E>(effect: Effect.Effect<A, E>) =>
-    lock.withPermits(1)(Effect.ensuring(effect, invalidate));
+  const write = lock.withPermits(1);
 
   /**
    * `write`, run once more on a fresh read when it finds a path gone: another process moved or
@@ -355,7 +356,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       Effect.catchIf(
         effect,
         (error) => error instanceof StorageError && isNotFound(error.cause),
-        () => Effect.andThen(invalidate, effect),
+        () => Effect.andThen(forgetAll, effect),
       ),
     );
 
@@ -402,16 +403,22 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           return path.join(dir, name);
         }).pipe(storage("Could not write the task"));
         let id = taskId;
-        yield* invalidate;
-        // A task with the same id appeared while this one was written: this one takes a new id.
-        while ((yield* state).idClashes.has(id)) {
+        /**
+         * Whether a task with the same id appeared while this one was written. Reads every id on
+         * disk, since a sync tool's file can land anywhere before the watcher reports it.
+         */
+        const clashes = Effect.gen(function* () {
+          const file = path.join(folder, TASK_FILE);
+          if (yield* withPlatform(idElsewhereOnDisk(tasksDir, id, file))) yield* forgetAll;
+          return (yield* state).idClashes.has(id);
+        });
+        while (yield* clashes) {
           id = yield* claimId.pipe(storage("Could not claim an id for the task"));
           folder = yield* Effect.gen(function* () {
             const file = path.join(folder, TASK_FILE);
             yield* writeAtomic(file, patchFrontmatter(yield* fs.readFileString(file), { id }));
             return yield* renameFolder(folder, taskFolderName(id, input.title));
           }).pipe(storage("Could not write the task"));
-          yield* invalidate;
         }
         return yield* reread(id).pipe(readBack);
       }).pipe(Effect.scoped),
@@ -446,7 +453,6 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           const file = path.join(dir, TASK_FILE);
           yield* writeAtomic(file, editTaskFile(yield* fs.readFileString(file), input));
         }).pipe(storage("Could not write the task"));
-        yield* invalidate;
         return yield* reread(taskId).pipe(readBack);
       }),
     );
@@ -478,7 +484,6 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           const file = path.join(dir, TASK_FILE);
           yield* writeAtomic(file, patchFrontmatter(yield* fs.readFileString(file), changes));
         }).pipe(storage("Could not move the task"));
-        yield* invalidate;
         return yield* reread(taskId).pipe(readBack);
       }),
     );
@@ -541,7 +546,6 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           const content = newListFile({ name: input.name, order: orderBetween(siblings, {}) });
           yield* createFolder(dir, slug, LIST_FILE, content);
         }).pipe(storage("Could not create the list"));
-        yield* invalidate;
         return yield* rereadList(listId).pipe(readBack);
       }),
     );
@@ -570,7 +574,6 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           yield* writeAtomic(file, patchFrontmatter(yield* fs.readFileString(file), { order }));
           if (parent !== list.parent) yield* fs.rename(dir, moved);
         }).pipe(storage("Could not move the list"));
-        yield* invalidate;
         return yield* rereadList(movedListId(listId, parent)).pipe(readBack);
       }),
     );
@@ -596,7 +599,6 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           const raw = yield* Effect.try(() => JSON.parse(text) as Record<string, unknown>);
           yield* writeAtomic(configPath, `${JSON.stringify({ ...raw, statuses }, null, 2)}\n`);
         }).pipe(storage("Could not reorder the statuses"));
-        yield* invalidate;
         return (yield* current).statuses;
       }),
     );
@@ -687,7 +689,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         const key = (diagnostic: Diagnostic) =>
           JSON.stringify([diagnostic.kind, diagnostic.path, diagnostic.field]);
         while (true) {
-          yield* invalidate;
+          yield* forgetAll;
           const scan = yield* state;
           const next = scan.snapshot.diagnostics.find(
             (diagnostic) =>
@@ -713,8 +715,9 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   if (options.watch === true) {
     yield* fs.watch(tasksDir, { recursive: true }).pipe(
       Stream.filter((event) => !event.path.endsWith(".tmp")),
+      Stream.tap((event) => Effect.sync(() => reads.changed(path.join(tasksDir, event.path)))),
       Stream.debounce("75 millis"),
-      Stream.runForEach(() => Effect.andThen(invalidate, PubSub.publish(changes, undefined))),
+      Stream.runForEach(() => PubSub.publish(changes, undefined)),
       Effect.catch((error) => Effect.logWarning(`Stopped watching ${tasksDir}`, error)),
       Effect.forkScoped,
     );

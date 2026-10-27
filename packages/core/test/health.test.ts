@@ -122,7 +122,7 @@ describe("file health", () => {
     expect(await diagnostics(root)).toEqual([one("XY-4-a/task.md", "foreign-id", "id", null)]);
   });
 
-  it("gives a copied task folder a new id and renames it, then its copied subtasks", async () => {
+  it("gives a copied task folder and its copied subtasks new ids and renames them in one fix", async () => {
     const root = await fresh({
       "HM-1-paint/task.md": "---\nid: HM-1\ntitle: Paint\n---\n",
       "HM-1-paint/HM-2-primer/task.md": "---\nid: HM-2\n---\n",
@@ -140,16 +140,54 @@ describe("file health", () => {
       one("HM-1-paint-copy/task.md", "duplicate-id", "id", "fresh-id"),
     ]);
     expect(read(root, "HM-3-paint-copy/task.md")).toBe("---\nid: HM-3\ntitle: Paint\n---\n");
-    expect(result.diagnostics.map(summary)).toEqual([
-      one("HM-3-paint-copy/HM-2-primer/task.md", "duplicate-id", "id", "fresh-id"),
-    ]);
-    const all = await inWorkspace(root, (ws) => ws.fixAll);
-    expect(all.diagnostics).toEqual([]);
+    expect(read(root, "HM-3-paint-copy/HM-4-primer/task.md")).toBe("---\nid: HM-4\n---\n");
+    expect(result.diagnostics).toEqual([]);
     expect((await snapshot(root)).tasks.map((task) => [task.id, task.parent])).toEqual([
       ["HM-1", null],
       ["HM-2", "HM-1"],
       ["HM-3", null],
       ["HM-4", "HM-3"],
+    ]);
+  });
+
+  it("serves the original of a duplicate even when the copy sorts first", async () => {
+    const root = await fresh({
+      "HM-1-paint-walls/task.md": "---\nid: HM-1\ntitle: Paint walls\n---\n",
+      "HM-1-old-name 2/task.md": "---\nid: HM-1\ntitle: Old name\n---\n",
+      "HM-2-tile/task.md": "---\nid: HM-2\ntitle: Tile\n---\n",
+      "HM-2-copy-of-tile/task.md": "---\nid: HM-2\ntitle: Tile\n---\n",
+    });
+    expect((await snapshot(root)).tasks.map((task) => [task.id, task.path])).toEqual([
+      ["HM-1", ".octodo/HM-1-paint-walls/task.md"],
+      ["HM-2", ".octodo/HM-2-tile/task.md"],
+    ]);
+    expect(await diagnostics(root)).toEqual([
+      one("HM-1-old-name 2", "conflict-copy", null, "keep-copy"),
+      one("HM-2-copy-of-tile/task.md", "duplicate-id", "id", "fresh-id"),
+    ]);
+  });
+
+  it("keeps a conflict copy of a task with subtasks without renumbering the original's", async () => {
+    const root = await fresh({
+      "HM-1-a/task.md": "---\nid: HM-1\nblocked_by: [HM-8]\n---\n",
+      "HM-9-x/task.md": "---\nid: HM-9\ntitle: X\n---\nOne.\n",
+      "HM-9-x/HM-8-sub/task.md": "---\nid: HM-8\ntitle: Sub\n---\nOriginal.\n",
+      "HM-9-x 2/task.md": "---\nid: HM-9\ntitle: X\n---\nTwo.\n",
+      "HM-9-x 2/HM-8-sub/task.md": "---\nid: HM-8\ntitle: Sub\n---\nCopy.\n",
+    });
+    const result = await inWorkspace(root, (ws) => ws.fixAll);
+    expect(result.fixed.map(summary)).toEqual([
+      one("HM-9-x 2", "conflict-copy", null, "keep-copy"),
+    ]);
+    expect(result.diagnostics).toEqual([]);
+    expect(
+      (await snapshot(root)).tasks.map((task) => [task.id, task.parent, task.path, task.body]),
+    ).toEqual([
+      ["HM-1", null, ".octodo/HM-1-a/task.md", ""],
+      ["HM-8", "HM-9", ".octodo/HM-9-x/HM-8-sub/task.md", "Original.\n"],
+      ["HM-9", null, ".octodo/HM-9-x/task.md", "One.\n"],
+      ["HM-10", null, ".octodo/HM-10-x/task.md", "Two.\n"],
+      ["HM-11", "HM-10", ".octodo/HM-10-x/HM-11-sub/task.md", "Copy.\n"],
     ]);
   });
 

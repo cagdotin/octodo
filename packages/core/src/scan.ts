@@ -24,6 +24,7 @@ import {
   idNumber,
   listDepth,
   sortStatuses,
+  taskFolderName,
 } from "./layout.ts";
 import { linkTasks } from "./links.ts";
 import { oldLayoutFolder } from "./migrate.ts";
@@ -34,6 +35,7 @@ import {
   readListFile,
   readTaskFile,
   type TaskFile,
+  type TaskFileRead,
 } from "./markdown.ts";
 import { claimIds, giveId, nextIdOnDisk, pendingId } from "./ids.ts";
 
@@ -261,6 +263,19 @@ export const scanWorkspace = (
           });
       });
 
+    /** Task folders read and waiting to be served, in reading order. */
+    const waiting: Array<{
+      dir: string;
+      list: string | null;
+      parent: string | null;
+      read: Exclude<TaskFileRead, { _tag: "Invalid" }>;
+      /**
+       * Of several folders with one id, the lowest rank is the task: 0 for a folder named after its
+       * id and title, 1 for another name, 2 for a sync tool's copy. The first read breaks a tie.
+       */
+      rank: number;
+    }> = [];
+
     const readTask = (
       dir: string,
       list: string | null,
@@ -276,11 +291,12 @@ export const scanWorkspace = (
         if (contents === null) return;
         const [text, info] = contents;
         const mtime = Option.getOrNull(info.mtime);
+        const folder = path.basename(dir);
         const read = readTaskFile(text, {
           list,
           parent,
           path: rel(file),
-          folder: path.basename(dir),
+          folder,
           defaultStatus: fallbackStatus,
           updated: mtime === null ? null : mtime.toISOString(),
         });
@@ -290,6 +306,22 @@ export const scanWorkspace = (
           yield* takeIdsUnder(dir);
           return;
         }
+        const rank =
+          conflictCopyOf(folder) !== null
+            ? 2
+            : read._tag === "Read" && folder !== taskFolderName(read.value.id, read.value.title)
+              ? 1
+              : 0;
+        waiting.push({ dir, list, parent, read, rank });
+      });
+
+    const serveTask = ({
+      dir,
+      list,
+      read,
+    }: (typeof waiting)[number]): Effect.Effect<void, never, FileSystem.FileSystem | Path.Path> =>
+      Effect.gen(function* () {
+        const file = path.join(dir, TASK_FILE);
         let id: string | null = null;
         if (read._tag === "MissingId") {
           missingId.push(dir);
@@ -397,6 +429,11 @@ export const scanWorkspace = (
       });
 
     yield* readList(tasksDir, null);
+    while (waiting.length > 0) {
+      const next = waiting.reduce((best, task) => (task.rank < best.rank ? task : best));
+      waiting.splice(waiting.indexOf(next), 1);
+      yield* serveTask(next);
+    }
 
     // Files made by hand or by another tool get an id the first time the app sees them.
     if (missingId.length > 0) {

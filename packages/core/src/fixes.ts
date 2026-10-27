@@ -30,20 +30,49 @@ type Handler = (
   context: FixContext,
 ) => Effect.Effect<void, unknown, FileSystem.FileSystem | Path.Path | Scope.Scope>;
 
-/** Gives a task a new id and renames its folder to match, dropping a conflict copy's ` 2`. */
-const giveFreshId = (file: string, context: FixContext) =>
+/** The task folders from `dir` down, parents before their subtasks. */
+const taskFoldersUnder = (
+  dir: string,
+): Effect.Effect<Array<string>, PlatformError.PlatformError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const text = yield* fs.readFileString(file);
-    const id = yield* context.claimId;
-    yield* writeFileAtomic(file, patchFrontmatter(text, { id }));
-    const dir = path.dirname(file);
-    const name = conflictCopyOf(path.basename(dir)) ?? path.basename(dir);
-    const old = frontmatterId(text);
-    const renamed = old !== null && name.startsWith(old) ? `${id}${name.slice(old.length)}` : name;
-    const target = path.join(path.dirname(dir), renamed);
-    if (target !== dir && !(yield* fs.exists(target))) yield* fs.rename(dir, target);
+    const found = [dir];
+    for (const name of (yield* fs.readDirectory(dir)).toSorted()) {
+      const child = path.join(dir, name);
+      if (name.startsWith(".") || (yield* fs.lstat(child)).type !== "Directory") continue;
+      if (yield* fs.exists(path.join(child, TASK_FILE)))
+        found.push(...(yield* taskFoldersUnder(child)));
+    }
+    return found;
+  });
+
+/**
+ * Gives the copied task in `dir` a new id, and each of its subtasks whose id another folder has,
+ * then renames their folders to match, dropping a conflict copy's ` 2`. Ids go in before any
+ * folder is renamed, deepest folders first, so every path stays valid until it is used.
+ */
+const renumberCopy = (dir: string, context: FixContext) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const renames: Array<{ dir: string; old: string | null; id: string }> = [];
+    for (const folder of yield* taskFoldersUnder(dir)) {
+      const file = path.join(folder, TASK_FILE);
+      const text = yield* fs.readFileString(file);
+      const old = frontmatterId(text);
+      if (folder !== dir && (old === null || !context.scan.dirs.tasks.has(old))) continue;
+      const id = yield* context.claimId;
+      yield* writeFileAtomic(file, patchFrontmatter(text, { id }));
+      renames.push({ dir: folder, old, id });
+    }
+    for (const { dir: folder, old, id } of renames.toReversed()) {
+      const name = conflictCopyOf(path.basename(folder)) ?? path.basename(folder);
+      const renamed =
+        old !== null && name.startsWith(old) ? `${id}${name.slice(old.length)}` : name;
+      const target = path.join(path.dirname(folder), renamed);
+      if (target !== folder && !(yield* fs.exists(target))) yield* fs.rename(folder, target);
+    }
   });
 
 /**
@@ -92,14 +121,18 @@ const keepLinksWhere =
     });
 
 const FIXES: Record<FixAction, Handler> = {
-  "fresh-id": (context) => giveFreshId(context.target, context),
+  "fresh-id": (context) =>
+    Effect.gen(function* () {
+      const path = yield* Path.Path;
+      yield* renumberCopy(path.dirname(context.target), context);
+    }),
   "keep-copy": (context) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const { target } = context;
       if ((yield* fs.stat(target)).type === "Directory")
-        return yield* giveFreshId(path.join(target, TASK_FILE), context);
+        return yield* renumberCopy(target, context);
       yield* adopt(target, path.dirname(path.dirname(target)), context);
     }),
   "wrap-as-task": (context) =>

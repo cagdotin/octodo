@@ -72,6 +72,16 @@ export const Task = Schema.Struct({
   path: Schema.String,
   /** Frontmatter keys the app does not manage, passed through untouched. */
   extra: Schema.Record(Schema.String, Schema.Unknown),
+  /** The tasks this one waits for, from `blocked_by`. An id may match no task. */
+  blockedBy: Schema.Array(Schema.String),
+  /** The tasks waiting for this one; computed from their `blocked_by`, never stored. */
+  blocks: Schema.Array(Schema.String),
+  /** Whether a task in `blockedBy` is still open or matches no task. Never stored. */
+  blocked: Schema.Boolean,
+  /** The task ids the body mentions as `[[HM-3]]`, in order, each once. */
+  mentions: Schema.Array(Schema.String),
+  /** The tasks whose body mentions this one. Never stored. */
+  mentionedIn: Schema.Array(Schema.String),
 });
 export type Task = typeof Task.Type;
 
@@ -117,6 +127,8 @@ export const UpdateTaskInput = Schema.Struct({
   tags: Schema.optionalKey(Schema.Array(Schema.String)),
   due: Schema.optionalKey(Schema.NullOr(Schema.String)),
   body: Schema.optionalKey(Schema.String),
+  /** Task ids this one waits for, replacing the current ones; empty removes the key. */
+  blocked_by: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 export type UpdateTaskInput = typeof UpdateTaskInput.Type;
 

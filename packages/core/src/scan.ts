@@ -22,6 +22,7 @@ import {
   listDepth,
   sortStatuses,
 } from "./layout.ts";
+import { linkTasks, type ReadTask } from "./links.ts";
 import { oldLayoutFolder } from "./migrate.ts";
 import { frontmatterId, patchFrontmatter, readListFile, readTaskFile } from "./markdown.ts";
 
@@ -57,7 +58,7 @@ const compareOrder = (
 
 const compareTasks =
   (key: string) =>
-  (a: Task, b: Task): number => {
+  (a: Pick<Task, "id" | "order">, b: Pick<Task, "id" | "order">): number => {
     if (a.order !== b.order) {
       if (a.order === "") return 1;
       if (b.order === "") return -1;
@@ -112,7 +113,7 @@ export const scanWorkspace = (
     const fallbackStatus = defaultStatus(statuses)?.id ?? "todo";
 
     const lists: Array<List> = [];
-    const tasks: Array<Task> = [];
+    const taskFiles: Array<ReadTask> = [];
     const listDirs = new Map<string, { dir: string; order: string }>();
     const taskDirs = new Map<string, string>();
     const missingId: Array<{ file: string; text: string }> = [];
@@ -203,7 +204,7 @@ export const scanWorkspace = (
           id = read.value.id;
           takeId(id);
           taskDirs.set(id, dir);
-          tasks.push(read.value);
+          taskFiles.push({ task: read.value, malformedLinks: read.malformedLinks });
         }
         for (const entry of yield* entries(dir)) {
           if (entry.type === "task") yield* readTask(entry.path, list, id);
@@ -297,7 +298,7 @@ export const scanWorkspace = (
         message: `This workspace has folders from the old layout (${legacyFolders.slice(0, 3).join(", ")}${legacyFolders.length > 3 ? ", ..." : ""}), which are not read. Run \`octo migrate\` to convert them.`,
       });
     }
-    for (const task of tasks) {
+    for (const { task } of taskFiles) {
       if (statuses.some((known) => known.id === task.status)) continue;
       statuses.push({ id: task.status, name: humanize(task.status), category: "unstarted" });
       report(
@@ -306,7 +307,12 @@ export const scanWorkspace = (
       );
     }
 
-    tasks.sort(compareTasks(config.key));
+    const compare = compareTasks(config.key);
+    const { tasks, diagnostics: linkDiagnostics } = linkTasks(
+      taskFiles.toSorted((a, b) => compare(a.task, b.task)),
+      statuses,
+    );
+    diagnostics.push(...linkDiagnostics);
     return {
       snapshot: {
         workspace: { id, name: config.name, key: config.key, root },

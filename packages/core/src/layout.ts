@@ -169,3 +169,104 @@ export const listMoveError = (
     return `There is already a list "${moved}"`;
   return null;
 };
+
+/**
+ * Relations a task stores in its frontmatter as a list of task ids: `blocked_by: [HM-3, HM-7]`.
+ * Only the task named by `field` stores an edge; the other end gets it as `reverse` when a
+ * snapshot is read. A new kind is one entry here plus its two `Task` fields.
+ */
+export const LINK_KINDS = [
+  {
+    field: "blocked_by",
+    forward: "blockedBy",
+    reverse: "blocks",
+    label: "Blocked by",
+    reverseLabel: "Blocks",
+  },
+] as const;
+
+export type LinkKind = (typeof LINK_KINDS)[number];
+export type LinkField = LinkKind["field"];
+
+export const isLinkField = (key: string): key is LinkField =>
+  LINK_KINDS.some((kind) => kind.field === key);
+
+/** Where a body mentions a task as `[[HM-3]]`: the id and the offsets of the whole `[[...]]`. */
+export interface Mention {
+  readonly id: string;
+  readonly from: number;
+  readonly to: number;
+}
+
+const MENTION = /\[\[([A-Za-z][A-Za-z0-9_]*-\d+)\]\]/g;
+const FENCE = /^(?:[ \t]*>)*[ \t]*(`{3,}|~{3,})/;
+
+/** Offset ranges of fenced code blocks and code spans, which hold text rather than mentions. */
+const codeRanges = (body: string): Array<readonly [number, number]> => {
+  const ranges: Array<readonly [number, number]> = [];
+  let fence: { readonly marker: string; readonly from: number } | null = null;
+  let paragraph: Array<readonly [number, number]> = [];
+  const closeParagraph = () => {
+    ranges.push(...spansIn(body, paragraph));
+    paragraph = [];
+  };
+  let offset = 0;
+  for (const line of body.split("\n")) {
+    const start = offset;
+    offset += line.length + 1;
+    const marker = FENCE.exec(line)?.[1];
+    if (fence !== null) {
+      if (
+        marker !== undefined &&
+        marker[0] === fence.marker[0] &&
+        marker.length >= fence.marker.length
+      ) {
+        ranges.push([fence.from, start + line.length]);
+        fence = null;
+      }
+      continue;
+    }
+    if (marker !== undefined) {
+      closeParagraph();
+      fence = { marker, from: start };
+    } else if (line.trim() === "") closeParagraph();
+    else paragraph.push([start, start + line.length]);
+  }
+  if (fence !== null) ranges.push([fence.from, body.length]);
+  closeParagraph();
+  return ranges;
+};
+
+/** Code spans in a paragraph: a run of backticks up to the next run of the same length. */
+const spansIn = (body: string, lines: ReadonlyArray<readonly [number, number]>) => {
+  if (lines.length === 0) return [];
+  const from = lines[0]![0];
+  const text = body.slice(from, lines.at(-1)![1]);
+  const runs = [...text.matchAll(/`+/g)];
+  const spans: Array<readonly [number, number]> = [];
+  for (let i = 0; i < runs.length; i++) {
+    const open = runs[i]!;
+    const close = runs.findIndex((run, j) => j > i && run[0].length === open[0].length);
+    if (close === -1) continue;
+    spans.push([from + open.index, from + runs[close]!.index + runs[close]![0].length]);
+    i = close;
+  }
+  return spans;
+};
+
+/** The `[[HM-3]]` mentions in a markdown body, in order, skipping code spans and fenced code. */
+export const findMentions = (body: string): Array<Mention> => {
+  if (!body.includes("[[")) return [];
+  const code = codeRanges(body);
+  return [...body.matchAll(MENTION)]
+    .map((match) => ({ id: match[1]!, from: match.index, to: match.index + match[0].length }))
+    .filter((mention) => !code.some(([from, to]) => mention.from >= from && mention.from < to));
+};
+
+/** Work that can start now: not blocked, and not in a closed category. */
+export const isReady = (
+  task: Pick<Task, "status" | "blocked">,
+  statuses: ReadonlyArray<StatusDefinition>,
+): boolean =>
+  !task.blocked &&
+  !isClosedCategory(statuses.find((status) => status.id === task.status)?.category);

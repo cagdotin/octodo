@@ -26,6 +26,11 @@ const task = (id: string, fields: Partial<Task> = {}): Task => ({
   body: "",
   path: `.octodo/${id}/task.md`,
   extra: {},
+  blockedBy: [],
+  blocks: [],
+  blocked: false,
+  mentions: [],
+  mentionedIn: [],
   ...fields,
 });
 

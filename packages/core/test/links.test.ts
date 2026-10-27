@@ -1,0 +1,246 @@
+import { NodeServices } from "@effect/platform-node";
+import { Effect } from "effect";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { DEFAULT_STATUSES } from "../src/domain.ts";
+import { findMentions, isReady } from "../src/layout.ts";
+import { editTaskFile, readTaskFile, removeLinks } from "../src/markdown.ts";
+import { initWorkspace, makeWorkspace } from "../src/workspace.ts";
+
+const run = <A, E>(effect: Effect.Effect<A, E, any>) =>
+  Effect.runPromise(
+    effect.pipe(Effect.scoped, Effect.provide(NodeServices.layer)) as Effect.Effect<A, E>,
+  );
+
+const fresh = () => {
+  const root = join(mkdtempSync(join(tmpdir(), "octodo-")), "house-move");
+  mkdirSync(root);
+  return root;
+};
+
+const open = (root: string) =>
+  Effect.gen(function* () {
+    yield* initWorkspace(root);
+    return yield* makeWorkspace("test", root);
+  });
+
+const write = (root: string, file: string, content: string) => {
+  mkdirSync(dirname(join(root, ".octodo", file)), { recursive: true });
+  writeFileSync(join(root, ".octodo", file), content);
+};
+
+const read = (root: string, file: string) => readFileSync(join(root, file), "utf8");
+
+const taskFile = (id: string, extra = "", body = "") =>
+  `---\nid: ${id}\ntitle: Task ${id}\n${extra}---\n${body}`;
+
+const place = {
+  list: null,
+  parent: null,
+  path: ".octodo/HM-1/task.md",
+  folder: "HM-1",
+  defaultStatus: "todo",
+  updated: null,
+};
+
+describe("mentions in a body", () => {
+  it("finds [[KEY-N]] in order, outside code spans and fenced code", () => {
+    const body = [
+      "See [[HM-3]] and [[HM-7]], then [[HM-3]] again.",
+      "Not `[[HM-8]]`, not ``a ` [[HM-9]]``, but [[hm-10]].",
+      "",
+      "```md",
+      "[[HM-11]]",
+      "```",
+      "~~~",
+      "[[HM-12]]",
+      "~~~",
+      "- [[HM-13]] [[not an id]] [[HM-]] [HM-14]",
+      "",
+      "```",
+      "[[HM-15]] in a fence that never closes",
+    ].join("\n");
+    expect(findMentions(body).map((mention) => mention.id)).toEqual([
+      "HM-3",
+      "HM-7",
+      "HM-3",
+      "hm-10",
+      "HM-13",
+    ]);
+    const [first] = findMentions(body);
+    expect(body.slice(first!.from, first!.to)).toBe("[[HM-3]]");
+  });
+
+  it("treats an unmatched backtick as text", () => {
+    expect(findMentions("a ` b [[HM-1]]").map((mention) => mention.id)).toEqual(["HM-1"]);
+  });
+});
+
+describe("link fields in task.md", () => {
+  const readTask = (text: string) => {
+    const result = readTaskFile(text, place);
+    if (result._tag !== "Read") throw new Error(`Expected a task, got ${result._tag}`);
+    return result;
+  };
+
+  it("reads blocked_by as ids, each once, and the body's mentions each once", () => {
+    const result = readTask(
+      taskFile("HM-1", "blocked_by: [HM-3, HM-7, HM-3]\n", "\n[[HM-5]] then [[HM-2]] [[HM-5]]\n"),
+    );
+    expect(result.value.blockedBy).toEqual(["HM-3", "HM-7"]);
+    expect(result.value.mentions).toEqual(["HM-5", "HM-2"]);
+    expect(result.value.extra).toEqual({});
+    expect(result.malformedLinks).toEqual([]);
+  });
+
+  it.each(["blocked_by: [[HM-3]]\n", "blocked_by: HM-3\n", "blocked_by: [HM-3, 4]\n"])(
+    "reads the ids out of the malformed field %j and says it is malformed",
+    (field) => {
+      const result = readTask(taskFile("HM-1", field));
+      expect(result.value.blockedBy).toEqual(["HM-3"]);
+      expect(result.malformedLinks).toEqual(["blocked_by"]);
+    },
+  );
+
+  it("reads no ids out of a field that holds none", () => {
+    const result = readTask(taskFile("HM-1", "blocked_by: {a: 1}\n"));
+    expect(result.value.blockedBy).toEqual([]);
+    expect(result.malformedLinks).toEqual(["blocked_by"]);
+  });
+
+  it("writes blocked_by as a flow list of ids and removes the key when empty", () => {
+    const text = taskFile("HM-1", "estimate: 3 # hours\n");
+    const linked = editTaskFile(text, { blocked_by: ["HM-3", "HM-7"] });
+    expect(linked).toBe(
+      "---\nid: HM-1\ntitle: Task HM-1\nestimate: 3 # hours\nblocked_by: [HM-3, HM-7]\n---\n",
+    );
+    expect(editTaskFile(linked, { blocked_by: [] })).toBe(
+      "---\nid: HM-1\ntitle: Task HM-1\nestimate: 3 # hours\n---\n",
+    );
+  });
+
+  it("removes ids from link fields, and leaves a file that lists none of them alone", () => {
+    const text = taskFile("HM-1", "blocked_by: [HM-3, HM-7]\n", "\nAfter [[HM-3]]\n");
+    expect(removeLinks(text, new Set(["HM-3"]))).toBe(
+      "---\nid: HM-1\ntitle: Task HM-1\nblocked_by: [HM-7]\n---\n\nAfter [[HM-3]]\n",
+    );
+    expect(removeLinks(text, new Set(["HM-3", "HM-7"]))).not.toContain("blocked_by");
+    expect(removeLinks(text, new Set(["HM-9"]))).toBeNull();
+  });
+});
+
+describe("links in a workspace", () => {
+  it("computes blocks, blocked and mentioned in when the snapshot is read", async () => {
+    const root = fresh();
+    const snapshot = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        yield* ws.snapshot;
+        write(root, "HM-1/task.md", taskFile("HM-1", "status: done\n"));
+        write(root, "HM-2/task.md", taskFile("HM-2", "status: archived\n"));
+        write(root, "HM-3/task.md", taskFile("HM-3", "blocked_by: [HM-1, HM-2]\n"));
+        write(root, "HM-4/task.md", taskFile("HM-4", "blocked_by: [HM-1, HM-3]\n"));
+        write(root, "HM-5/task.md", taskFile("HM-5", "", "\nAfter [[HM-4]] and [[HM-5]]\n"));
+        write(root, "HM-5/HM-6/task.md", taskFile("HM-6", "", "\nSee [[HM-4]], `[[HM-1]]`\n"));
+        return yield* (yield* makeWorkspace("again", root)).snapshot;
+      }),
+    );
+    const byId = new Map(snapshot.tasks.map((task) => [task.id, task]));
+    expect(byId.get("HM-1")).toMatchObject({ blocks: ["HM-3", "HM-4"], blocked: false });
+    expect(byId.get("HM-3")).toMatchObject({ blockedBy: ["HM-1", "HM-2"], blocked: false });
+    expect(byId.get("HM-3")!.blocks).toEqual(["HM-4"]);
+    expect(byId.get("HM-4")).toMatchObject({ blockedBy: ["HM-1", "HM-3"], blocked: true });
+    expect(byId.get("HM-4")!.mentionedIn).toEqual(["HM-5", "HM-6"]);
+    expect(byId.get("HM-5")).toMatchObject({ mentions: ["HM-4", "HM-5"], mentionedIn: [] });
+    expect(byId.get("HM-1")!.mentionedIn).toEqual([]);
+    expect(snapshot.diagnostics).toEqual([]);
+  });
+
+  it("reads links that do not hold as diagnostics, and an unknown blocker blocks", async () => {
+    const root = fresh();
+    const snapshot = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        yield* ws.snapshot;
+        write(root, "HM-1/task.md", taskFile("HM-1", "blocked_by: [HM-99]\n", "\n[[HM-98]]\n"));
+        write(root, "HM-2/task.md", taskFile("HM-2", "blocked_by: [[HM-1]]\n"));
+        write(root, "HM-3/task.md", taskFile("HM-3", "blocked_by: [HM-3]\n"));
+        return yield* (yield* makeWorkspace("again", root)).snapshot;
+      }),
+    );
+    const byId = new Map(snapshot.tasks.map((task) => [task.id, task]));
+    expect(byId.get("HM-1")).toMatchObject({ blockedBy: ["HM-99"], blocked: true });
+    expect(byId.get("HM-1")!.mentions).toEqual(["HM-98"]);
+    expect(byId.get("HM-2")).toMatchObject({ blockedBy: ["HM-1"], blocked: true });
+    expect(byId.get("HM-3")).toMatchObject({ blockedBy: [], blocked: false, blocks: [] });
+    expect(snapshot.diagnostics.map(({ path, message }) => [path, message.split(",")[0]])).toEqual([
+      [".octodo/HM-1/task.md", "blocked_by lists HM-99"],
+      [".octodo/HM-2/task.md", "blocked_by must be a list of task ids"],
+      [".octodo/HM-3/task.md", "blocked_by lists the task itself"],
+    ]);
+  });
+
+  it("writes blocked_by through update and refuses unknown ids and the task itself", async () => {
+    const root = fresh();
+    const result = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        const paint = yield* ws.createTask({ title: "Paint" });
+        const primer = yield* ws.createTask({ title: "Buy primer" });
+        const linked = yield* ws.updateTask(paint.id, { blocked_by: [primer.id, primer.id] });
+        const file = read(root, linked.path);
+        const unknown = yield* Effect.flip(ws.updateTask(paint.id, { blocked_by: ["HM-9"] }));
+        const self = yield* Effect.flip(ws.updateTask(paint.id, { blocked_by: [paint.id] }));
+        const blocker = yield* ws.getTask(primer.id);
+        yield* ws.moveTask(primer.id, { status: "done" });
+        const unblocked = yield* ws.getTask(paint.id);
+        const cleared = yield* ws.updateTask(paint.id, { blocked_by: [] });
+        return { linked, file, unknown, self, blocker, unblocked, cleared };
+      }),
+    );
+    expect(result.linked).toMatchObject({ blockedBy: ["HM-2"], blocked: true });
+    expect(result.file).toContain("\nblocked_by: [HM-2]\n");
+    expect(result.unknown).toMatchObject({ _tag: "InvalidRequest" });
+    expect(result.self).toMatchObject({ _tag: "InvalidRequest" });
+    expect(result.blocker.blocks).toEqual(["HM-1"]);
+    expect(result.unblocked).toMatchObject({ blockedBy: ["HM-2"], blocked: false });
+    expect(result.cleared.blockedBy).toEqual([]);
+    expect(read(root, result.cleared.path)).not.toContain("blocked_by");
+  });
+
+  it("deletes a task's id, and its subtasks' ids, from other tasks' links but not their bodies", async () => {
+    const root = fresh();
+    const result = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        const gone = yield* ws.createTask({ title: "Gone" });
+        const sub = yield* ws.createTask({ title: "Gone too", parent: gone.id });
+        const keep = yield* ws.createTask({ title: "Keep" });
+        const waiting = yield* ws.createTask({ title: "Waiting", body: `After [[${gone.id}]]` });
+        yield* ws.updateTask(waiting.id, { blocked_by: [gone.id, sub.id, keep.id] });
+        const bystander = yield* ws.createTask({ title: "Bystander" });
+        yield* ws.updateTask(bystander.id, { blocked_by: [keep.id] });
+        const before = read(root, (yield* ws.getTask(bystander.id)).path);
+        yield* ws.deleteTask(gone.id);
+        const snapshot = yield* ws.snapshot;
+        return { snapshot, before, waiting: waiting.id, bystander: bystander.id };
+      }),
+    );
+    const byId = new Map(result.snapshot.tasks.map((task) => [task.id, task]));
+    const waiting = byId.get(result.waiting)!;
+    expect(waiting).toMatchObject({ blockedBy: ["HM-3"], mentions: ["HM-1"] });
+    expect(read(root, waiting.path)).toContain("\nblocked_by: [HM-3]\n");
+    expect(read(root, waiting.path)).toContain("After [[HM-1]]");
+    expect(read(root, byId.get(result.bystander)!.path)).toBe(result.before);
+    expect(result.snapshot.diagnostics).toEqual([]);
+  });
+
+  it("counts a task as ready when it is open and not blocked", () => {
+    expect(isReady({ status: "todo", blocked: false }, DEFAULT_STATUSES)).toBe(true);
+    expect(isReady({ status: "todo", blocked: true }, DEFAULT_STATUSES)).toBe(false);
+    expect(isReady({ status: "done", blocked: false }, DEFAULT_STATUSES)).toBe(false);
+    expect(isReady({ status: "archived", blocked: false }, DEFAULT_STATUSES)).toBe(false);
+  });
+});

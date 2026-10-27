@@ -44,6 +44,8 @@ describe("readTaskFile", () => {
       body: "Body text\n",
       path: place.path,
       extra: { estimate: 3 },
+      blockedBy: [],
+      mentions: [],
     });
   });
 

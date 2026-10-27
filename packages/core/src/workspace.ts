@@ -31,6 +31,7 @@ import {
 import { isNotFound, removeLeftovers, tempName, writeFileAtomic } from "./files.ts";
 import {
   CONFIG_FILE,
+  LINK_KINDS,
   LIST_FILE,
   MAX_LIST_DEPTH,
   TASK_FILE,
@@ -46,7 +47,13 @@ import {
   sortStatuses,
   taskFolderName,
 } from "./layout.ts";
-import { editTaskFile, newListFile, newTaskFile, patchFrontmatter } from "./markdown.ts";
+import {
+  editTaskFile,
+  newListFile,
+  newTaskFile,
+  patchFrontmatter,
+  removeLinks,
+} from "./markdown.ts";
 import { scanWorkspace, type Scan } from "./scan.ts";
 
 /** One workspace on disk: a folder with a `.octodo/` directory. The files are the source of truth. */
@@ -58,15 +65,19 @@ export interface Workspace {
   readonly createTask: (
     input: CreateTaskInput,
   ) => Effect.Effect<Task, InvalidRequest | StorageError>;
+  /** Refuses links to unknown tasks and to the task itself. */
   readonly updateTask: (
     id: string,
     input: UpdateTaskInput,
-  ) => Effect.Effect<Task, TaskNotFound | StorageError>;
+  ) => Effect.Effect<Task, TaskNotFound | InvalidRequest | StorageError>;
   readonly moveTask: (
     id: string,
     input: MoveTaskInput,
   ) => Effect.Effect<Task, TaskNotFound | InvalidRequest | StorageError>;
-  /** Removes the task's folder: its subtasks and attachments go with it. */
+  /**
+   * Removes the task's folder: its subtasks and attachments go with it. Other tasks' links to any
+   * of them are removed first, so a rerun after a crash finishes the cleanup.
+   */
   readonly deleteTask: (id: string) => Effect.Effect<void, TaskNotFound | StorageError>;
   readonly createList: (
     input: CreateListInput,
@@ -379,11 +390,23 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       }),
     );
 
-  const updateTask = (taskId: string, input: UpdateTaskInput) =>
+  /** The ids a link field gets: each once, all of them existing tasks other than `taskId`. */
+  const checkLinks = (snapshot: WorkspaceSnapshot, taskId: string, ids: ReadonlyArray<string>) => {
+    const unknown = ids.filter((id) => !snapshot.tasks.some((task) => task.id === id));
+    if (unknown.length > 0) return invalid(`Unknown task ${unknown.join(", ")}`);
+    if (ids.includes(taskId)) return invalid("A task cannot be linked to itself");
+    return Effect.succeed([...new Set(ids)]);
+  };
+
+  const updateTask = (taskId: string, given: UpdateTaskInput) =>
     writeFresh(
       Effect.gen(function* () {
         const { snapshot, dirs } = yield* state;
         yield* findTask(snapshot, taskId);
+        const input =
+          given.blocked_by === undefined
+            ? given
+            : { ...given, blocked_by: yield* checkLinks(snapshot, taskId, given.blocked_by) };
         yield* Effect.gen(function* () {
           const dir =
             input.title === undefined
@@ -434,9 +457,22 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       Effect.gen(function* () {
         const { snapshot, dirs } = yield* state;
         yield* findTask(snapshot, taskId);
-        yield* storage("Could not delete the task")(
-          fs.remove(dirs.tasks.get(taskId)!, { recursive: true }),
+        const removed = new Set(
+          snapshot.tasks
+            .filter((task) => inTaskSubtree(snapshot.tasks, task.id, taskId))
+            .map((task) => task.id),
         );
+        yield* Effect.gen(function* () {
+          for (const task of snapshot.tasks) {
+            const links = LINK_KINDS.flatMap((kind) => task[kind.forward]);
+            if (removed.has(task.id) || !links.some((id) => removed.has(id))) continue;
+            const file = path.join(root, task.path);
+            const text = yield* fs.readFileString(file);
+            const unlinked = yield* Effect.try(() => removeLinks(text, removed));
+            if (unlinked !== null) yield* writeAtomic(file, unlinked);
+          }
+          yield* fs.remove(dirs.tasks.get(taskId)!, { recursive: true });
+        }).pipe(storage("Could not delete the task"));
       }),
     );
 

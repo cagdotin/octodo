@@ -2,7 +2,7 @@ import { Option, Predicate, Schema } from "effect";
 import { generateKeyBetween } from "fractional-indexing";
 import { isMap, parseDocument, type Document } from "yaml";
 import { Priority, type CreateTaskInput, type Task, type UpdateTaskInput } from "./domain.ts";
-import { humanize } from "./layout.ts";
+import { LINK_KINDS, findMentions, humanize, isLinkField, type LinkField } from "./layout.ts";
 
 /** What the folder tree says about a task, which `task.md` itself does not. */
 export interface TaskPlace {
@@ -22,7 +22,18 @@ export type FrontmatterRead<A> =
   | { readonly _tag: "Read"; readonly value: A }
   | { readonly _tag: "Invalid"; readonly message: string };
 
-export type TaskFileRead = FrontmatterRead<Task> | { readonly _tag: "MissingId" };
+/** A task as its own file has it, before a snapshot adds what other tasks say about it. */
+export type TaskFile = Omit<Task, "blocks" | "blocked" | "mentionedIn">;
+
+export type TaskFileRead =
+  | {
+      readonly _tag: "Read";
+      readonly value: TaskFile;
+      /** Link fields that are not a list of task ids; `value` holds the ids found in them. */
+      readonly malformedLinks: ReadonlyArray<LinkField>;
+    }
+  | { readonly _tag: "Invalid"; readonly message: string }
+  | { readonly _tag: "MissingId" };
 
 /** Keys the app reads into a task's fields; `updated` is no longer written but older files have it. */
 const MANAGED = new Set([
@@ -35,15 +46,19 @@ const MANAGED = new Set([
   "created",
   "order",
   "updated",
+  ...LINK_KINDS.map((kind) => kind.field),
 ]);
 
 type EditableKey = Exclude<keyof UpdateTaskInput, "body">;
 
 /** The fields create and update write from their input, in the order a new file lists them. */
-const EDITABLE = { title: true, priority: true, tags: true, due: true } satisfies Record<
-  EditableKey,
-  true
->;
+const EDITABLE = {
+  title: true,
+  priority: true,
+  tags: true,
+  due: true,
+  blocked_by: true,
+} satisfies Record<EditableKey, true>;
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n?---[ \t]*(?:\r?\n|$)/;
 
@@ -66,6 +81,21 @@ const readOrder = (value: unknown): string => {
 
 const readTags = (value: unknown): Array<string> =>
   Array.isArray(value) ? value.map(String) : typeof value === "string" ? [value] : [];
+
+/**
+ * The task ids in a link field. Anything but a list of ids is malformed; the ids found in it
+ * (a lone id, or ids in nested lists from `[[HM-3]]`) are still read.
+ */
+const readLinkField = (
+  value: unknown,
+): { readonly ids: ReadonlyArray<string>; readonly malformed: boolean } => {
+  if (value === undefined || value === null) return { ids: [], malformed: false };
+  const found = [value].flat(Infinity);
+  const ids = found.filter((id): id is string => typeof id === "string" && id.length > 0);
+  const malformed =
+    !Array.isArray(value) || value.some((id) => typeof id !== "string" || id.length === 0);
+  return { ids: [...new Set(ids)], malformed };
+};
 
 const splitFrontmatter = (
   text: string,
@@ -119,10 +149,10 @@ export const patchFrontmatter = (
   if (!isMap(doc.contents)) doc.contents = doc.createNode({});
   for (const [key, value] of Object.entries(changes)) {
     if (value === undefined) doc.delete(key);
-    else doc.set(key, value);
+    else doc.set(key, isLinkField(key) ? doc.createNode(value, { flow: true }) : value);
   }
   const nextBody = body ?? parts.body;
-  return `---\n${doc.toString({ lineWidth: 0 })}---\n${nextBody.length > 0 ? `\n${nextBody.replace(/\n*$/, "\n")}` : ""}`;
+  return `---\n${doc.toString({ lineWidth: 0, flowCollectionPadding: false })}---\n${nextBody.length > 0 ? `\n${nextBody.replace(/\n*$/, "\n")}` : ""}`;
 };
 
 /** Values the file leaves out rather than writes: no priority, no tags, no due date. */
@@ -151,8 +181,10 @@ export const readTaskFile = (text: string, place: TaskPlace): TaskFileRead => {
     return { _tag: "Invalid", message: "Invalid frontmatter: id must be text, such as HM-1" };
   const id = stringOrNull(rawId);
   if (id === null) return { _tag: "MissingId" };
+  const link = (field: LinkField) => readLinkField(data[field]);
   return {
     _tag: "Read",
+    malformedLinks: LINK_KINDS.map((kind) => kind.field).filter((field) => link(field).malformed),
     value: {
       id,
       title: stringOrNull(data["title"]) ?? folderTitle(place.folder, id),
@@ -168,6 +200,8 @@ export const readTaskFile = (text: string, place: TaskPlace): TaskFileRead => {
       body,
       path: place.path,
       extra: Object.fromEntries(Object.entries(data).filter(([key]) => !MANAGED.has(key))),
+      blockedBy: link("blocked_by").ids,
+      mentions: [...new Set(findMentions(body).map((mention) => mention.id))],
     },
   };
 };
@@ -189,6 +223,23 @@ export const newTaskFile = (
 
 export const editTaskFile = (text: string, input: UpdateTaskInput): string =>
   patchFrontmatter(text, editChanges(input), input.body);
+
+/**
+ * The file without `ids` in any link field, or null when no link field lists one, so a rerun
+ * after a partial cleanup rewrites only the files still left. Throws on invalid frontmatter.
+ */
+export const removeLinks = (text: string, ids: ReadonlySet<string>): string | null => {
+  const read = readFrontmatter(text);
+  if ("error" in read) throw new Error(read.error);
+  const changes: Record<string, unknown> = {};
+  for (const kind of LINK_KINDS) {
+    const { ids: linked } = readLinkField(read.data[kind.field]);
+    if (!linked.some((id) => ids.has(id))) continue;
+    const kept = linked.filter((id) => !ids.has(id));
+    changes[kind.field] = kept.length > 0 ? kept : undefined;
+  }
+  return Object.keys(changes).length > 0 ? patchFrontmatter(text, changes) : null;
+};
 
 export interface ListFile {
   readonly name: string | null;

@@ -521,6 +521,34 @@ describe("workspace", () => {
     ]);
   });
 
+  it("leaves task.md as it was when the folder cannot move or be renamed", async () => {
+    const root = fresh();
+    const { before, errors } = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        yield* ws.createList({ name: "Home" });
+        const task = yield* ws.createTask({ title: "Paint" });
+        const before = read(root, "HM-1-paint/task.md");
+        chmodSync(join(root, ".octodo/home"), 0o555);
+        chmodSync(join(root, ".octodo"), 0o555);
+        try {
+          return {
+            before,
+            errors: [
+              yield* Effect.flip(ws.moveTask(task.id, { list: "home", status: "done" })),
+              yield* Effect.flip(ws.updateTask(task.id, { title: "Paint walls" })),
+            ],
+          };
+        } finally {
+          chmodSync(join(root, ".octodo"), 0o755);
+          chmodSync(join(root, ".octodo/home"), 0o755);
+        }
+      }),
+    );
+    expect(errors.map((error) => error._tag)).toEqual(["StorageError", "StorageError"]);
+    expect(read(root, "HM-1-paint/task.md")).toBe(before);
+  });
+
   it("refuses to move a task into itself or its own subtree", async () => {
     const root = fresh();
     const errors = await run(

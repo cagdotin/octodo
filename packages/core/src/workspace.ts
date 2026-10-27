@@ -308,9 +308,19 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   /** Moves a folder into another existing container, keeping its name when it is free. */
   const moveFolder = (dir: string, container: string) =>
     Effect.gen(function* () {
-      if (path.dirname(dir) === container) return;
-      const name = yield* freeName(container, path.basename(dir));
-      yield* fs.rename(dir, path.join(container, name));
+      if (path.dirname(dir) === container) return dir;
+      const moved = path.join(container, yield* freeName(container, path.basename(dir)));
+      yield* fs.rename(dir, moved);
+      return moved;
+    });
+
+  /** Renames a folder unless the name is taken, which is harmless: it is only for people. */
+  const renameFolder = (dir: string, name: string) =>
+    Effect.gen(function* () {
+      const renamed = path.join(path.dirname(dir), name);
+      if (renamed === dir || (yield* fs.exists(renamed))) return dir;
+      yield* fs.rename(dir, renamed);
+      return renamed;
     });
 
   /** Serialises writes and drops the cache afterwards, whatever happened. */
@@ -359,14 +369,13 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       Effect.gen(function* () {
         const { snapshot, dirs } = yield* state;
         yield* findTask(snapshot, taskId);
-        const dir = dirs.tasks.get(taskId)!;
         yield* Effect.gen(function* () {
+          const dir =
+            input.title === undefined
+              ? dirs.tasks.get(taskId)!
+              : yield* renameFolder(dirs.tasks.get(taskId)!, taskFolderName(taskId, input.title));
           const file = path.join(dir, TASK_FILE);
           yield* writeAtomic(file, editTaskFile(yield* fs.readFileString(file), input));
-          if (input.title === undefined) return;
-          // A taken name leaves the folder as it is: its name is only for people.
-          const renamed = path.join(path.dirname(dir), taskFolderName(taskId, input.title));
-          if (renamed !== dir && !(yield* fs.exists(renamed))) yield* fs.rename(dir, renamed);
         }).pipe(storage("Could not write the task"));
         yield* invalidate;
         return yield* reread(taskId).pipe(readBack);
@@ -393,10 +402,12 @@ export const makeWorkspace = Effect.fnUntraced(function* (
               yield* orderedTasks(snapshot, container, taskId),
               input,
             );
-          const dir = scan.dirs.tasks.get(taskId)!;
+          const dir = yield* moveFolder(
+            scan.dirs.tasks.get(taskId)!,
+            containerDir(scan, container),
+          );
           const file = path.join(dir, TASK_FILE);
           yield* writeAtomic(file, patchFrontmatter(yield* fs.readFileString(file), changes));
-          yield* moveFolder(dir, containerDir(scan, container));
         }).pipe(storage("Could not move the task"));
         yield* invalidate;
         return yield* reread(taskId).pipe(readBack);

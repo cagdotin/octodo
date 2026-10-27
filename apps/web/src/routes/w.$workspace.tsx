@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { SearchXIcon } from "lucide-react";
 import { useEffect, useState } from "react";
+import { AppFrame } from "@/components/app-frame";
 import { AppSidebar } from "@/components/app-sidebar";
 import { BoardView } from "@/components/board-view";
 import { CommandPalette } from "@/components/command-palette";
@@ -24,7 +25,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarInset } from "@/components/ui/sidebar";
 import { Spinner } from "@/components/ui/spinner";
 import { WindowDragArea } from "@/components/window-drag-area";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -178,7 +179,7 @@ function WorkspacePage() {
   };
 
   return (
-    <SidebarProvider className="h-svh overflow-hidden">
+    <AppFrame workspace={workspace}>
       <DragAndDrop>
         <AppSidebar
           snapshot={snapshot}
@@ -190,6 +191,7 @@ function WorkspacePage() {
           <div className="flex min-h-0 flex-1">
             <div className="flex min-w-0 flex-1 flex-col">
               <ViewHeader
+                list={search.list}
                 title={title}
                 snapshot={snapshot}
                 tasks={inList}
@@ -242,6 +244,6 @@ function WorkspacePage() {
         title={newTask?.title ?? ""}
         onOpenTask={(id) => void navigate({ search: (prev) => ({ ...prev, task: id }) })}
       />
-    </SidebarProvider>
+    </AppFrame>
   );
 }

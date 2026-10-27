@@ -41,6 +41,7 @@
   --color-sync-live: var(--sync-live);
   --color-sync-pending: var(--sync-pending);
   --color-ink: var(--ink);
+  --color-chrome: var(--chrome);
   --font-heading: var(--font-sans);
   /* Geist is the brand face; Geist Mono is the "written down" voice for ids, dates and counts. */
   --font-sans: "Geist Variable", -apple-system, "Helvetica Neue", Arial, sans-serif;
@@ -134,11 +135,13 @@
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --sidebar: var(--background);
+  /* The window frame (toolbar and rail) is the desk; the sidebar and the page are paper on it. */
+  --chrome: #e8e7e2;
+  --sidebar: #f0efeb;
   --sidebar-foreground: #504f4c;
   --sidebar-primary: #22211f;
   --sidebar-primary-foreground: #f8f6f2;
-  --sidebar-accent: #ecebe6;
+  --sidebar-accent: #e5e4df;
   --sidebar-accent-foreground: #22211f;
   --sidebar-border: rgb(34 33 31 / 8%);
   --sidebar-ring: color-mix(in srgb, var(--ink) 70%, transparent);
@@ -185,11 +188,12 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: var(--background);
+  --chrome: #0e0e0d;
+  --sidebar: #171716;
   --sidebar-foreground: #c0bdb7;
   --sidebar-primary: #f0ece5;
   --sidebar-primary-foreground: #171716;
-  --sidebar-accent: #262625;
+  --sidebar-accent: #252524;
   --sidebar-accent-foreground: #f0ece5;
   --sidebar-border: rgb(240 236 229 / 7%);
   --sidebar-ring: color-mix(in srgb, var(--ink) 60%, transparent);

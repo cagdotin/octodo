@@ -3,16 +3,10 @@ import { isClosedCategory } from "@octodo/core/layout";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
-  CalendarDaysIcon,
-  CalendarRangeIcon,
   CheckIcon,
   ChevronDownIcon,
   CopyIcon,
   FolderOpenIcon,
-  InboxIcon,
-  LayersIcon,
-  LockOpenIcon,
-  type LucideIcon,
   PlusIcon,
   SearchIcon,
   SettingsIcon,
@@ -27,6 +21,7 @@ import { Disclosure } from "@/components/list-view";
 import { NewListDialog } from "@/components/new-list-dialog";
 import { ITEM, SidebarLists } from "@/components/sidebar-lists";
 import { SyncIndicator } from "@/components/sync-indicator";
+import { ViewIcon } from "@/components/task-bits";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -56,7 +51,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { workspacesQuery } from "@/lib/api";
-import { desktop, isDesktopMac } from "@/lib/desktop";
+import { desktop } from "@/lib/desktop";
 import { cn } from "@/lib/utils";
 import { filterTasks, listCounts, SMART, statusMap } from "@/lib/tasks";
 
@@ -83,13 +78,7 @@ export function AppSidebar({
   // Picking an entry on a phone should reveal the list behind the sheet.
   const close = () => isMobile && setOpenMobile(false);
 
-  const entry = (
-    list: string | undefined,
-    label: string,
-    icon: LucideIcon,
-    count: number,
-  ): ReactNode => {
-    const Icon = icon;
+  const entry = (list: string | undefined, label: string, count: number): ReactNode => {
     return (
       <SidebarMenuItem key={label}>
         <SidebarMenuButton asChild isActive={activeList === list} className={ITEM}>
@@ -100,7 +89,7 @@ export function AppSidebar({
             onClick={close}
             draggable={false}
           >
-            <Icon />
+            <ViewIcon list={list} />
             <span>{label}</span>
           </Link>
         </SidebarMenuButton>
@@ -110,8 +99,7 @@ export function AppSidebar({
   };
 
   return (
-    <Sidebar className="select-none desktop-mac:pt-0">
-      {isDesktopMac && <TitleBar />}
+    <Sidebar className="select-none">
       <SidebarHeader className="flex-row items-center gap-1 pb-1">
         <WorkspaceSwitcher current={snapshot.workspace} />
         <div className="ml-auto flex items-center">
@@ -152,13 +140,13 @@ export function AppSidebar({
         <SidebarGroup className="py-1">
           <SidebarGroupContent>
             <SidebarMenu className="gap-px">
-              {entry(SMART.all, "All tasks", InboxIcon, open)}
-              {entry(SMART.today, "Today", CalendarDaysIcon, openCount(SMART.today))}
-              {entry(SMART.upcoming, "Next 7 days", CalendarRangeIcon, openCount(SMART.upcoming))}
-              {entry(SMART.ready, "Ready", LockOpenIcon, openCount(SMART.ready))}
+              {entry(SMART.all, "All tasks", open)}
+              {entry(SMART.today, "Today", openCount(SMART.today))}
+              {entry(SMART.upcoming, "Next 7 days", openCount(SMART.upcoming))}
+              {entry(SMART.ready, "Ready", openCount(SMART.ready))}
               {snapshot.tasks.some((task) => task.list === null) &&
                 snapshot.lists.length > 0 &&
-                entry(SMART.none, "No list", LayersIcon, none)}
+                entry(SMART.none, "No list", none)}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -227,14 +215,6 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
       </SidebarGroup>
     </Collapsible>
   );
-}
-
-/**
- * The macOS desktop app's title bar: an empty drag strip across the sidebar column with the
- * traffic lights at its left (positioned by Electron to match its 52px height).
- */
-export function TitleBar() {
-  return <div data-slot="title-bar" className="h-13 shrink-0 app-drag" />;
 }
 
 /**

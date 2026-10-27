@@ -8,7 +8,8 @@ import {
   XIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { ListGlyph, PriorityIcon } from "@/components/task-bits";
+import { PageToolbar } from "@/components/app-frame";
+import { ListGlyph, PriorityIcon, ViewIcon } from "@/components/task-bits";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -23,8 +24,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { useDesktopChrome } from "@/lib/desktop";
 import { cn } from "@/lib/utils";
 import {
   allTags,
@@ -36,39 +35,15 @@ import {
   type TaskFilter,
 } from "@/lib/tasks";
 
-/**
- * The top row of the main area. In the macOS desktop app it is part of the title bar (a drag region
- * whose middle lines up with the traffic lights); while the sidebar is out of sight it makes room
- * for the traffic lights and shows the toggle that brings the sidebar back.
- */
-export function PageHeader({ title, children }: { title: ReactNode; children?: ReactNode }) {
-  const { state, isMobile } = useSidebar();
-  const chrome = useDesktopChrome();
-  const sidebarHidden = isMobile || state === "collapsed";
-
-  return (
-    <header
-      className={cn(
-        "flex h-13 shrink-0 items-center gap-1 pr-3 pl-4 select-none md:pl-6",
-        "desktop-mac:app-drag",
-        chrome.windowed && sidebarHidden && "pl-[84px] md:pl-[84px]",
-      )}
-    >
-      {sidebarHidden && <SidebarTrigger className="-ml-1 text-muted-foreground" />}
-      <div className="flex min-w-0 items-center gap-1.5 truncate">{title}</div>
-      {children && <div className="ml-auto flex items-center gap-0.5">{children}</div>}
-    </header>
-  );
-}
-
 const ROUND =
   "rounded-lg text-muted-foreground aria-expanded:bg-accent aria-expanded:text-foreground";
 
 /**
- * The view's header, TickTick style: its name, then a filter button and a "…" menu with the view
+ * The view's part of the toolbar: its name, then a filter button and a "…" menu with the view
  * (list or board) and what to show.
  */
 export function ViewHeader({
+  list,
   title,
   snapshot,
   tasks,
@@ -79,6 +54,7 @@ export function ViewHeader({
   display,
   onDisplayChange,
 }: {
+  list: string | undefined;
   title: string;
   snapshot: WorkspaceSnapshot;
   /** Tasks in the current list, before display options and filters, to offer their tags. */
@@ -92,13 +68,7 @@ export function ViewHeader({
 }) {
   const count = filterCount(filter);
   return (
-    <PageHeader
-      title={
-        <h1 className="truncate text-lg font-semibold tracking-[-0.02em] text-foreground">
-          {title}
-        </h1>
-      }
-    >
+    <PageToolbar icon={<ViewIcon list={list} />} title={<h1 className="truncate">{title}</h1>}>
       {count > 0 && (
         <Button
           variant="ghost"
@@ -178,7 +148,7 @@ export function ViewHeader({
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
-    </PageHeader>
+    </PageToolbar>
   );
 }
 

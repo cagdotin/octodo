@@ -126,7 +126,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ParentLink workspace={workspace} snapshot={snapshot} task={task} />
-      <div className="flex shrink-0 items-start gap-1 border-b px-3.5 py-3 desktop-mac:app-drag">
+      <div className="flex shrink-0 items-start gap-1 border-b px-3.5 py-3">
         <StatusMenu workspace={workspace} snapshot={snapshot} task={task}>
           <Button
             variant="ghost"

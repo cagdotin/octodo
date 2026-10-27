@@ -1,8 +1,8 @@
 import type { WorkspaceSnapshot } from "@octodo/core";
 import { Link, useMatchRoute } from "@tanstack/react-router";
-import { ChevronLeftIcon, PlugIcon, SlidersHorizontalIcon } from "lucide-react";
+import { ChevronLeftIcon, PaletteIcon, PlugIcon, SlidersHorizontalIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { Avatar, TitleBar } from "@/components/app-sidebar";
+import { Avatar } from "@/components/app-sidebar";
 import { SyncIndicator } from "@/components/sync-indicator";
 import { StatusIcon } from "@/components/task-bits";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -19,7 +19,6 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { isDesktopMac } from "@/lib/desktop";
 
 /** Linear-sized nav rows, as in the app's sidebar. */
 const ITEM = "h-7 gap-2.5 px-2 text-sidebar-foreground/90 data-active:font-medium";
@@ -36,6 +35,7 @@ export const SETTINGS_PAGES = [
 
 /** Settings for the whole app rather than one workspace. */
 export const APP_SETTINGS_PAGES = [
+  { to: "/w/$workspace/settings/appearance", label: "Appearance", icon: <PaletteIcon /> },
   { to: "/w/$workspace/settings/connections", label: "Connections", icon: <PlugIcon /> },
 ] as const satisfies ReadonlyArray<{ to: string; label: string; icon: ReactNode }>;
 
@@ -49,8 +49,7 @@ export function SettingsSidebar({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   const close = () => isMobile && setOpenMobile(false);
 
   return (
-    <Sidebar className="select-none desktop-mac:pt-0">
-      {isDesktopMac && <TitleBar />}
+    <Sidebar className="select-none">
       <SidebarHeader className="pb-1">
         <SidebarMenu>
           <SidebarMenuItem>

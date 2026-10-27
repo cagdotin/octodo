@@ -1,4 +1,4 @@
-import { ChevronRightIcon } from "lucide-react";
+import { ChevronRightIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import {
   Item,
@@ -9,9 +9,9 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { PageHeader } from "@/components/workspace-header";
+import { PageToolbar } from "@/components/app-frame";
 
-/** A settings page: the inset header, then the content in a centred, readable column. */
+/** A settings page: its title in the toolbar, then the content in a centred, readable column. */
 export function SettingsPage({
   title,
   description,
@@ -41,12 +41,13 @@ export function SettingsPage({
 
 function SettingsHeader({ title }: { title: string }) {
   return (
-    <PageHeader
+    <PageToolbar
+      icon={<SettingsIcon />}
       title={
-        <span className="flex min-w-0 items-center gap-1.5 font-mono text-xs text-muted-foreground">
-          <span>Settings</span>
-          <ChevronRightIcon className="size-3 shrink-0" />
-          <span className="truncate text-foreground">{title}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="text-muted-foreground">Settings</span>
+          <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="truncate">{title}</span>
         </span>
       }
     />

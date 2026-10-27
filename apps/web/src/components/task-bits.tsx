@@ -6,7 +6,15 @@ import type {
   Task,
   WorkspaceSnapshot,
 } from "@octodo/core";
-import { FolderIcon, ListChecksIcon } from "lucide-react";
+import {
+  CalendarDaysIcon,
+  CalendarRangeIcon,
+  FolderIcon,
+  InboxIcon,
+  LayersIcon,
+  ListChecksIcon,
+  LockOpenIcon,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -21,7 +29,7 @@ import {
 import { useMoveTask, useUpdateTask } from "@/lib/api";
 import { checklistProgress } from "@/lib/checklist";
 import { cn } from "@/lib/utils";
-import { createdLabel, dueInfo, listLabel, PRIORITIES, PRIORITY_TEXT } from "@/lib/tasks";
+import { createdLabel, dueInfo, listLabel, PRIORITIES, PRIORITY_TEXT, SMART } from "@/lib/tasks";
 
 /* ---------------------------------------------------------------------------------------------- */
 /* Icons                                                                                          */
@@ -143,6 +151,24 @@ export function PriorityIcon({ priority, className }: { priority: Priority; clas
 /** The icon every list gets: a list is a folder on disk. */
 export function ListGlyph({ className }: { className?: string }) {
   return <FolderIcon className={className} />;
+}
+
+/** The icon of a view: a smart view's own, or the list glyph. */
+export function ViewIcon({ list }: { list: string | undefined }) {
+  switch (list) {
+    case SMART.all:
+      return <InboxIcon />;
+    case SMART.today:
+      return <CalendarDaysIcon />;
+    case SMART.upcoming:
+      return <CalendarRangeIcon />;
+    case SMART.none:
+      return <LayersIcon />;
+    case SMART.ready:
+      return <LockOpenIcon />;
+    default:
+      return <ListGlyph />;
+  }
 }
 
 /* ---------------------------------------------------------------------------------------------- */

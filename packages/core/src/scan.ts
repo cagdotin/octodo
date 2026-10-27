@@ -31,6 +31,7 @@ import { linkTasks } from "./links.ts";
 import { oldLayoutFolder } from "./migrate.ts";
 import {
   frontmatterId,
+  hasFrontmatter,
   patchFrontmatter,
   readFrontmatter,
   readListFile,
@@ -272,7 +273,9 @@ export const scanWorkspace = (
             ? " and identical to it"
             : `, the same as ${rel(twin)}`;
         const broken = parses ? "" : ", and its frontmatter does not parse";
-        if (kind === "loose-markdown")
+        if (kind === "loose-markdown" && !hasFrontmatter(text))
+          report("note", file, "This markdown file has no frontmatter, so it is read as a note");
+        else if (kind === "loose-markdown")
           report(kind, file, `This markdown file is not in a task folder${same}${broken}`, {
             fix: identical ? "remove-copy" : adoptable ? "wrap-as-task" : null,
           });

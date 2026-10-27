@@ -30,7 +30,7 @@ export function DiagnosticsDialog({
   const fixableFirst = diagnostics.toSorted(
     (a, b) => Number(a.fix === null) - Number(b.fix === null),
   );
-  const fixable = diagnostics.filter((diagnostic) => diagnostic.fix !== null).length;
+  const fixable = diagnostics.filter((diagnostic) => diagnostic.fix?.inFixAll === true).length;
   const busy = fixOne.isPending || fixAll.isPending;
   const fixing = (diagnostic: Diagnostic) =>
     fixAll.isPending ||

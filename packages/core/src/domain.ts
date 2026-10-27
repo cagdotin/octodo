@@ -133,6 +133,7 @@ export const DiagnosticKind = Schema.Literals([
   "self-link",
   "malformed-link",
   "loose-markdown",
+  "note",
   "conflict-copy",
   "unmarked-folder",
   "both-markers",
@@ -158,7 +159,12 @@ export const FixAction = Schema.Literals([
 ]);
 export type FixAction = typeof FixAction.Type;
 
-export const Fix = Schema.Struct({ action: FixAction, label: Schema.String });
+export const Fix = Schema.Struct({
+  action: FixAction,
+  label: Schema.String,
+  /** Whether fix-all applies it; a fix that guesses what a person meant is applied one at a time. */
+  inFixAll: Schema.Boolean,
+});
 export type Fix = typeof Fix.Type;
 
 /** A problem with one file or folder. `field` names the frontmatter key at fault, if any. */

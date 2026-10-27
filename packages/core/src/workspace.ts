@@ -123,7 +123,10 @@ export interface Workspace {
    * there. Repeating a request, or sending one the files no longer match, changes nothing.
    */
   readonly fixDiagnostic: (request: FixRequest) => Effect.Effect<FixResult, StorageError>;
-  /** Applies every fix there is, reading the files again after each, until none is left to try. */
+  /**
+   * Applies every fix that cannot lose what a person meant, reading the files again after each,
+   * until none is left to try.
+   */
   readonly fixAll: Effect.Effect<FixResult, StorageError>;
   /** Emits after files under `.octodo/` change, whoever changed them. Empty unless watching. */
   readonly changes: Stream.Stream<void>;
@@ -733,7 +736,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     attachmentPath,
     writeAttachment,
     fixDiagnostic,
-    fixAll: fixWhere(() => true),
+    fixAll: fixWhere((diagnostic) => diagnostic.fix?.inFixAll === true),
     changes: Stream.fromPubSub(changes),
   } satisfies Workspace;
 });

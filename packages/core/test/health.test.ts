@@ -325,6 +325,23 @@ describe("file health", () => {
     });
   });
 
+  it("keeps a loose markdown file without frontmatter as a note, and fix-all wraps nothing", async () => {
+    const root = await fresh({
+      "README.md": "# Read me\n",
+      "home/list.md": "",
+      "home/notes.md": "---\ntitle: Measure the hall\n---\n",
+    });
+    expect(await diagnostics(root)).toEqual([
+      one("README.md", "note", null, null),
+      one("home/notes.md", "loose-markdown", null, "wrap-as-task"),
+    ]);
+    const before = files(root);
+    const result = await inWorkspace(root, (ws) => ws.fixAll);
+    expect(result.fixed).toEqual([]);
+    expect(files(root)).toEqual(before);
+    expect(read(root, "README.md")).toBe("# Read me\n");
+  });
+
   it("offers to delete a loose file that is an exact copy of the task its id names", async () => {
     const task = "---\nid: HM-1\ntitle: A\n---\n";
     const root = await fresh({ "HM-1-a/task.md": task, "HM-1-a.md": task });
@@ -711,14 +728,14 @@ describe("file health", () => {
     expect(result.fixed.map((diagnostic) => diagnostic.kind).toSorted()).toEqual([
       "conflict-copy",
       "duplicate-id",
-      "loose-markdown",
       "unknown-status",
     ]);
     expect(result.failed).toEqual([]);
     expect(result.diagnostics.map(summary)).toEqual([
       one("broken/task.md", "invalid-frontmatter", null, null),
+      one("home/notes.md", "note", null, null),
     ]);
     expect((await inWorkspace(root, (ws) => ws.fixAll)).fixed).toEqual([]);
-    expect(existsSync(join(root, ".octodo/home/notes.md"))).toBe(false);
+    expect(read(root, "home/notes.md")).toBe("Loose\n");
   });
 });

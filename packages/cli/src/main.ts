@@ -64,17 +64,22 @@ const taskId = Argument.String("id").pipe(Argument.withDescription("Task id, e.g
 /** The folder `--workspace` names, or the current directory. */
 const target = Effect.map(octo, (root) => Option.getOrElse(root.workspace, () => process.cwd()));
 
+const isNote = (diagnostic: Diagnostic) => diagnostic.kind === "note";
+
 /**
  * The workspace named by `--workspace`, or the one containing the current directory. Prints what
- * its files have wrong on stderr, and points at `octo doctor --fix` when some of it can be fixed.
+ * its files have wrong on stderr, notes aside, and points at `octo doctor` when some of it can be
+ * fixed.
  */
 const workspace = Effect.gen(function* () {
   const ws = yield* (yield* Workspaces).open(yield* target);
-  const { diagnostics } = yield* ws.snapshot;
-  for (const diagnostic of diagnostics)
+  const problems = (yield* ws.snapshot).diagnostics.filter((diagnostic) => !isNote(diagnostic));
+  for (const diagnostic of problems)
     yield* Console.error(`warning: ${diagnostic.path}: ${diagnostic.message}`);
-  if (diagnostics.some((diagnostic) => diagnostic.fix !== null))
+  if (problems.some((diagnostic) => diagnostic.fix?.inFixAll === true))
     yield* Console.error("Run `octo doctor --fix` to fix what octodo can.");
+  else if (problems.some((diagnostic) => diagnostic.fix !== null))
+    yield* Console.error("Run `octo doctor` to pick the fixes to apply.");
   return ws;
 });
 
@@ -420,7 +425,8 @@ const doctorCommand = Command.make(
       : options.fix
         ? yield* ws.fixAll
         : { fixed: [], failed: [], diagnostics: (yield* ws.snapshot).diagnostics };
-    if (result.diagnostics.length > 0) process.exitCode = 1;
+    const problems = result.diagnostics.filter((diagnostic) => !isNote(diagnostic));
+    if (problems.length > 0) process.exitCode = 1;
     if (options.json) return yield* Console.log(JSON.stringify(result, null, 2));
     for (const fixed of result.fixed)
       yield* Console.log(`fixed: ${fixed.path}: ${fixed.fix?.label ?? fixed.kind}`);
@@ -429,9 +435,10 @@ const doctorCommand = Command.make(
     if (result.diagnostics.length === 0) return yield* Console.log(`No problems in ${ws.root}`);
     if (result.fixed.length > 0 || result.failed.length > 0) yield* Console.log("");
     yield* Console.log(result.diagnostics.map(describeDiagnostic).join("\n\n"));
-    const fixable = result.diagnostics.filter((diagnostic) => diagnostic.fix !== null).length;
+    const fixable = problems.filter((diagnostic) => diagnostic.fix?.inFixAll === true).length;
+    const notes = result.diagnostics.length - problems.length;
     yield* Console.log(
-      `\n${result.diagnostics.length} problems${fixable > 0 && !options.fix ? `; run \`octo doctor --fix\` to fix ${fixable}` : ""}`,
+      `\n${problems.length} problems${notes > 0 ? ` and ${notes} notes` : ""}${fixable > 0 && !options.fix ? `; run \`octo doctor --fix\` to fix ${fixable}` : ""}`,
     );
   }),
 ).pipe(

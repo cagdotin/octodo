@@ -62,11 +62,13 @@ describe("fixing diagnostics over HTTP", () => {
   });
 
   it("fixes everything fixable in one call", async () => {
-    seed("notes.md", "Loose\n");
+    seed("HOU-1-a/task 2.md", "---\nid: HOU-1\n---\n");
+    seed("notes.md", "---\ntitle: Loose\n---\n");
     const result = (await (await post("/diagnostics/fix-all")).json()) as {
       fixed: Array<{ kind: string }>;
     };
-    expect(result.fixed.map((diagnostic) => diagnostic.kind)).toEqual(["loose-markdown"]);
+    expect(result.fixed.map((diagnostic) => diagnostic.kind)).toEqual(["conflict-copy"]);
+    expect(readFileSync(join(root, ".octodo/notes.md"), "utf8")).toBe("---\ntitle: Loose\n---\n");
   });
 
   it("refuses a workspace key that ids cannot use", async () => {

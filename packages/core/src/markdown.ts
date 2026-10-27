@@ -188,6 +188,9 @@ const splitFrontmatter = (
   return { yaml: match[1] ?? "", body: text.slice(match[0].length).replace(/^\r?\n/, "") };
 };
 
+/** Whether the file starts with a `---` frontmatter block. */
+export const hasFrontmatter = (text: string): boolean => splitFrontmatter(text).yaml !== null;
+
 /** The `id` in a file's frontmatter, found even when the rest of the frontmatter does not parse. */
 export const frontmatterId = (text: string): string | null => {
   const { yaml } = splitFrontmatter(text);

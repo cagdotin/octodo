@@ -67,6 +67,11 @@ export const PROBLEMS = {
     remedy: "A task is a folder with task.md, so this file is not read",
     fixes: ["wrap-as-task", "remove-copy"],
   },
+  note: {
+    remedy:
+      "octodo leaves it as it is; to make it a task, put it in a task folder as task.md with --- frontmatter",
+    fixes: [],
+  },
   "conflict-copy": {
     remedy: "A sync tool made it when two edits clashed, and it is not read",
     fixes: ["keep-copy", "remove-copy"],
@@ -116,6 +121,9 @@ export const FIX_LABELS: Record<FixAction, string> = {
   "add-status": "Add the status to config.json",
 };
 
+/** Fixes that guess what a person meant, which fix-all leaves to be picked one at a time. */
+const ONE_AT_A_TIME: ReadonlySet<FixAction> = new Set(["wrap-as-task"]);
+
 type FixesOf<K extends DiagnosticKind> = (typeof PROBLEMS)[K]["fixes"][number];
 
 export interface DiagnosticOptions<K extends DiagnosticKind> {
@@ -141,7 +149,10 @@ export const diagnostic = <K extends DiagnosticKind>(
         ? problem.fixes[0]!
         : null
       : options.fix;
-  const fix: Fix | null = action === null ? null : { action, label: FIX_LABELS[action] };
+  const fix: Fix | null =
+    action === null
+      ? null
+      : { action, label: FIX_LABELS[action], inFixAll: !ONE_AT_A_TIME.has(action) };
   return {
     path,
     kind,

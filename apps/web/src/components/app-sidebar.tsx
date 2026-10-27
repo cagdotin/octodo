@@ -340,7 +340,7 @@ export function Avatar({ label }: { label: string }) {
 
 function DiagnosticsButton({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   const [open, setOpen] = useState(false);
-  const count = snapshot.diagnostics.length;
+  const count = snapshot.diagnostics.filter((diagnostic) => diagnostic.kind !== "note").length;
   return (
     <>
       <Tooltip>

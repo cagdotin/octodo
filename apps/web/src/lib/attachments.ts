@@ -8,7 +8,6 @@ export interface Attachments {
   readonly upload: (file: File) => Promise<string>;
 }
 
-const WEB = /^https?:\/\//i;
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 
 const decoded = (segment: string) => {
@@ -20,11 +19,10 @@ const decoded = (segment: string) => {
 };
 
 /**
- * Web images load as they are and paths inside the task folder through the server. Anything that
- * could resolve elsewhere on the server (`/`, `..`, `%2e%2e`) or use another scheme stays source.
+ * Images load only from the task folder, through the server. Anything that could resolve elsewhere
+ * (`/`, `..`, `%2e%2e`, a web or other URL) stays source.
  */
 export const attachmentUrl = (base: string, src: string): string | null => {
-  if (WEB.test(src)) return src;
   if (src === "" || SCHEME.test(src) || /^[/\\]/.test(src)) return null;
   const segments = src.replace(/^\.\//, "").split(/[/\\]/);
   if (segments.some((segment) => segment === "" || decoded(segment).startsWith("."))) return null;

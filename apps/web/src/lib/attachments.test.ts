@@ -4,14 +4,16 @@ import { attachmentName, attachmentUrl, imageMarkdown } from "./attachments.ts";
 const BASE = "/api/workspaces/hm/tasks/HM-1/files";
 
 describe("attachments", () => {
-  it("loads paths in the task folder through the server and web images directly", () => {
+  it("loads paths in the task folder through the server", () => {
     expect(attachmentUrl(BASE, "images/plan.png")).toBe(`${BASE}/images/plan.png`);
     expect(attachmentUrl(BASE, "./images/plan.png")).toBe(`${BASE}/images/plan.png`);
-    expect(attachmentUrl(BASE, "https://example.com/a.png")).toBe("https://example.com/a.png");
   });
 
-  it("refuses anything that could resolve elsewhere on the server", () => {
+  it("leaves everything outside the task folder as source, web images included", () => {
     for (const src of [
+      "https://example.com/a.png",
+      "HTTP://example.com/a.png",
+      "//example.com/a.png",
       "../task.md",
       "images/../../x",
       "images/%2e%2e/%2E%2E/x",

@@ -80,4 +80,17 @@ describe("subtasks in views", () => {
       status: "done",
     });
   });
+
+  it("keeps a task's place on a status-only move, as core keeps its order", () => {
+    const ids = (moved: WorkspaceSnapshot) => moved.tasks.map((entry) => entry.id);
+    const order = TASKS.map((entry) => entry.id);
+    expect(ids(applyMove(snapshot(TASKS), "HM-2", { status: "todo" }))).toEqual(order);
+    expect(ids(applyMove(snapshot(TASKS), "HM-2", { status: "todo", parent: "HM-1" }))).toEqual(
+      order,
+    );
+    expect(ids(applyMove(snapshot(TASKS), "HM-2", { status: "todo", parent: null })).at(-1)).toBe(
+      "HM-2",
+    );
+    expect(ids(applyMove(snapshot(TASKS), "HM-2", { before: "HM-1" }))[0]).toBe("HM-2");
+  });
 });

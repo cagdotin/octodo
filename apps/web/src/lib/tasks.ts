@@ -309,8 +309,9 @@ const movedContainer = (
 };
 
 /**
- * Mirrors a move in a cached snapshot: the task changes status/list/parent and is placed next to
- * its neighbour in the task array, which is the order views render in.
+ * Mirrors a move in a cached snapshot, whose task array is the order views render in. As in core,
+ * the task keeps its place unless the move names a neighbour or changes its list or parent; then it
+ * goes next to the neighbour, or last.
  */
 export const applyMove = (
   snapshot: WorkspaceSnapshot,
@@ -321,6 +322,9 @@ export const applyMove = (
   if (!task) return snapshot;
   const { list, parent } = movedContainer(snapshot.tasks, task, move);
   const moved: Task = { ...task, status: move.status ?? task.status, list, parent };
+  const placed = move.before !== undefined || move.after !== undefined;
+  if (!placed && list === task.list && parent === task.parent)
+    return { ...snapshot, tasks: snapshot.tasks.map((entry) => (entry === task ? moved : entry)) };
   const rest = snapshot.tasks.filter((entry) => entry.id !== id);
   let index = rest.length;
   if (move.before !== undefined) {

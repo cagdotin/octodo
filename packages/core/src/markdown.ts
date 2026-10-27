@@ -78,10 +78,9 @@ const readFrontmatter = (
   try {
     const parts = splitFrontmatter(text);
     const value: unknown = parseYaml(parts.yaml).toJS();
-    return {
-      data: Predicate.isObject(value) ? (value as Record<string, unknown>) : {},
-      body: parts.body,
-    };
+    if (value !== null && !Predicate.isObject(value))
+      return { error: "Invalid frontmatter: it must be a set of key: value pairs" };
+    return { data: (value ?? {}) as Record<string, unknown>, body: parts.body };
   } catch (error) {
     return { error: String(error) };
   }
@@ -128,7 +127,10 @@ export const readTaskFile = (text: string, place: TaskPlace): TaskFileRead => {
   const read = readFrontmatter(text);
   if ("error" in read) return { _tag: "Invalid", message: read.error };
   const { data, body } = read;
-  const id = stringOrNull(data["id"]);
+  const rawId = data["id"] ?? null;
+  if (rawId !== null && typeof rawId !== "string")
+    return { _tag: "Invalid", message: "Invalid frontmatter: id must be text, such as HM-1" };
+  const id = stringOrNull(rawId);
   if (id === null) return { _tag: "MissingId" };
   return {
     _tag: "Read",

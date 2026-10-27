@@ -195,6 +195,27 @@ describe("workspace", () => {
     ]);
   });
 
+  it("reports an id that is not text and frontmatter that is not keys, and never rewrites them", async () => {
+    const root = fresh();
+    await run(initWorkspace(root));
+    const broken = {
+      "number/task.md": "---\nid: 42\ntitle: Number\n---\n",
+      "sequence/task.md": "---\n- a\n- b\n---\nBody\n",
+      "scalar/task.md": "---\njust words\n---\n",
+      "home/list.md": "---\n- a\n---\n",
+    };
+    for (const [file, content] of Object.entries(broken)) write(root, file, content);
+    const snapshot = await run(Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot));
+    expect(snapshot.tasks).toEqual([]);
+    expect(snapshot.diagnostics.map((diagnostic) => diagnostic.path).toSorted()).toEqual([
+      ".octodo/home/list.md",
+      ".octodo/number/task.md",
+      ".octodo/scalar/task.md",
+      ".octodo/sequence/task.md",
+    ]);
+    for (const [file, content] of Object.entries(broken)) expect(read(root, file)).toBe(content);
+  });
+
   it("points an old-layout workspace at octo migrate once", async () => {
     const root = fresh();
     await run(initWorkspace(root));

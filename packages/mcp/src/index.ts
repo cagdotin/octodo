@@ -1,6 +1,9 @@
 import {
   CreateListInput,
   CreateTaskInput,
+  Diagnostic,
+  FixRequest,
+  FixResult,
   List,
   MoveListInput,
   MoveTaskInput,
@@ -22,7 +25,8 @@ export const INSTRUCTIONS = `octodo manages tasks stored as markdown files under
 - A task folder inside another task is a subtask: create_task and move_task take a parent task id, and get_task lists a task's subtasks.
 - Folders with list.md are lists, nested up to 3 levels. List ids are folder names joined by slashes: garden/seeds.
 - Every task has a stable id like HM-42 (the workspace key plus a number). Refer to tasks by id, never by path.
-- Call get_workspace first to learn the statuses and lists before creating or moving tasks. If it reports the old layout, tell the user to run octo migrate.
+- Call get_workspace first to learn the statuses and lists before creating or moving tasks.
+- Files that octodo cannot read cleanly show up as diagnostics (list_diagnostics). Fix one with fix_diagnostic when it offers a fix; otherwise tell the user what its message says to do. Never edit the files to fix them.
 - The workspace parameter takes a registered workspace id or an absolute folder path; omit it to use the workspace containing the server's working directory.`;
 
 const ToolFailure = Schema.Struct({ error: Schema.String });
@@ -59,7 +63,7 @@ const GetWorkspace = Tool.make("get_workspace", {
     workspace: WorkspaceInfo,
     statuses: Schema.Array(Schema.Struct({ ...StatusDefinition.fields, count: Schema.Number })),
     lists: Schema.Array(Schema.Struct({ ...List.fields, count: Schema.Number })),
-    diagnostics: Schema.Array(Schema.Struct({ path: Schema.String, message: Schema.String })),
+    diagnostics: Schema.Array(Diagnostic),
   }),
   failure: ToolFailure,
   failureMode: "return",
@@ -174,6 +178,28 @@ const MoveList = Tool.make("move_list", {
   failureMode: "return",
 }).annotate(Tool.Destructive, false);
 
+const ListDiagnostics = Tool.make("list_diagnostics", {
+  description:
+    "List the problems with files in the workspace: each has a path, a kind, the frontmatter field at fault, a message saying what to do, and a fix when octodo can repair it.",
+  parameters: Schema.Struct({ workspace: WorkspaceParam }),
+  success: Schema.Array(Diagnostic),
+  failure: ToolFailure,
+  failureMode: "return",
+})
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false);
+
+const FixDiagnostic = Tool.make("fix_diagnostic", {
+  description:
+    "Apply the fix of one diagnostic, given its path and kind from list_diagnostics. octodo reads the files again and fixes the problem only if it is still there, so repeating a call is harmless. Returns what it fixed and the diagnostics left. A remove-copy fix deletes a redundant copy.",
+  parameters: Schema.Struct({ workspace: WorkspaceParam, ...FixRequest.fields }),
+  success: FixResult,
+  failure: ToolFailure,
+  failureMode: "return",
+})
+  .annotate(Tool.Destructive, true)
+  .annotate(Tool.Idempotent, true);
+
 export const TasksToolkit = Toolkit.make(
   ListWorkspaces,
   GetWorkspace,
@@ -185,6 +211,8 @@ export const TasksToolkit = Toolkit.make(
   DeleteTask,
   CreateList,
   MoveList,
+  ListDiagnostics,
+  FixDiagnostic,
 );
 
 const toFailure = (error: { readonly message: string }) => ({ error: error.message });
@@ -283,6 +311,17 @@ export const toolkitLayer = (options: { readonly defaultDir?: string | undefined
         move_list: ({ workspace, id, ...input }) =>
           Effect.flatMap(open(workspace), (ws) =>
             Effect.mapError(ws.moveList(id, input), toFailure),
+          ),
+        list_diagnostics: ({ workspace }) =>
+          Effect.flatMap(open(workspace), (ws) =>
+            Effect.mapError(
+              Effect.map(ws.snapshot, (snapshot) => snapshot.diagnostics),
+              toFailure,
+            ),
+          ),
+        fix_diagnostic: ({ workspace, ...request }) =>
+          Effect.flatMap(open(workspace), (ws) =>
+            Effect.mapError(ws.fixDiagnostic(request), toFailure),
           ),
       });
     }),

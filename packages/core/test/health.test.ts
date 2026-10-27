@@ -195,6 +195,20 @@ describe("file health", () => {
     ]);
   });
 
+  it("renames a copy's folder only where its name starts with the whole old id", async () => {
+    const root = await fresh({
+      "HM-1-y/task.md": "---\nid: HM-1\ntitle: Y\n---\n",
+      "HM-10-x/task.md": "---\nid: HM-1\ntitle: X\n---\n",
+    });
+    await fixTwice(root, {
+      path: ".octodo/HM-10-x/task.md",
+      kind: "duplicate-id",
+      action: "fresh-id",
+    });
+    expect(files(root)).toEqual(["HM-1-y/task.md", "HM-10-x/task.md", "config.json"]);
+    expect(read(root, "HM-10-x/task.md")).toBe("---\nid: HM-2\ntitle: X\n---\n");
+  });
+
   it("serves the original of a duplicate even when the copy sorts first", async () => {
     const root = await fresh({
       "HM-1-paint-walls/task.md": "---\nid: HM-1\ntitle: Paint walls\n---\n",

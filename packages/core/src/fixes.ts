@@ -69,7 +69,9 @@ const renumberCopy = (dir: string, context: FixContext) =>
     for (const { dir: folder, old, id } of renames.toReversed()) {
       const name = conflictCopyOf(path.basename(folder)) ?? path.basename(folder);
       const renamed =
-        old !== null && name.startsWith(old) ? `${id}${name.slice(old.length)}` : name;
+        old !== null && (name === old || name.startsWith(`${old}-`))
+          ? `${id}${name.slice(old.length)}`
+          : name;
       const target = path.join(path.dirname(folder), renamed);
       if (target !== folder && !(yield* fs.exists(target))) yield* fs.rename(folder, target);
     }

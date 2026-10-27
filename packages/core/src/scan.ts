@@ -38,8 +38,10 @@ import {
   readTaskFile,
   type TaskFile,
   type TaskFileRead,
+  type TaskPlace,
 } from "./markdown.ts";
 import { claimIds, giveId, nextIdOnDisk, pendingId } from "./ids.ts";
+import type { ScanCache } from "./scan-cache.ts";
 
 /** A snapshot plus where its lists and tasks are on disk, which is nobody else's business. */
 export interface Scan {
@@ -128,32 +130,79 @@ const FOLDER_ENTRIES_AT_ONCE = 32;
  */
 const OPEN_FILES = 32;
 
+/** What a scan reads at one path before it reads the folders inside it. */
+type Node =
+  | { readonly type: "symlink"; readonly target: string }
+  | { readonly type: "file"; readonly mtime: Date | null }
+  | {
+      readonly type: "folder";
+      readonly names: Result.Result<ReadonlyArray<string>, PlatformError.PlatformError>;
+      /** The text of its `task.md` or `list.md`, or null when it has none. */
+      readonly task: Result.Result<string, PlatformError.PlatformError> | null;
+      readonly list: Result.Result<string, PlatformError.PlatformError> | null;
+    };
+
+/** Whether `node` holds what is on disk until its path changes: it is there and every read worked. */
+const settled = (node: Node | null): boolean =>
+  node !== null &&
+  (node.type !== "folder" ||
+    (Result.isSuccess(node.names) &&
+      [node.task, node.list].every((read) => read === null || Result.isSuccess(read))));
+
 /**
  * Reads the folder tree under `dir` that a scan walks, many folders at once: each folder's entries,
- * and the `task.md` or `list.md` of each task and list folder.
+ * and the `task.md` or `list.md` of each task and list folder. What `cache` holds of a path is not
+ * read again.
  */
 const readListing = (
   dir: string,
+  cache: ScanCache | undefined,
 ): Effect.Effect<Listing, never, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const openFiles = yield* Semaphore.make(OPEN_FILES);
+    const readFile = (file: string) => openFiles.withPermits(1)(fs.readFileString(file));
 
     /**
      * The marker file `file` read, or null when the folder does not have it. A failed read asks
      * `exists`, so a dangling link or an unlistable folder decides as it would.
      */
-    const readMarker = <A>(
+    const readMarker = (
       names: Result.Result<ReadonlyArray<string>, PlatformError.PlatformError>,
       file: string,
-      read: Effect.Effect<A, PlatformError.PlatformError>,
     ) =>
       Effect.gen(function* () {
         if (Result.isSuccess(names) && !names.success.includes(path.basename(file))) return null;
-        const result = yield* Effect.result(openFiles.withPermits(1)(read));
+        const result = yield* Effect.result(readFile(file));
         if (Result.isSuccess(result)) return result;
         return (yield* fs.exists(file)) ? result : null;
+      });
+
+    const readNode = (at: string) =>
+      Effect.gen(function* () {
+        const info = yield* fs.lstat(at);
+        if (info.type === "SymbolicLink")
+          return { type: "symlink" as const, target: yield* fs.readLink(at) };
+        if (info.type === "File")
+          return { type: "file" as const, mtime: Option.getOrNull(info.mtime) };
+        if (info.type !== "Directory") return null;
+        const names = yield* Effect.result(fs.readDirectory(at));
+        const task = yield* readMarker(names, path.join(at, TASK_FILE));
+        const list = yield* readMarker(names, path.join(at, LIST_FILE));
+        if (task === null && list === null) {
+          // A folder that can be listed but not entered fails here, and is reported unreadable.
+          yield* fs.exists(path.join(at, TASK_FILE));
+          yield* fs.exists(path.join(at, LIST_FILE));
+        }
+        return { type: "folder" as const, names, task, list };
+      });
+
+    /** A `task.md` that is a link, read anew each scan: a change to its target reports neither path. */
+    const readLinkedTask = (file: string) =>
+      Effect.all({
+        text: readFile(file),
+        mtime: Effect.map(fs.stat(file), (info) => Option.getOrNull(info.mtime)),
       });
 
     const entry = (
@@ -162,45 +211,25 @@ const readListing = (
     ): Effect.Effect<Entry | null, never, FileSystem.FileSystem | Path.Path> => {
       const child = path.join(dir, name);
       return Effect.gen(function* () {
-        const info = yield* fs.lstat(child);
-        if (info.type === "SymbolicLink")
-          return {
-            name,
-            path: child,
-            type: "symlink" as const,
-            target: yield* fs.readLink(child),
-          };
-        if (info.type === "File")
-          return { name, path: child, type: "file" as const, mtime: Option.getOrNull(info.mtime) };
-        if (info.type !== "Directory") return null;
-        const names = yield* Effect.result(fs.readDirectory(child));
-        const taskFile = path.join(child, TASK_FILE);
-        const task = yield* readMarker(names, taskFile, fs.readFileString(taskFile));
-        const list = yield* readMarker(
-          names,
-          path.join(child, LIST_FILE),
-          fs.readFileString(path.join(child, LIST_FILE)),
-        );
+        const node: Node | null = yield* cache === undefined
+          ? readNode(child)
+          : cache.read(child, "node", readNode(child), settled);
+        if (node === null) return null;
+        if (node.type !== "folder") return { name, path: child, ...node };
+        const { names, task, list } = node;
         if (task !== null && list !== null) return { name, path: child, type: "both" as const };
         if (task !== null) {
           const taskListing = yield* listing(child, names);
           const listed = Result.isSuccess(taskListing.entries)
             ? taskListing.entries.success.find((entry) => entry.name === TASK_FILE)
             : undefined;
-          // A task.md that is a link has the modification time of the file it links to.
-          const mtime =
+          const file =
             listed?.type === "file"
-              ? Result.succeed(listed.mtime)
-              : Result.map(yield* Effect.result(fs.stat(taskFile)), (stat) =>
-                  Option.getOrNull(stat.mtime),
-                );
-          return {
-            name,
-            path: child,
-            type: "task" as const,
-            file: Result.flatMap(task, (text) => Result.map(mtime, (mtime) => ({ text, mtime }))),
-            listing: taskListing,
-          };
+              ? Result.map(task, (text) => ({ text, mtime: listed.mtime }))
+              : Result.isFailure(task)
+                ? Result.fail(task.failure)
+                : yield* Effect.result(readLinkedTask(path.join(child, TASK_FILE)));
+          return { name, path: child, type: "task" as const, file, listing: taskListing };
         }
         if (list !== null)
           return {
@@ -210,9 +239,6 @@ const readListing = (
             file: list,
             listing: yield* listing(child, names),
           };
-        // A folder that can be listed but not entered fails here, and is reported unreadable.
-        yield* fs.exists(taskFile);
-        yield* fs.exists(path.join(child, LIST_FILE));
         return { name, path: child, type: "folder" as const };
       }).pipe(
         Effect.catch((error) =>
@@ -240,13 +266,21 @@ const readListing = (
             })),
           );
 
-    return yield* listing(dir, yield* Effect.result(fs.readDirectory(dir)));
+    const names = fs.readDirectory(dir);
+    return yield* listing(
+      dir,
+      yield* Effect.result(cache === undefined ? names : cache.read(dir, "names", names)),
+    );
   });
 
-/** Reads `.octodo/` by its grammar: folders with `task.md` are tasks, folders with `list.md` lists. */
+/**
+ * Reads `.octodo/` by its grammar: folders with `task.md` are tasks, folders with `list.md` lists.
+ * With a `cache`, it reads only the folders and files that changed since the scans that filled it.
+ */
 export const scanWorkspace = (
   id: string,
   root: string,
+  cache?: ScanCache,
 ): Effect.Effect<Scan, never, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -445,6 +479,18 @@ export const scanWorkspace = (
      */
     const waiting: readonly [Array<Waiting>, Array<Waiting>, Array<Waiting>] = [[], [], []];
 
+    /**
+     * `readTaskFile`, kept with what the cache holds of the task folder `dir`. A `task.md` that is a
+     * link is read anew each scan, so a kept read is used only for the same text.
+     */
+    const parseTask = (dir: string, text: string, place: TaskPlace) => {
+      const parse = Effect.sync(() => ({ text, read: readTaskFile(text, place) }));
+      return Effect.map(
+        cache === undefined ? parse : cache.read(dir, JSON.stringify(place), parse),
+        (kept) => (kept.text === text ? kept.read : readTaskFile(text, place)),
+      );
+    };
+
     const readTask = (
       task: Extract<Entry, { type: "task" }>,
       list: string | null,
@@ -461,7 +507,7 @@ export const scanWorkspace = (
         if (contents === null) return;
         const { text, mtime } = contents;
         const folder = path.basename(dir);
-        const read = readTaskFile(text, {
+        const read = yield* parseTask(dir, text, {
           list,
           parent,
           path: rel(file),
@@ -611,7 +657,7 @@ export const scanWorkspace = (
         }
       });
 
-    yield* readList(tasksDir, yield* readListing(tasksDir), null);
+    yield* readList(tasksDir, yield* readListing(tasksDir, cache), null);
     const nextWaiting = () => waiting.find((queue) => queue.length > 0)?.shift();
     for (let next = nextWaiting(); next !== undefined; next = nextWaiting()) yield* serveTask(next);
 

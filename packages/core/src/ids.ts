@@ -62,22 +62,25 @@ export const claimIds = <R>(
   });
 
 /**
- * The number past every id with workspace key `key` in a markdown file or `.pending-id` marker
- * under `tasksDir`, as a scan's `nextIdNumber`, but from each file's id line alone. A task moved
- * between folders while this walks can be missed; a create checks its id after the write.
+ * The id in each markdown file and `.pending-id` marker under `tasksDir`, from the file's id line
+ * alone. A task moved between folders while this walks can be missed; a create checks its id
+ * after the write.
  */
-export const nextIdOnDisk = (
+const idsOnDisk = (
   tasksDir: string,
-  key: string,
-): Effect.Effect<number, never, FileSystem.FileSystem | Path.Path> =>
+): Effect.Effect<
+  ReadonlyArray<{ readonly id: string; readonly file: string }>,
+  never,
+  FileSystem.FileSystem | Path.Path
+> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    let highest = 0;
+    const found: Array<{ readonly id: string; readonly file: string }> = [];
     const take = (file: string) =>
       Effect.map(fs.readFileString(file), (text) => {
         const id = file.endsWith(".md") ? frontmatterId(text) : text.trim();
-        highest = Math.max(highest, (id === null ? null : idNumber(id, key)) ?? 0);
+        if (id !== null) found.push({ id, file });
       });
     const walk = (dir: string): Effect.Effect<void> =>
       Effect.gen(function* () {
@@ -97,8 +100,28 @@ export const nextIdOnDisk = (
         );
       }).pipe(Effect.ignore);
     yield* walk(tasksDir);
-    return highest + 1;
+    return found;
   });
+
+/** The number past every id with workspace key `key` on disk, as a scan's `nextIdNumber`. */
+export const nextIdOnDisk = (
+  tasksDir: string,
+  key: string,
+): Effect.Effect<number, never, FileSystem.FileSystem | Path.Path> =>
+  Effect.map(
+    idsOnDisk(tasksDir),
+    (found) => found.reduce((highest, { id }) => Math.max(highest, idNumber(id, key) ?? 0), 0) + 1,
+  );
+
+/** Whether a markdown file under `tasksDir` other than `file` has the id `id`. */
+export const idElsewhereOnDisk = (
+  tasksDir: string,
+  id: string,
+  file: string,
+): Effect.Effect<boolean, never, FileSystem.FileSystem | Path.Path> =>
+  Effect.map(idsOnDisk(tasksDir), (found) =>
+    found.some((other) => other.id === id && other.file !== file && other.file.endsWith(".md")),
+  );
 
 /**
  * The id a task folder without one is getting from another process, read before its `task.md` so

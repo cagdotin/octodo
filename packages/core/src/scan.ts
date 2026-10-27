@@ -142,7 +142,7 @@ export const scanWorkspace = (
       report(
         "invalid-config",
         path.join(tasksDir, CONFIG_FILE),
-        `The key ${JSON.stringify(config.key)} is not letters and digits starting with a letter, which other tools expect of task ids. Its tasks still load; to fix it, set "key" in config.json to letters and digits such as "${suggested}" and change each id ${config.key}-<n> to ${suggested}-<n>`,
+        `The key ${JSON.stringify(config.key)} is not letters and digits starting with a letter, so a mention such as [[${config.key}-1]] is not read. Its tasks still load; to fix it, set "key" in config.json to letters and digits such as "${suggested}" and change each id ${config.key}-<n> to ${suggested}-<n>`,
         { field: "key" },
       );
     }

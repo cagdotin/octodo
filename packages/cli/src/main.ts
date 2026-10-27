@@ -64,6 +64,8 @@ const taskId = Argument.String("id").pipe(Argument.withDescription("Task id, e.g
 /** The folder `--workspace` names, or the current directory. */
 const target = Effect.map(octo, (root) => Option.getOrElse(root.workspace, () => process.cwd()));
 
+const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+
 const isNote = (diagnostic: Diagnostic) => diagnostic.kind === "note";
 
 /**
@@ -438,7 +440,7 @@ const doctorCommand = Command.make(
     const fixable = problems.filter((diagnostic) => diagnostic.fix?.inFixAll === true).length;
     const notes = result.diagnostics.length - problems.length;
     yield* Console.log(
-      `\n${problems.length} problems${notes > 0 ? ` and ${notes} notes` : ""}${fixable > 0 && !options.fix ? `; run \`octo doctor --fix\` to fix ${fixable}` : ""}`,
+      `\n${count(problems.length, "problem")}${notes > 0 ? ` and ${count(notes, "note")}` : ""}${fixable > 0 && !options.fix ? `; run \`octo doctor --fix\` to fix ${fixable}` : ""}`,
     );
   }),
 ).pipe(

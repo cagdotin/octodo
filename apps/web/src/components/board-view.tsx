@@ -21,7 +21,7 @@ import {
   TaskDate,
 } from "@/components/task-bits";
 import { TaskComposer } from "@/components/task-composer";
-import { SubtaskCount } from "@/components/task-subtasks";
+import { ParentChip, SubtaskCount } from "@/components/task-subtasks";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { subtaskProgress, type Progress } from "@/lib/tasks";
@@ -236,6 +236,7 @@ function TaskCard({
         <TagChips tags={task.tags} />
         <ListChip lists={snapshot.lists} list={task.list} />
         <span className="ml-auto flex items-center gap-2">
+          <ParentChip snapshot={snapshot} task={task} />
           <SubtaskCount progress={subtasks} />
           <ChecklistCount body={task.body} />
         </span>

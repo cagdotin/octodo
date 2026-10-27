@@ -122,21 +122,23 @@ export const allTags = (tasks: ReadonlyArray<Task>) =>
 
 export const todayKey = () => format(new Date(), "yyyy-MM-dd");
 
-/** The tasks a view shows: top-level ones only, since subtasks show inside their parent. */
+/**
+ * The tasks a view shows. Views of a list show top-level tasks, with subtasks inside their parent;
+ * the date views show every task due in their range, subtasks too.
+ */
 export const filterTasks = (
   all: ReadonlyArray<Task>,
   list: string | undefined,
 ): ReadonlyArray<Task> => {
+  const dueBy = (last: string) => all.filter((task) => task.due !== null && task.due <= last);
   const tasks = all.filter((task) => task.parent === null);
-  if (list === undefined) return tasks;
-  const today = todayKey();
   switch (list) {
+    case undefined:
+      return tasks;
     case SMART.today:
-      return tasks.filter((task) => task.due !== null && task.due <= today);
+      return dueBy(todayKey());
     case SMART.upcoming:
-      return tasks.filter(
-        (task) => task.due !== null && task.due <= format(addDays(new Date(), 7), "yyyy-MM-dd"),
-      );
+      return dueBy(format(addDays(new Date(), 7), "yyyy-MM-dd"));
     case SMART.none:
       return tasks.filter((task) => task.list === null);
     default:

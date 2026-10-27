@@ -6,6 +6,7 @@ import {
   descendantCount,
   filterTasks,
   listCounts,
+  SMART,
   subtaskProgress,
   withoutSubtree,
 } from "./tasks.ts";
@@ -45,10 +46,19 @@ const TASKS = [
 ];
 
 describe("subtasks in views", () => {
-  it("shows only top-level tasks in lists and smart views", () => {
-    expect(filterTasks(TASKS, undefined).map((entry) => entry.id)).toEqual(["HM-1", "HM-5"]);
-    expect(filterTasks(TASKS, "home").map((entry) => entry.id)).toEqual(["HM-1"]);
-    expect(listCounts(snapshot(TASKS)).counts.get("home")).toBe(1);
+  it("shows only top-level tasks in list views, and subtasks too in date views", () => {
+    const tasks = [
+      ...TASKS,
+      task("HM-6", { list: "home", parent: "HM-1", due: "2000-01-01" }),
+      task("HM-7", { due: "2000-01-01" }),
+    ];
+    const ids = (list: string | undefined) => filterTasks(tasks, list).map((entry) => entry.id);
+    expect(ids(undefined)).toEqual(["HM-1", "HM-5", "HM-7"]);
+    expect(ids("home")).toEqual(["HM-1"]);
+    expect(ids(SMART.none)).toEqual(["HM-5", "HM-7"]);
+    expect(ids(SMART.today)).toEqual(["HM-6", "HM-7"]);
+    expect(ids(SMART.upcoming)).toEqual(["HM-6", "HM-7"]);
+    expect(listCounts(snapshot(tasks)).counts.get("home")).toBe(1);
   });
 
   it("counts direct subtasks in a completed status as done", () => {

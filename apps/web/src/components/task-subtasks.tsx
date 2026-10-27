@@ -40,6 +40,21 @@ export function SubtaskCount({
   );
 }
 
+/** "↑ HM-1" on a subtask that a view lists on its own, with the parent's title on hover. */
+export function ParentChip({ snapshot, task }: { snapshot: WorkspaceSnapshot; task: Task }) {
+  if (task.parent === null) return null;
+  const parent = snapshot.tasks.find((entry) => entry.id === task.parent);
+  return (
+    <span
+      title={parent && `Subtask of ${parent.title}`}
+      className="flex shrink-0 items-center gap-0.5 font-mono text-xs text-muted-foreground"
+    >
+      <CornerLeftUpIcon className="size-3.5" />
+      {task.parent}
+    </span>
+  );
+}
+
 function TaskLink({
   workspace,
   task,

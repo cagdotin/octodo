@@ -406,6 +406,22 @@ describe("file health", () => {
     expect(read(root, "HM-3-tile/task.md")).toBe("---\nid: HM-3\n---\n\nWhite.\n");
   });
 
+  it("compares hidden files too before it offers to delete a copied folder", async () => {
+    const root = await fresh({
+      "HM-1-paint/task.md": "---\nid: HM-1\n---\n",
+      "HM-1-paint/.colours": "red\n",
+      "HM-1-paint 2/task.md": "---\nid: HM-1\n---\n",
+      "HM-1-paint 2/.colours": "blue\n",
+      "HM-2-tile/task.md": "---\nid: HM-2\n---\n",
+      "HM-2-tile 2/task.md": "---\nid: HM-2\n---\n",
+      "HM-2-tile 2/.pending-id": "HM-2\n",
+    });
+    expect(await diagnostics(root)).toEqual([
+      one("HM-1-paint 2", "conflict-copy", null, "keep-copy"),
+      one("HM-2-tile 2", "conflict-copy", null, "remove-copy"),
+    ]);
+  });
+
   it("refuses a fix whose action is not the one a fresh read offers", async () => {
     const root = await fresh({
       "HM-2-tile/task.md": "---\nid: HM-2\n---\nGrey.\n",

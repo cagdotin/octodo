@@ -25,6 +25,9 @@ const LEFTOVER = new RegExp(
 /** The name a sync tool's conflict copy of a bookkeeping file copies: `.claim-HM-5 2` copies `.claim-HM-5`. */
 const copied = (name: string) => name.replace(/ \d+(?=(?:\.tmp)?$)/, "");
 
+/** Whether `name` is one of octodo's own bookkeeping files, or a sync tool's copy of one. */
+const isBookkeeping = (name: string) => LEFTOVER.test(copied(name));
+
 /** Patterns in `.octodo/.gitignore` matching every bookkeeping name and its conflict copies. */
 const IGNORED = [".claim-*", ".pending-id*", ".new-*", ".migrate-*", ".*.tmp"];
 
@@ -77,7 +80,7 @@ export const removeLeftovers = (
       const child = path.join(dir, name);
       yield* Effect.gen(function* () {
         const info = yield* fs.lstat(child);
-        if (LEFTOVER.test(copied(name))) {
+        if (isBookkeeping(name)) {
           const runs = name.startsWith(".claim-")
             ? ownerRuns(yield* fs.readFileString(child).pipe(Effect.orElseSucceed(() => "")))
             : null;
@@ -109,7 +112,10 @@ export const writeFileAtomic = Effect.fnUntraced(function* (
 export const isNotFound = (error: unknown): boolean =>
   PlatformError.isPlatformError(error) && error.reason._tag === "NotFound";
 
-/** Whether two folders hold the same names and bytes all the way down, hidden entries aside. */
+/**
+ * Whether two folders hold the same names and bytes all the way down, hidden files included and
+ * octodo's bookkeeping aside. A link is the same only as a link to the same place.
+ */
 export const sameTree = (
   a: string,
   b: string,
@@ -117,18 +123,16 @@ export const sameTree = (
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const [infoA, infoB] = [yield* fs.stat(a), yield* fs.stat(b)];
+    const [infoA, infoB] = [yield* fs.lstat(a), yield* fs.lstat(b)];
     if (infoA.type !== infoB.type) return false;
+    if (infoA.type === "SymbolicLink") return (yield* fs.readLink(a)) === (yield* fs.readLink(b));
     if (infoA.type === "File") {
       const [bytesA, bytesB] = [yield* fs.readFile(a), yield* fs.readFile(b)];
       return bytesA.length === bytesB.length && bytesA.every((byte, i) => byte === bytesB[i]);
     }
-    const visible = (names: ReadonlyArray<string>) =>
-      names.filter((name) => !name.startsWith(".")).toSorted();
-    const [namesA, namesB] = [
-      visible(yield* fs.readDirectory(a)),
-      visible(yield* fs.readDirectory(b)),
-    ];
+    const kept = (names: ReadonlyArray<string>) =>
+      names.filter((name) => !isBookkeeping(name)).toSorted();
+    const [namesA, namesB] = [kept(yield* fs.readDirectory(a)), kept(yield* fs.readDirectory(b))];
     if (namesA.join("/") !== namesB.join("/")) return false;
     for (const name of namesA) {
       if (!(yield* sameTree(path.join(a, name), path.join(b, name)))) return false;

@@ -204,5 +204,40 @@ describe("task ids across processes", () => {
     expect(read(root, "milk/task.md")).toMatch(/^---\nid: HM-7\n/);
     expect(existsSync(join(root, ".octodo/milk/.pending-id"))).toBe(false);
     expect(created.id).toBe("HM-8");
+    expect(await ids(root), "a marker the read finishes is no problem").toEqual({
+      ids: ["HM-7", "HM-8"],
+      diagnostics: [],
+    });
+  });
+
+  it("gives a copied task a new id past one another process holds a claim on", async () => {
+    const root = await fresh();
+    write(root, "HM-1-paint/task.md", "---\nid: HM-1\n---\n");
+    write(root, "HM-1-paint-copy/task.md", "---\nid: HM-1\n---\n");
+    write(root, ".claim-HM-2", "");
+    const result = await run(Effect.flatMap(makeWorkspace("app", root), (ws) => ws.fixAll));
+    expect(result.failed).toEqual([]);
+    expect(read(root, "HM-3-paint-copy/task.md")).toBe("---\nid: HM-3\n---\n");
+  });
+
+  it("never gives a fixed copy the id of a task another workspace creates at the same time", async () => {
+    const root = await fresh();
+    write(root, "HM-1-a/task.md", "---\nid: HM-1\n---\n");
+    for (const copy of ["b", "c", "d", "e"])
+      write(root, `HM-1-${copy}/task.md`, "---\nid: HM-1\n---\n");
+    const [fixed, ...created] = await Promise.all([
+      run(Effect.flatMap(makeWorkspace("app", root), (ws) => ws.fixAll)),
+      ...Array.from({ length: 8 }, (_, index) =>
+        run(
+          Effect.flatMap(makeWorkspace(`cli${index}`, root), (ws) =>
+            ws.createTask({ title: `Task ${index}` }),
+          ),
+        ),
+      ),
+    ]);
+    expect(fixed.failed).toEqual([]);
+    const onDisk = await ids(root);
+    expect(onDisk.diagnostics).toEqual([]);
+    expect(onDisk.ids).toHaveLength(1 + 4 + created.length);
   });
 });

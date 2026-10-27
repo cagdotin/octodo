@@ -350,19 +350,26 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   const reread = (taskId: string) =>
     Effect.flatMap(current, (snapshot) => findTask(snapshot, taskId));
 
+  /**
+   * A new task id that no other process on this machine hands out until the scope closes, which
+   * leaves the cache holding a scan read after the claim.
+   */
+  const claimId = Effect.gen(function* () {
+    const cached = yield* state;
+    const freshNext = Effect.andThen(
+      invalidate,
+      Effect.map(state, (scan) => scan.nextIdNumber),
+    );
+    const [claimed] = yield* withPlatform(
+      claimIds(tasksDir, cached.snapshot.workspace.key, cached.nextIdNumber, 1, freshNext),
+    );
+    return claimed!;
+  });
+
   const createTask = (input: CreateTaskInput) =>
     write(
       Effect.gen(function* () {
-        const cached = yield* state;
-        const { key } = cached.snapshot.workspace;
-        const freshNext = Effect.andThen(
-          invalidate,
-          Effect.map(state, (scan) => scan.nextIdNumber),
-        );
-        const claimed = yield* withPlatform(
-          claimIds(tasksDir, key, cached.nextIdNumber, 1, freshNext),
-        ).pipe(storage("Could not claim an id for the task"));
-        const taskId = claimed[0]!;
+        const taskId = yield* claimId.pipe(storage("Could not claim an id for the task"));
         const scan = yield* state;
         const { snapshot } = scan;
         if (scan.oldLayout)
@@ -665,7 +672,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           );
           if (next === undefined) return { fixed, failed, diagnostics: scan.snapshot.diagnostics };
           tried.add(key(next));
-          const exit = yield* Effect.exit(withPlatform(applyFix(root, scan, next)));
+          const exit = yield* Effect.exit(withPlatform(applyFix(root, scan, next, claimId)));
           if (exit._tag === "Success") fixed.push(next);
           else failed.push({ diagnostic: next, error: String(Cause.squash(exit.cause)) });
         }

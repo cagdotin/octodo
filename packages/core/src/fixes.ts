@@ -1,4 +1,4 @@
-import { Effect, FileSystem, Path } from "effect";
+import { Effect, FileSystem, Path, PlatformError, Scope } from "effect";
 import { DEFAULT_STATUSES, type Diagnostic, type FixAction } from "./domain.ts";
 import { createFolder, freeName, writeFileAtomic } from "./files.ts";
 import {
@@ -22,13 +22,13 @@ interface FixContext {
   /** Where the diagnostic points, as an absolute path. */
   readonly target: string;
   readonly diagnostic: Diagnostic;
+  /** A new task id, claimed against every process until the fix is done. */
+  readonly claimId: Effect.Effect<string, PlatformError.PlatformError, Scope.Scope>;
 }
 
 type Handler = (
   context: FixContext,
-) => Effect.Effect<void, unknown, FileSystem.FileSystem | Path.Path>;
-
-const nextId = ({ scan }: FixContext) => `${scan.snapshot.workspace.key}-${scan.nextIdNumber}`;
+) => Effect.Effect<void, unknown, FileSystem.FileSystem | Path.Path | Scope.Scope>;
 
 /** Gives a task a new id and renames its folder to match, dropping a conflict copy's ` 2`. */
 const giveFreshId = (file: string, context: FixContext) =>
@@ -36,7 +36,7 @@ const giveFreshId = (file: string, context: FixContext) =>
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const text = yield* fs.readFileString(file);
-    const id = nextId(context);
+    const id = yield* context.claimId;
     yield* writeFileAtomic(file, patchFrontmatter(text, { id }));
     const dir = path.dirname(file);
     const name = conflictCopyOf(path.basename(dir)) ?? path.basename(dir);
@@ -60,7 +60,7 @@ const adopt = (file: string, container: string, context: FixContext) =>
     const own = frontmatterId(text);
     const { key } = context.scan.snapshot.workspace;
     const keep = own !== null && idNumber(own, key) !== null && !context.scan.dirs.tasks.has(own);
-    const id = keep ? own : nextId(context);
+    const id = keep ? own : yield* context.claimId;
     const content = keep ? text : patchFrontmatter(text, { id });
     if (!keep) yield* writeFileAtomic(file, content);
     const title = read.data["title"];
@@ -136,10 +136,11 @@ export const applyFix = (
   root: string,
   scan: Scan,
   diagnostic: Diagnostic,
+  claimId: FixContext["claimId"],
 ): Effect.Effect<void, unknown, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     if (diagnostic.fix === null) return;
     const path = yield* Path.Path;
     const target = path.join(root, diagnostic.path);
-    yield* FIXES[diagnostic.fix.action]({ root, scan, target, diagnostic });
-  });
+    yield* FIXES[diagnostic.fix.action]({ root, scan, target, diagnostic, claimId });
+  }).pipe(Effect.scoped);

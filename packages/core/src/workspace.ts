@@ -81,7 +81,8 @@ export interface Workspace {
   ) => Effect.Effect<ReadonlyArray<StatusDefinition>, InvalidRequest | StorageError>;
   /**
    * The absolute path of a file in a task's folder, from a path relative to it. Refuses anything
-   * outside the folder, `task.md` itself, hidden names and paths into a subtask.
+   * outside the folder, hidden names, paths into a subtask, and `task.md` or `list.md` at any
+   * depth and in any case.
    */
   readonly attachmentPath: (
     taskId: string,
@@ -107,6 +108,9 @@ interface Container {
 }
 
 const TOP: Container = { list: null, parent: null };
+
+/** Lower case, since a case-insensitive file system (macOS, Windows) takes `Task.MD` for `task.md`. */
+const MARKERS = new Set([TASK_FILE, LIST_FILE]);
 
 const storage =
   (message: string) =>
@@ -511,8 +515,10 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         return yield* invalid("Give a path relative to the task folder");
       if (segments.some((part) => part.startsWith(".")))
         return yield* invalid("Attachment paths cannot leave the task folder or name hidden files");
-      if (segments.length === 1 && segments[0] === TASK_FILE)
-        return yield* invalid(`${TASK_FILE} is the task itself, not an attachment`);
+      if (segments.some((part) => MARKERS.has(part.toLowerCase())))
+        return yield* invalid(
+          `An attachment cannot be named ${TASK_FILE} or ${LIST_FILE}: that would make a subtask or a list`,
+        );
       const subtask = yield* Effect.orElseSucceed(
         fs.exists(path.join(dir, segments[0]!, TASK_FILE)),
         () => false,
@@ -553,7 +559,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     );
 
   const writeAttachment = (taskId: string, relativePath: string, bytes: Uint8Array) =>
-    lock.withPermits(1)(
+    write(
       Effect.gen(function* () {
         const { dir, segments } = yield* attachmentTarget(taskId, relativePath);
         return yield* Effect.gen(function* () {

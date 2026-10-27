@@ -583,6 +583,30 @@ describe("attachments", () => {
     expect(existsSync(join(root, ".octodo/escape.png"))).toBe(false);
   });
 
+  it("refuses task.md and list.md at any depth and in any case, which would make a subtask or list", async () => {
+    const root = fresh();
+    const result = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        const task = yield* ws.createTask({ title: "Plan" });
+        const paths = ["images/task.md", "docs/list.md", "Task.MD", "a/b/LIST.md"];
+        const refused = [
+          ...(yield* Effect.forEach(paths, (path) =>
+            Effect.flip(ws.writeAttachment(task.id, path, bytes)),
+          )),
+          ...(yield* Effect.forEach(paths, (path) =>
+            Effect.flip(ws.attachmentPath(task.id, path)),
+          )),
+        ];
+        return { refused, snapshot: yield* (yield* makeWorkspace("again", root)).snapshot };
+      }),
+    );
+    expect(result.refused.map((error) => error._tag)).toEqual(Array(8).fill("InvalidRequest"));
+    expect(files(root)).toEqual(["HM-1-plan/task.md"]);
+    expect(result.snapshot.tasks.map((task) => task.id)).toEqual(["HM-1"]);
+    expect(result.snapshot.diagnostics).toEqual([]);
+  });
+
   it("refuses symlinks that lead out of the task folder and symlinked files", async () => {
     const root = fresh();
     const outside = join(root, "outside");

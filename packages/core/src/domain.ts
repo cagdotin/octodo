@@ -20,7 +20,7 @@ export type StatusDefinition = typeof StatusDefinition.Type;
 
 /**
  * `.octodo/config.json`. Unknown keys are kept when the app rewrites it. The order of `statuses`
- * within each category is the workflow order; the `s<NN>-` folder numbers mirror it.
+ * within each category is the workflow order.
  */
 export const WorkspaceConfig = Schema.Struct({
   name: Schema.String,
@@ -38,15 +38,16 @@ export const DEFAULT_STATUSES: ReadonlyArray<StatusDefinition> = [
 ];
 
 /**
- * A list folder. Snapshots give lists depth first, each among its siblings in folder order, so a
- * tree can be built by walking the array once.
+ * A folder with `list.md`. Snapshots give lists depth first, each among its siblings by `order`, so
+ * a tree can be built by walking the array once.
  */
 export const List = Schema.Struct({
-  /** The slugs from `.octodo/` down to the list, without folder numbers: `garden/seeds`. */
+  /** The folder names from `.octodo/` down to the list: `garden/seeds`. */
   id: Schema.String,
+  /** From `list.md`, or the humanized folder name when it has none. */
   name: Schema.String,
   parent: Schema.NullOr(Schema.String),
-  /** Path of the folder relative to `.octodo/`, e.g. `l01-garden/l00-seeds`. */
+  /** Path of the folder relative to `.octodo/`, e.g. `garden/seeds`. */
   folder: Schema.String,
 });
 export type List = typeof List.Type;
@@ -55,16 +56,19 @@ export const Task = Schema.Struct({
   id: Schema.String,
   title: Schema.String,
   status: Schema.String,
-  /** The list the task belongs to, or null when its status folder sits directly in `.octodo/`. */
+  /** The nearest list folder above the task; a subtask is in its parent's list. */
   list: Schema.NullOr(Schema.String),
+  /** The task whose folder holds this one, or null for a task directly in a list or `.octodo/`. */
+  parent: Schema.NullOr(Schema.String),
   priority: Priority,
   tags: Schema.Array(Schema.String),
   due: Schema.NullOr(Schema.String),
   created: Schema.NullOr(Schema.String),
+  /** When `task.md` last changed on disk. */
   updated: Schema.NullOr(Schema.String),
   order: Schema.String,
   body: Schema.String,
-  /** Path of the file relative to the workspace root. */
+  /** Path of `task.md` relative to the workspace root. */
   path: Schema.String,
   /** Frontmatter keys the app does not manage, passed through untouched. */
   extra: Schema.Record(Schema.String, Schema.Unknown),
@@ -94,10 +98,12 @@ export const WorkspaceSnapshot = Schema.Struct({
 });
 export type WorkspaceSnapshot = typeof WorkspaceSnapshot.Type;
 
+/** `list` and a non-null `parent` are exclusive: a subtask is in its parent's list. */
 export const CreateTaskInput = Schema.Struct({
   title: Schema.NonEmptyString,
   status: Schema.optionalKey(Schema.String),
   list: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  parent: Schema.optionalKey(Schema.NullOr(Schema.String)),
   priority: Schema.optionalKey(Priority),
   tags: Schema.optionalKey(Schema.Array(Schema.String)),
   due: Schema.optionalKey(Schema.NullOr(Schema.String)),
@@ -115,12 +121,15 @@ export const UpdateTaskInput = Schema.Struct({
 export type UpdateTaskInput = typeof UpdateTaskInput.Type;
 
 /**
- * Moves a task to another status and/or list, optionally placing it between two neighbours.
- * `before` and `after` are task ids in the destination; omitting both puts it last.
+ * Moves a task to another status, list or parent task, optionally placing it between two
+ * neighbours. `list` and a non-null `parent` are exclusive; `parent: null` lifts a subtask into
+ * its list. `before` and `after` are task ids in the destination column (same container, same
+ * status); omitting both puts it last.
  */
 export const MoveTaskInput = Schema.Struct({
   status: Schema.optionalKey(Schema.String),
   list: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  parent: Schema.optionalKey(Schema.NullOr(Schema.String)),
   before: Schema.optionalKey(Schema.String),
   after: Schema.optionalKey(Schema.String),
 });
@@ -148,7 +157,7 @@ export type CreateListInput = typeof CreateListInput.Type;
 /**
  * Moves a list under another parent (null for the top level) and/or places it between two
  * siblings. `before` and `after` are list ids among the destination's children; omitting both
- * puts it last. Moving renames folders, so a list moved to another parent gets a new id.
+ * puts it last. A list moved to another parent gets a new id.
  */
 export const MoveListInput = Schema.Struct({
   parent: Schema.optionalKey(Schema.NullOr(Schema.String)),

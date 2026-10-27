@@ -1,17 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { List, StatusDefinition } from "../src/domain.ts";
 import {
-  classifyFolder,
-  compareFolders,
   defaultStatus,
   deriveKey,
+  inTaskSubtree,
   isClosedCategory,
-  listFolder,
+  legacyFolder,
   listMoveError,
   movedListId,
   sortStatuses,
-  statusFolder,
-  taskFileName,
+  taskFolderName,
 } from "../src/layout.ts";
 
 const lists = (...ids: Array<string>): Array<List> =>
@@ -106,42 +104,19 @@ describe("statuses", () => {
 });
 
 describe("layout", () => {
-  it("classifies folders by prefix and reads their number", () => {
-    expect(classifyFolder("s02-in-progress")).toEqual({
+  it("recognises folders of the old layout so the scanner can point at octo migrate", () => {
+    expect(legacyFolder("s02-in-progress")).toEqual({
       type: "status",
       slug: "in-progress",
       position: 2,
     });
-    expect(classifyFolder("l00-groceries")).toEqual({
-      type: "list",
-      slug: "groceries",
-      position: 0,
-    });
-    expect(classifyFolder("l-groceries")).toEqual({
+    expect(legacyFolder("l-groceries")).toEqual({
       type: "list",
       slug: "groceries",
       position: null,
     });
-    expect(classifyFolder("p-thing")).toEqual({ type: "unknown" });
-    expect(classifyFolder("notes")).toEqual({ type: "unknown" });
-    expect(classifyFolder(".git")).toEqual({ type: "ignored" });
-  });
-
-  it("sorts numbered folders first, then by slug", () => {
-    const folders = [
-      { slug: "b", position: null },
-      { slug: "c", position: 1 },
-      { slug: "a", position: null },
-      { slug: "d", position: 0 },
-    ];
-    expect(folders.toSorted(compareFolders).map((folder) => folder.slug)).toEqual([
-      "d",
-      "c",
-      "a",
-      "b",
-    ]);
-    expect(listFolder(3, "garden")).toBe("l03-garden");
-    expect(statusFolder(12, "done")).toBe("s12-done");
+    expect(legacyFolder("groceries")).toBeNull();
+    expect(legacyFolder("HM-1-buy-milk")).toBeNull();
   });
 
   it("derives Linear-style keys", () => {
@@ -150,7 +125,21 @@ describe("layout", () => {
     expect(deriveKey("My Big Home Project")).toBe("MBHP");
   });
 
-  it("names task files after id and title", () => {
-    expect(taskFileName("HM-4", "Fix the Import!")).toBe("HM-4-fix-the-import.md");
+  it("names task folders after id and title", () => {
+    expect(taskFolderName("HM-4", "Fix the Import!")).toBe("HM-4-fix-the-import");
+    expect(taskFolderName("HM-5", "!!!")).toBe("HM-5");
+  });
+
+  it("knows which tasks sit under another, at any depth", () => {
+    const tasks = [
+      { id: "A", parent: null },
+      { id: "B", parent: "A" },
+      { id: "C", parent: "B" },
+      { id: "D", parent: null },
+    ];
+    expect(inTaskSubtree(tasks, "C", "A")).toBe(true);
+    expect(inTaskSubtree(tasks, "A", "A")).toBe(true);
+    expect(inTaskSubtree(tasks, "A", "C")).toBe(false);
+    expect(inTaskSubtree(tasks, "D", "A")).toBe(false);
   });
 });

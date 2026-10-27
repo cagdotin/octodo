@@ -1,0 +1,157 @@
+import { describe, expect, it } from "vitest";
+import {
+  editTaskFile,
+  newListFile,
+  newTaskFile,
+  patchFrontmatter,
+  readListFile,
+  readTaskFile,
+} from "../src/markdown.ts";
+
+const place = {
+  list: "garden",
+  parent: "GA-9",
+  path: ".octodo/garden/GA-9-fence/GA-1-fix-the-gate/task.md",
+  folder: "GA-1-fix-the-gate",
+  defaultStatus: "todo",
+  updated: "2026-10-26T13:00:00.000Z",
+};
+const now = "2026-10-26T12:00:00.000Z";
+
+const readTask = (text: string) => {
+  const read = readTaskFile(text, place);
+  if (read._tag !== "Read") throw new Error(`Expected a task, got ${read._tag}`);
+  return read.value;
+};
+
+describe("readTaskFile", () => {
+  it("reads managed keys into the task, takes place and mtime from the tree, keeps the rest", () => {
+    const task = readTask(
+      "---\nid: GA-1\ntitle: Fix the gate\nstatus: done\npriority: high\ntags: [a, b]\ndue: 2026-11-01\nupdated: 2020-01-01\nestimate: 3\n---\n\nBody text\n",
+    );
+    expect(task).toEqual({
+      id: "GA-1",
+      title: "Fix the gate",
+      status: "done",
+      list: "garden",
+      parent: "GA-9",
+      priority: "high",
+      tags: ["a", "b"],
+      due: "2026-11-01",
+      created: null,
+      updated: place.updated,
+      order: "",
+      body: "Body text\n",
+      path: place.path,
+      extra: { estimate: 3 },
+    });
+  });
+
+  it("reads a task without a status as the default status", () => {
+    expect(readTask("---\nid: GA-1\n---\n").status).toBe("todo");
+  });
+
+  it("accepts a single tag written as a string", () => {
+    expect(readTask("---\nid: GA-1\ntags: solo\n---\n").tags).toEqual(["solo"]);
+  });
+
+  it("reads an unknown priority as none", () => {
+    expect(readTask("---\nid: GA-1\npriority: bogus\n---\n").priority).toBe("none");
+  });
+
+  it("titles a task without a title after its folder name", () => {
+    expect(readTask("---\nid: GA-1\n---\n").title).toBe("Fix The Gate");
+  });
+
+  it("reports a file without an id, including one without frontmatter", () => {
+    expect(readTaskFile("---\ntitle: New\n---\n", place)).toEqual({ _tag: "MissingId" });
+    expect(readTaskFile("# Just notes\n", place)).toEqual({ _tag: "MissingId" });
+  });
+
+  it("reports invalid YAML", () => {
+    const read = readTaskFile("---\ntitle: [unclosed\n---\n", place);
+    expect(read._tag).toBe("Invalid");
+    expect(read._tag === "Invalid" && read.message).toContain("Invalid frontmatter");
+  });
+});
+
+describe("writing task files", () => {
+  it("writes a new task with its status and leaves default fields out", () => {
+    expect(
+      newTaskFile(
+        { title: "Fix the gate", due: null, tags: [], priority: "none" },
+        { id: "GA-1", status: "todo", order: "a0", now },
+      ),
+    ).toBe(`---\nid: GA-1\ntitle: Fix the gate\nstatus: todo\ncreated: ${now}\norder: a0\n---\n`);
+  });
+
+  it("writes set fields and the body", () => {
+    expect(
+      newTaskFile(
+        { title: "Gate", priority: "high", tags: ["x"], due: "2026-11-01", body: "Notes" },
+        { id: "GA-1", status: "todo", order: "a0", now },
+      ),
+    ).toBe(
+      `---\nid: GA-1\ntitle: Gate\nstatus: todo\npriority: high\ntags:\n  - x\ndue: 2026-11-01\ncreated: ${now}\norder: a0\n---\n\nNotes\n`,
+    );
+  });
+
+  it("keeps unknown keys, their order and comments when updating, and writes no updated key", () => {
+    const original = "---\n# owner note\nestimate: 3 # points\nid: GA-1\ntitle: Old\n---\n\nBody\n";
+    expect(editTaskFile(original, { title: "New", priority: "high" })).toBe(
+      "---\n# owner note\nestimate: 3 # points\nid: GA-1\ntitle: New\npriority: high\n---\n\nBody\n",
+    );
+  });
+
+  it("removes a field set back to its default, and replaces the body", () => {
+    expect(
+      editTaskFile("---\nid: GA-1\npriority: high\ntags: [a]\ndue: 2026-01-01\n---\nold\n", {
+        due: null,
+        priority: "none",
+        tags: [],
+        body: "new",
+      }),
+    ).toBe("---\nid: GA-1\n---\n\nnew\n");
+  });
+
+  it("keeps a title that reads like a default value", () => {
+    expect(editTaskFile("---\nid: GA-1\n---\n", { title: "none" })).toBe(
+      "---\nid: GA-1\ntitle: none\n---\n",
+    );
+  });
+
+  it("round-trips: what an update writes reads back as the edited task", () => {
+    const text = editTaskFile("---\nid: GA-1\nestimate: 3\n---\n", {
+      title: "Fix it",
+      tags: ["x"],
+      due: "2026-12-24",
+    });
+    expect(readTask(text)).toMatchObject({
+      title: "Fix it",
+      tags: ["x"],
+      due: "2026-12-24",
+      extra: { estimate: 3 },
+    });
+  });
+
+  it("adds an id to a hand-written file without touching anything else", () => {
+    expect(patchFrontmatter("Just notes\n", { id: "GA-7" })).toBe(
+      "---\nid: GA-7\n---\n\nJust notes\n",
+    );
+  });
+});
+
+describe("list files", () => {
+  it("writes name and order and reads them back with the body", () => {
+    const text = newListFile({ name: "Seeds & bulbs", order: "a1" });
+    expect(text).toBe("---\nname: Seeds & bulbs\norder: a1\n---\n");
+    expect(readListFile(`${text}\nWhat goes in the ground.\n`)).toEqual({
+      _tag: "Read",
+      value: { name: "Seeds & bulbs", order: "a1", body: "What goes in the ground.\n" },
+    });
+  });
+
+  it("reads an empty list file as no name and no order", () => {
+    expect(readListFile("")).toEqual({ _tag: "Read", value: { name: null, order: "", body: "" } });
+  });
+});

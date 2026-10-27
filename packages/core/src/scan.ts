@@ -1,0 +1,248 @@
+import { Effect, FileSystem, Option, Path, Schema } from "effect";
+import {
+  DEFAULT_STATUSES,
+  WorkspaceConfig,
+  type Diagnostic,
+  type List,
+  type StatusDefinition,
+  type Task,
+  type WorkspaceSnapshot,
+} from "./domain.ts";
+import { writeFileAtomic } from "./files.ts";
+import {
+  CONFIG_FILE,
+  LIST_FILE,
+  MAX_LIST_DEPTH,
+  TASK_FILE,
+  TASKS_DIR,
+  defaultStatus,
+  deriveKey,
+  humanize,
+  idNumber,
+  legacyFolder,
+  listDepth,
+  sortStatuses,
+} from "./layout.ts";
+import { patchFrontmatter, readListFile, readTaskFile } from "./markdown.ts";
+
+/** A snapshot plus where its lists and tasks are on disk, which is nobody else's business. */
+export interface Scan {
+  readonly snapshot: WorkspaceSnapshot;
+  readonly dirs: {
+    /** Each list's absolute folder and the order key from its `list.md`. */
+    readonly lists: ReadonlyMap<string, { readonly dir: string; readonly order: string }>;
+    /** Each task's absolute folder. */
+    readonly tasks: ReadonlyMap<string, string>;
+  };
+}
+
+const decodeConfig = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceConfig));
+
+/** Orders by fractional key, keys before no key, then by folder name. */
+const compareOrder = (
+  a: { readonly order: string; readonly name: string },
+  b: { readonly order: string; readonly name: string },
+): number => {
+  if (a.order !== b.order) {
+    if (a.order === "") return 1;
+    if (b.order === "") return -1;
+    return a.order < b.order ? -1 : 1;
+  }
+  return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+};
+
+const compareTasks =
+  (key: string) =>
+  (a: Task, b: Task): number => {
+    if (a.order !== b.order) {
+      if (a.order === "") return 1;
+      if (b.order === "") return -1;
+      return a.order < b.order ? -1 : 1;
+    }
+    return (idNumber(a.id, key) ?? Infinity) - (idNumber(b.id, key) ?? Infinity);
+  };
+
+/** Reads `.octodo/` by its grammar: folders with `task.md` are tasks, folders with `list.md` lists. */
+export const scanWorkspace = (
+  id: string,
+  root: string,
+): Effect.Effect<Scan, unknown, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const tasksDir = path.join(root, TASKS_DIR);
+    const rel = (absolute: string) => path.relative(root, absolute);
+    const diagnostics: Array<Diagnostic> = [];
+    const report = (absolute: string, message: string) =>
+      diagnostics.push({ path: rel(absolute), message });
+
+    const config = yield* fs.readFileString(path.join(tasksDir, CONFIG_FILE)).pipe(
+      Effect.flatMap(decodeConfig),
+      Effect.catch((error) => {
+        diagnostics.push({ path: path.join(TASKS_DIR, CONFIG_FILE), message: String(error) });
+        const name = humanize(path.basename(root));
+        return Effect.succeed<WorkspaceConfig>({ name, key: deriveKey(name) });
+      }),
+    );
+    const statuses: Array<StatusDefinition> = [...(config.statuses ?? DEFAULT_STATUSES)];
+    const fallbackStatus = defaultStatus(statuses)?.id ?? "todo";
+
+    const lists: Array<List> = [];
+    const tasks: Array<Task> = [];
+    const listDirs = new Map<string, { dir: string; order: string }>();
+    const taskDirs = new Map<string, string>();
+    const missingId: Array<{ file: string; text: string }> = [];
+    let legacy = false;
+
+    const entries = (dir: string) =>
+      Effect.gen(function* () {
+        const found: Array<{
+          name: string;
+          path: string;
+          type: "file" | "task" | "list" | "both" | "folder";
+        }> = [];
+        for (const name of (yield* fs.readDirectory(dir)).toSorted()) {
+          if (name.startsWith(".")) continue;
+          const child = path.join(dir, name);
+          const info = yield* fs.stat(child);
+          if (info.type !== "Directory") {
+            if (info.type === "File") found.push({ name, path: child, type: "file" });
+            continue;
+          }
+          const task = yield* fs.exists(path.join(child, TASK_FILE));
+          const list = yield* fs.exists(path.join(child, LIST_FILE));
+          const type = task && list ? "both" : task ? "task" : list ? "list" : "folder";
+          found.push({ name, path: child, type });
+        }
+        return found;
+      });
+
+    const readTask = (
+      dir: string,
+      list: string | null,
+      parent: string | null,
+    ): Effect.Effect<void, unknown> =>
+      Effect.gen(function* () {
+        const file = path.join(dir, TASK_FILE);
+        const text = yield* fs.readFileString(file);
+        const mtime = Option.getOrNull((yield* fs.stat(file)).mtime);
+        const read = readTaskFile(text, {
+          list,
+          parent,
+          path: rel(file),
+          folder: path.basename(dir),
+          defaultStatus: fallbackStatus,
+          updated: mtime === null ? null : mtime.toISOString(),
+        });
+        if (read._tag === "Invalid") {
+          report(file, `${read.message}; this task and its subtasks are not read`);
+          return;
+        }
+        let id: string | null = null;
+        if (read._tag === "MissingId") {
+          missingId.push({ file, text });
+        } else if (taskDirs.has(read.value.id)) {
+          report(
+            file,
+            `Duplicate task id ${read.value.id}; this copy and its subtasks are ignored`,
+          );
+          return;
+        } else {
+          id = read.value.id;
+          taskDirs.set(id, dir);
+          tasks.push(read.value);
+        }
+        for (const entry of yield* entries(dir)) {
+          if (entry.type === "task") yield* readTask(entry.path, list, id);
+          else if (entry.type === "list")
+            report(entry.path, "A list cannot sit inside a task; it is not read");
+          else if (entry.type === "both")
+            report(entry.path, "Folder has both task.md and list.md; it is not read");
+        }
+      });
+
+    const readList = (dir: string, list: string | null): Effect.Effect<void, unknown> =>
+      Effect.gen(function* () {
+        const children: Array<{ name: string; path: string; order: string; list: List }> = [];
+        for (const entry of yield* entries(dir)) {
+          if (entry.type === "file") {
+            if (entry.name.endsWith(".md") && (list === null || entry.name !== LIST_FILE))
+              report(entry.path, "Markdown file is not a task; a task is a folder with task.md");
+          } else if (entry.type === "task") {
+            yield* readTask(entry.path, list, null);
+          } else if (entry.type === "both") {
+            report(entry.path, "Folder has both task.md and list.md; it is not read");
+          } else if (entry.type === "folder") {
+            if (legacyFolder(entry.name) !== null) legacy = true;
+            else report(entry.path, "Folder has neither task.md nor list.md; it is not read");
+          } else if (listDepth(list) >= MAX_LIST_DEPTH) {
+            report(
+              entry.path,
+              `Lists nest at most ${MAX_LIST_DEPTH} levels deep; this one is not read`,
+            );
+          } else {
+            const file = path.join(entry.path, LIST_FILE);
+            const read = readListFile(yield* fs.readFileString(file));
+            if (read._tag === "Invalid") report(file, read.message);
+            const listFile = read._tag === "Read" ? read.value : null;
+            const listId = list === null ? entry.name : `${list}/${entry.name}`;
+            children.push({
+              name: entry.name,
+              path: entry.path,
+              order: listFile?.order ?? "",
+              list: {
+                id: listId,
+                name: listFile?.name ?? humanize(entry.name),
+                parent: list,
+                folder: path.relative(tasksDir, entry.path),
+              },
+            });
+          }
+        }
+        for (const child of children.toSorted(compareOrder)) {
+          lists.push(child.list);
+          listDirs.set(child.list.id, { dir: child.path, order: child.order });
+          yield* readList(child.path, child.list.id);
+        }
+      });
+
+    yield* readList(tasksDir, null);
+
+    // Files made by hand or by another tool get an id the first time the app sees them.
+    let next = Math.max(0, ...tasks.map((task) => idNumber(task.id, config.key) ?? 0)) + 1;
+    for (const { file, text } of missingId) {
+      const assigned = `${config.key}-${next++}`;
+      yield* writeFileAtomic(file, patchFrontmatter(text, { id: assigned }));
+      yield* Effect.logInfo(`Assigned ${assigned} to ${rel(file)}`);
+    }
+    // Assigning ids rewrites files, so the scan repeats to read them back.
+    if (missingId.length > 0) return yield* scanWorkspace(id, root);
+
+    if (legacy) {
+      diagnostics.push({
+        path: TASKS_DIR,
+        message:
+          "This workspace has folders from the old layout (s01-todo, l00-groceries), which are not read. Run `octo migrate` to convert them.",
+      });
+    }
+    for (const task of tasks) {
+      if (statuses.some((known) => known.id === task.status)) continue;
+      statuses.push({ id: task.status, name: humanize(task.status), category: "unstarted" });
+      report(
+        path.join(root, task.path),
+        `Status "${task.status}" is not in config.json; it is shown as an unstarted status`,
+      );
+    }
+
+    tasks.sort(compareTasks(config.key));
+    return {
+      snapshot: {
+        workspace: { id, name: config.name, key: config.key, root },
+        statuses: sortStatuses(statuses),
+        lists,
+        tasks,
+        diagnostics,
+      },
+      dirs: { lists: listDirs, tasks: taskDirs },
+    };
+  });

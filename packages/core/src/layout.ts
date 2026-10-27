@@ -2,18 +2,17 @@
  * Plain functions with no Effect code, so the browser can import this module on its own
  * (`@octodo/core/layout`) without pulling the runtime in.
  *
- * The on-disk conventions of a workspace. Everything the app knows about a task's place comes
- * from folder names under `.octodo/`: `s<NN>-<id>` folders are statuses and `l<NN>-<slug>` folders
- * are lists. The number only orders a folder among its siblings; it is not part of the id, so
- * reordering renames folders without changing what anything refers to. A status folder belongs to
- * the nearest list above it, or to no list when it sits directly in `.octodo/`.
+ * The on-disk grammar of a workspace. A folder with `task.md` is a task, and the task folders
+ * inside it are its subtasks. A folder with `list.md` is a list. `.octodo/` is the root. Folder
+ * names mean nothing to the scanner: a task folder is named `<id>-<slug>` and a list folder is its
+ * slug for people reading the tree, and a list's id is its folder names joined by `/`.
  */
-import type { List, StatusCategory, StatusDefinition } from "./domain.ts";
+import type { List, StatusCategory, StatusDefinition, Task } from "./domain.ts";
 
 export const TASKS_DIR = ".octodo";
 export const CONFIG_FILE = "config.json";
-export const STATUS_PREFIX = "s";
-export const LIST_PREFIX = "l";
+export const TASK_FILE = "task.md";
+export const LIST_FILE = "list.md";
 /** How deep lists nest: a top-level list, its sublists and theirs. */
 export const MAX_LIST_DEPTH = 3;
 
@@ -48,49 +47,22 @@ export const defaultStatus = (
 ): StatusDefinition | undefined =>
   statuses.find((status) => status.category === "unstarted") ?? sortStatuses(statuses)[0];
 
-export type FolderKind =
-  | {
-      readonly type: "status" | "list";
-      readonly slug: string;
-      /** The number after the prefix, or null for a folder named by hand without one. */
-      readonly position: number | null;
-    }
-  | { readonly type: "ignored" }
-  | { readonly type: "unknown" };
-
-const NUMBERED = /^([a-z])(\d*)-(.+)$/;
-
-export const classifyFolder = (name: string): FolderKind => {
-  if (name.startsWith(".")) return { type: "ignored" };
-  const match = NUMBERED.exec(name);
-  if (match === null) return { type: "unknown" };
+/** A folder of the layout before tasks were folders: `s01-todo` (a status) or `l00-groceries` (a list). */
+export const legacyFolder = (
+  name: string,
+): {
+  readonly type: "status" | "list";
+  readonly slug: string;
+  readonly position: number | null;
+} | null => {
+  const match = /^([sl])(\d*)-(.+)$/.exec(name);
+  if (match === null) return null;
   const [, prefix, digits, slug] = match;
-  const position = digits === "" ? null : Number(digits);
-  if (prefix === STATUS_PREFIX) return { type: "status", slug: slug!, position };
-  if (prefix === LIST_PREFIX) return { type: "list", slug: slug!, position };
-  return { type: "unknown" };
-};
-
-const numbered = (prefix: string, position: number, slug: string) =>
-  `${prefix}${String(position).padStart(2, "0")}-${slug}`;
-
-export const statusFolder = (position: number, id: string): string =>
-  numbered(STATUS_PREFIX, position, id);
-
-export const listFolder = (position: number, slug: string): string =>
-  numbered(LIST_PREFIX, position, slug);
-
-/** Sorts numbered folders by number, then the ones without a number, each by slug. */
-export const compareFolders = (
-  a: { readonly slug: string; readonly position: number | null },
-  b: { readonly slug: string; readonly position: number | null },
-): number => {
-  if (a.position !== b.position) {
-    if (a.position === null) return 1;
-    if (b.position === null) return -1;
-    return a.position - b.position;
-  }
-  return a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0;
+  return {
+    type: prefix === "s" ? "status" : "list",
+    slug: slug!,
+    position: digits === "" ? null : Number(digits),
+  };
 };
 
 export const slugify = (text: string): string =>
@@ -135,9 +107,25 @@ export const idNumber = (id: string, key: string): number | null => {
   return match === null ? null : Number(match[1]);
 };
 
-export const taskFileName = (id: string, title: string): string => {
+export const taskFolderName = (id: string, title: string): string => {
   const slug = slugify(title).slice(0, 60).replace(/-+$/, "");
-  return slug.length > 0 ? `${id}-${slug}.md` : `${id}.md`;
+  return slug.length > 0 ? `${id}-${slug}` : id;
+};
+
+/** Whether task `id` is `root` or one of its subtasks at any depth, following `parent` links. */
+export const inTaskSubtree = (
+  tasks: ReadonlyArray<Pick<Task, "id" | "parent">>,
+  id: string,
+  root: string,
+): boolean => {
+  const parents = new Map(tasks.map((task) => [task.id, task.parent]));
+  const seen = new Set<string>();
+  for (let current: string | null = id; current !== null; current = parents.get(current) ?? null) {
+    if (current === root) return true;
+    if (seen.has(current)) return false;
+    seen.add(current);
+  }
+  return false;
 };
 
 /** How many levels down a list sits: 1 for a top-level list, 0 for the workspace itself. */

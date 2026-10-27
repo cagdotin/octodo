@@ -97,7 +97,6 @@ const compareTasks =
 interface Listing {
   /** The folder's entries in name order, dot entries and entries gone since aside. */
   readonly entries: Result.Result<ReadonlyArray<Entry>, PlatformError.PlatformError>;
-  /** Whether the folder holds a `.pending-id` marker. */
   readonly pendingId: boolean;
 }
 
@@ -122,8 +121,7 @@ type Entry = { readonly name: string; readonly path: string } & (
   | { readonly type: "unreadable"; readonly error: PlatformError.PlatformError }
 );
 
-/** How many entries of one folder a scan reads at once. */
-const ENTRIES_AT_ONCE = 32;
+const FOLDER_ENTRIES_AT_ONCE = 32;
 /**
  * How many files a scan reads at once. Only a file read holds a descriptor across several system
  * calls; listing a folder or a stat holds one within a single call.
@@ -231,7 +229,7 @@ const readListing = (
         : Effect.forEach(
             names.success.filter((name) => !name.startsWith(".")).toSorted(),
             (name) => entry(dir, name),
-            { concurrency: ENTRIES_AT_ONCE },
+            { concurrency: FOLDER_ENTRIES_AT_ONCE },
           ).pipe(
             Effect.map((found) => ({
               entries: Result.succeed(found.filter((entry) => entry !== null)),

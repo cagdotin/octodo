@@ -207,14 +207,13 @@ const parseYaml = (yaml: string | null): Document => {
 };
 
 const KEY_VALUE = /^([A-Za-z_][\w-]*): (.+)$/;
-/** A YAML indicator or white space, which a plain scalar does not start with. */
-const INDICATOR = /^[\s\-?:,[\]{}#&*!|>'"%@`]/;
+const INDICATOR_OR_SPACE = /^[\s\-?:,[\]{}#&*!|>'"%@`]/;
 /** The words and numbers YAML's core schema reads as something other than a string. */
 const NOT_A_STRING =
   /^(?:~|[Nn]ull|NULL|[Tt]rue|TRUE|[Ff]alse|FALSE|[-+]?[0-9]+|0o[0-7]+|0x[0-9a-fA-F]+|[-+]?\.(?:inf|Inf|INF)|\.nan|\.NaN|\.NAN|[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)[eE][-+]?[0-9]+|[-+]?(?:\.[0-9]+|[0-9]+\.[0-9]*))$/;
 
 const isPlainString = (scalar: string) =>
-  !INDICATOR.test(scalar) &&
+  !INDICATOR_OR_SPACE.test(scalar) &&
   !NOT_A_STRING.test(scalar) &&
   !scalar.includes("#") &&
   !/:\s/.test(scalar) &&

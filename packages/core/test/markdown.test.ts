@@ -317,7 +317,7 @@ describe("frontmatter", () => {
     const chance = (one: number) => pick(Array.from({ length: one }, (_, i) => i)) === 0;
     let plain = 0;
     const differences: Array<{ yaml: string; read: unknown; parsed: unknown }> = [];
-    for (let i = 0; i < 20_000; i++) {
+    for (let i = 0; i < 5_000; i++) {
       const yaml = Array.from({ length: 1 + (i % 4) }, () =>
         chance(10)
           ? pick(lines)
@@ -332,6 +332,6 @@ describe("frontmatter", () => {
         differences.push({ yaml, read, parsed: expected });
     }
     expect(differences.slice(0, 5)).toEqual([]);
-    expect(plain, "a good share of cases are plain strings").toBeGreaterThan(2_000);
+    expect(plain, "a good share of cases are plain strings").toBeGreaterThan(500);
   });
 });

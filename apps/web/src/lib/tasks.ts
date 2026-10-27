@@ -8,7 +8,7 @@ import type {
   Task,
   WorkspaceSnapshot,
 } from "@octodo/core";
-import { inSubtree, isClosedCategory, movedListId } from "@octodo/core/layout";
+import { inSubtree, inTaskSubtree, isClosedCategory, movedListId } from "@octodo/core/layout";
 import {
   addDays,
   format,
@@ -122,10 +122,12 @@ export const allTags = (tasks: ReadonlyArray<Task>) =>
 
 export const todayKey = () => format(new Date(), "yyyy-MM-dd");
 
+/** The tasks a view shows: top-level ones only, since subtasks show inside their parent. */
 export const filterTasks = (
-  tasks: ReadonlyArray<Task>,
+  all: ReadonlyArray<Task>,
   list: string | undefined,
 ): ReadonlyArray<Task> => {
+  const tasks = all.filter((task) => task.parent === null);
   if (list === undefined) return tasks;
   const today = todayKey();
   switch (list) {
@@ -197,14 +199,14 @@ export const formatTimestamp = (value: string | null) => {
   return Number.isNaN(date.getTime()) ? value : format(date, "MMM d, yyyy HH:mm");
 };
 
-/** Open (not closed) task counts per list, including tasks in nested lists. */
+/** Open (not closed) top-level task counts per list, including tasks in nested lists. */
 export const listCounts = (snapshot: WorkspaceSnapshot) => {
   const statuses = statusMap(snapshot.statuses);
   const counts = new Map<string, number>();
   let none = 0;
   let open = 0;
   for (const task of snapshot.tasks) {
-    if (isClosedCategory(statuses.get(task.status)?.category)) continue;
+    if (task.parent !== null || isClosedCategory(statuses.get(task.status)?.category)) continue;
     open++;
     if (task.list === null) {
       none++;
@@ -292,9 +294,23 @@ export const listLabel = (lists: ReadonlyArray<List>, id: string | null) => {
   return names.length > 0 ? names.join(" / ") : id;
 };
 
+/** Where a move puts a task: under a parent (in its list), in a list, or where it was. */
+const movedContainer = (
+  tasks: ReadonlyArray<Task>,
+  task: Task,
+  move: MoveTaskInput,
+): Pick<Task, "list" | "parent"> => {
+  if (move.parent !== undefined && move.parent !== null) {
+    const parent = tasks.find((entry) => entry.id === move.parent);
+    return { list: parent?.list ?? task.list, parent: move.parent };
+  }
+  if (move.list === undefined && move.parent === undefined) return task;
+  return { list: move.list === undefined ? task.list : move.list, parent: null };
+};
+
 /**
- * Mirrors a move in a cached snapshot: the task changes status/list and is placed next to its
- * neighbour in the task array, which is the order views render in.
+ * Mirrors a move in a cached snapshot: the task changes status/list/parent and is placed next to
+ * its neighbour in the task array, which is the order views render in.
  */
 export const applyMove = (
   snapshot: WorkspaceSnapshot,
@@ -303,11 +319,8 @@ export const applyMove = (
 ): WorkspaceSnapshot => {
   const task = snapshot.tasks.find((entry) => entry.id === id);
   if (!task) return snapshot;
-  const moved: Task = {
-    ...task,
-    status: move.status ?? task.status,
-    list: move.list === undefined ? task.list : move.list,
-  };
+  const { list, parent } = movedContainer(snapshot.tasks, task, move);
+  const moved: Task = { ...task, status: move.status ?? task.status, list, parent };
   const rest = snapshot.tasks.filter((entry) => entry.id !== id);
   let index = rest.length;
   if (move.before !== undefined) {
@@ -337,4 +350,34 @@ export const neighbours = (
     .find((entry) => entry.list === list);
   if (previous) return { after: previous.id };
   return {};
+};
+
+/** The tasks directly under `parent`, in the snapshot's order. */
+export const subtasksOf = (tasks: ReadonlyArray<Task>, parent: string) =>
+  tasks.filter((task) => task.parent === parent);
+
+/** How many tasks go with `id` when it is deleted: its subtasks at any depth. */
+export const descendantCount = (tasks: ReadonlyArray<Task>, id: string) =>
+  tasks.filter((task) => task.id !== id && inTaskSubtree(tasks, task.id, id)).length;
+
+/** Removes a task and its subtasks at any depth, as deleting its folder does. */
+export const withoutSubtree = (tasks: ReadonlyArray<Task>, id: string) =>
+  tasks.filter((task) => !inTaskSubtree(tasks, task.id, id));
+
+export interface Progress {
+  readonly done: number;
+  readonly total: number;
+}
+
+/** Direct subtasks per parent id, counting those in a completed status as done. */
+export const subtaskProgress = (snapshot: WorkspaceSnapshot): ReadonlyMap<string, Progress> => {
+  const statuses = statusMap(snapshot.statuses);
+  const progress = new Map<string, Progress>();
+  for (const task of snapshot.tasks) {
+    if (task.parent === null) continue;
+    const { done, total } = progress.get(task.parent) ?? { done: 0, total: 0 };
+    const completed = statuses.get(task.status)?.category === "completed";
+    progress.set(task.parent, { done: done + (completed ? 1 : 0), total: total + 1 });
+  }
+  return progress;
 };

@@ -26,6 +26,7 @@ import {
   TagChips,
 } from "@/components/task-bits";
 import { TagsEditor } from "@/components/tags-editor";
+import { ParentLink, SubtasksGoing, TaskSubtasks } from "@/components/task-subtasks";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -119,6 +120,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <ParentLink workspace={workspace} snapshot={snapshot} task={task} />
       <div className="flex shrink-0 items-start gap-1 border-b px-3.5 py-3 desktop-mac:app-drag">
         <StatusMenu workspace={workspace} snapshot={snapshot} task={task}>
           <Button
@@ -196,6 +198,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
         onBlur={() => editor.send({ type: "FLUSH" })}
         className="min-h-0 flex-1 text-base md:text-sm"
       />
+      <TaskSubtasks workspace={workspace} snapshot={snapshot} task={task} />
 
       <div className="flex h-11 shrink-0 items-center gap-0.5 border-t pr-3.5 pl-2">
         <DropdownMenu>
@@ -308,7 +311,12 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {task.id}?</AlertDialogTitle>
             <AlertDialogDescription>
-              This deletes <span className="font-mono">{task.path}</span> from disk.
+              This deletes{" "}
+              <span className="font-mono">
+                {task.path.slice(0, task.path.lastIndexOf("/") + 1)}
+              </span>{" "}
+              and everything in it
+              <SubtasksGoing snapshot={snapshot} task={task} />.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

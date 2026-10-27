@@ -101,8 +101,11 @@ export const deriveKey = (name: string): string => {
     .toUpperCase();
 };
 
+const TASK_ID = /[A-Za-z][A-Za-z0-9]*-\d+/.source;
+const WHOLE_TASK_ID = new RegExp(`^${TASK_ID}$`);
+
 /** Whether `id` has the shape of a task id: a key, a dash and a number, as in `HM-42`. */
-export const isTaskId = (id: string): boolean => /^[A-Za-z][A-Za-z0-9]*-\d+$/.test(id);
+export const isTaskId = (id: string): boolean => WHOLE_TASK_ID.test(id);
 
 /**
  * The name a sync tool's conflict copy was made from: iCloud names a second copy of `task.md`
@@ -210,7 +213,7 @@ export interface Mention {
   readonly to: number;
 }
 
-const MENTION = /\[\[([A-Za-z][A-Za-z0-9_]*-\d+)\]\]/g;
+const MENTION = new RegExp(`\\[\\[(${TASK_ID})\\]\\]`, "g");
 const FENCE = /^(?:[ \t]*>)*[ \t]*(`{3,}|~{3,})/;
 
 /** Offset ranges of fenced code blocks and code spans, which hold text rather than mentions. */

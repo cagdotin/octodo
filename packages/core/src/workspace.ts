@@ -72,7 +72,10 @@ export interface Workspace {
   readonly createTask: (
     input: CreateTaskInput,
   ) => Effect.Effect<Task, InvalidRequest | StorageError>;
-  /** Refuses links to unknown tasks and to the task itself. */
+  /**
+   * Refuses links to the task itself and to unknown tasks, except unknown ones its field already
+   * lists, so a dangling blocker never stops an edit of the others.
+   */
   readonly updateTask: (
     id: string,
     input: UpdateTaskInput,
@@ -406,11 +409,15 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       }).pipe(Effect.scoped),
     );
 
-  /** The ids a link field gets: each once, all of them existing tasks other than `taskId`. */
-  const checkLinks = (snapshot: WorkspaceSnapshot, taskId: string, ids: ReadonlyArray<string>) => {
-    const unknown = ids.filter((id) => !snapshot.tasks.some((task) => task.id === id));
+  /**
+   * The ids a link field gets: each once, none of them `taskId`, and each an existing task or one
+   * the field already had.
+   */
+  const checkLinks = (snapshot: WorkspaceSnapshot, task: Task, ids: ReadonlyArray<string>) => {
+    const known = new Set([...snapshot.tasks.map(({ id }) => id), ...task.blockedBy]);
+    const unknown = ids.filter((id) => !known.has(id));
     if (unknown.length > 0) return invalid(`Unknown task ${unknown.join(", ")}`);
-    if (ids.includes(taskId)) return invalid("A task cannot be linked to itself");
+    if (ids.includes(task.id)) return invalid("A task cannot be linked to itself");
     return Effect.succeed([...new Set(ids)]);
   };
 
@@ -418,11 +425,11 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     writeFresh(
       Effect.gen(function* () {
         const { snapshot, dirs } = yield* state;
-        yield* findTask(snapshot, taskId);
+        const task = yield* findTask(snapshot, taskId);
         const input =
           given.blocked_by === undefined
             ? given
-            : { ...given, blocked_by: yield* checkLinks(snapshot, taskId, given.blocked_by) };
+            : { ...given, blocked_by: yield* checkLinks(snapshot, task, given.blocked_by) };
         yield* Effect.gen(function* () {
           const dir =
             input.title === undefined

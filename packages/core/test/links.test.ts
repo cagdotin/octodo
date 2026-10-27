@@ -235,6 +235,30 @@ describe("links in a workspace", () => {
     expect(read(root, result.cleared.path)).not.toContain("blocked_by");
   });
 
+  it("lets an update keep or drop blockers that match no task, and refuses only new unknown ids", async () => {
+    const root = fresh();
+    const result = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        const primer = yield* ws.createTask({ title: "Buy primer" });
+        write(root, "HM-2/task.md", taskFile("HM-2", "blocked_by: [HM-1, HM-98, HM-99]\n"));
+        yield* (yield* makeWorkspace("again", root)).snapshot;
+        const fresh = yield* makeWorkspace("fresh", root);
+        const droppedValid = yield* fresh.updateTask("HM-2", { blocked_by: ["HM-98", "HM-99"] });
+        const droppedDangling = yield* fresh.updateTask("HM-2", { blocked_by: ["HM-98"] });
+        const added = yield* Effect.flip(
+          fresh.updateTask("HM-2", { blocked_by: ["HM-98", "HM-97"] }),
+        );
+        const relinked = yield* fresh.updateTask("HM-2", { blocked_by: ["HM-98", primer.id] });
+        return { droppedValid, droppedDangling, added, relinked };
+      }),
+    );
+    expect(result.droppedValid.blockedBy).toEqual(["HM-98", "HM-99"]);
+    expect(result.droppedDangling.blockedBy).toEqual(["HM-98"]);
+    expect(result.added).toMatchObject({ _tag: "InvalidRequest", message: "Unknown task HM-97" });
+    expect(result.relinked.blockedBy).toEqual(["HM-98", "HM-1"]);
+  });
+
   it("deletes a task's id, and its subtasks' ids, from other tasks' links but not their bodies", async () => {
     const root = fresh();
     const result = await run(

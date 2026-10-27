@@ -1,4 +1,4 @@
-import { Effect, FileSystem, Path } from "effect";
+import { Effect, FileSystem, Path, PlatformError } from "effect";
 
 /** Writes through a temporary sibling and a rename, so readers and sync tools never see half a file. */
 export const writeFileAtomic = Effect.fnUntraced(function* (
@@ -12,3 +12,7 @@ export const writeFileAtomic = Effect.fnUntraced(function* (
   else yield* fs.writeFile(temp, content);
   yield* fs.rename(temp, file);
 });
+
+/** Whether a file system call failed because its path is gone, as when another process moved it. */
+export const isNotFound = (error: unknown): boolean =>
+  PlatformError.isPlatformError(error) && error.reason._tag === "NotFound";

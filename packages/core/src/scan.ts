@@ -8,7 +8,7 @@ import {
   type Task,
   type WorkspaceSnapshot,
 } from "./domain.ts";
-import { writeFileAtomic } from "./files.ts";
+import { isNotFound, writeFileAtomic } from "./files.ts";
 import {
   CONFIG_FILE,
   LIST_FILE,
@@ -66,7 +66,7 @@ const compareTasks =
 export const scanWorkspace = (
   id: string,
   root: string,
-): Effect.Effect<Scan, unknown, FileSystem.FileSystem | Path.Path> =>
+): Effect.Effect<Scan, never, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -75,6 +75,19 @@ export const scanWorkspace = (
     const diagnostics: Array<Diagnostic> = [];
     const report = (absolute: string, message: string) =>
       diagnostics.push({ path: rel(absolute), message });
+    /**
+     * What `effect` reads from one entry, or null when it fails: silently when the entry is gone
+     * (another process moved it), as a diagnostic otherwise.
+     */
+    const attempt = <A, E, R>(
+      absolute: string,
+      effect: Effect.Effect<A, E, R>,
+      failure = "Could not read it",
+    ): Effect.Effect<A | null, never, R> =>
+      Effect.catch(effect, (error) => {
+        if (!isNotFound(error)) report(absolute, `${failure}: ${String(error)}`);
+        return Effect.succeed(null);
+      });
 
     const config = yield* fs.readFileString(path.join(tasksDir, CONFIG_FILE)).pipe(
       Effect.flatMap(decodeConfig),
@@ -101,18 +114,21 @@ export const scanWorkspace = (
           path: string;
           type: "file" | "task" | "list" | "both" | "folder";
         }> = [];
-        for (const name of (yield* fs.readDirectory(dir)).toSorted()) {
+        for (const name of ((yield* attempt(dir, fs.readDirectory(dir))) ?? []).toSorted()) {
           if (name.startsWith(".")) continue;
           const child = path.join(dir, name);
-          const info = yield* fs.stat(child);
-          if (info.type !== "Directory") {
-            if (info.type === "File") found.push({ name, path: child, type: "file" });
-            continue;
-          }
-          const task = yield* fs.exists(path.join(child, TASK_FILE));
-          const list = yield* fs.exists(path.join(child, LIST_FILE));
-          const type = task && list ? "both" : task ? "task" : list ? "list" : "folder";
-          found.push({ name, path: child, type });
+          const type = yield* attempt(
+            child,
+            Effect.gen(function* () {
+              const info = yield* fs.stat(child);
+              if (info.type === "File") return "file";
+              if (info.type !== "Directory") return null;
+              const task = yield* fs.exists(path.join(child, TASK_FILE));
+              const list = yield* fs.exists(path.join(child, LIST_FILE));
+              return task && list ? "both" : task ? "task" : list ? "list" : "folder";
+            }),
+          );
+          if (type !== null) found.push({ name, path: child, type });
         }
         return found;
       });
@@ -121,11 +137,17 @@ export const scanWorkspace = (
       dir: string,
       list: string | null,
       parent: string | null,
-    ): Effect.Effect<void, unknown> =>
+    ): Effect.Effect<void> =>
       Effect.gen(function* () {
         const file = path.join(dir, TASK_FILE);
-        const text = yield* fs.readFileString(file);
-        const mtime = Option.getOrNull((yield* fs.stat(file)).mtime);
+        const contents = yield* attempt(
+          file,
+          Effect.all([fs.readFileString(file), fs.stat(file)]),
+          `Could not read it; this task and its subtasks are not read`,
+        );
+        if (contents === null) return;
+        const [text, info] = contents;
+        const mtime = Option.getOrNull(info.mtime);
         const read = readTaskFile(text, {
           list,
           parent,
@@ -161,7 +183,7 @@ export const scanWorkspace = (
         }
       });
 
-    const readList = (dir: string, list: string | null): Effect.Effect<void, unknown> =>
+    const readList = (dir: string, list: string | null): Effect.Effect<void> =>
       Effect.gen(function* () {
         const children: Array<{ name: string; path: string; order: string; list: List }> = [];
         for (const entry of yield* entries(dir)) {
@@ -182,9 +204,10 @@ export const scanWorkspace = (
             );
           } else {
             const file = path.join(entry.path, LIST_FILE);
-            const read = readListFile(yield* fs.readFileString(file));
-            if (read._tag === "Invalid") report(file, read.message);
-            const listFile = read._tag === "Read" ? read.value : null;
+            const text = yield* attempt(file, fs.readFileString(file));
+            const read = text === null ? null : readListFile(text);
+            if (read?._tag === "Invalid") report(file, read.message);
+            const listFile = read?._tag === "Read" ? read.value : null;
             const listId = list === null ? entry.name : `${list}/${entry.name}`;
             children.push({
               name: entry.name,
@@ -210,13 +233,20 @@ export const scanWorkspace = (
 
     // Files made by hand or by another tool get an id the first time the app sees them.
     let next = Math.max(0, ...tasks.map((task) => idNumber(task.id, config.key) ?? 0)) + 1;
+    let assignedAny = false;
     for (const { file, text } of missingId) {
       const assigned = `${config.key}-${next++}`;
-      yield* writeFileAtomic(file, patchFrontmatter(text, { id: assigned }));
+      const written = yield* attempt(
+        file,
+        Effect.as(writeFileAtomic(file, patchFrontmatter(text, { id: assigned })), true),
+        "Could not give it an id; it is not read",
+      );
+      if (written === null) continue;
+      assignedAny = true;
       yield* Effect.logInfo(`Assigned ${assigned} to ${rel(file)}`);
     }
     // Assigning ids rewrites files, so the scan repeats to read them back.
-    if (missingId.length > 0) return yield* scanWorkspace(id, root);
+    if (assignedAny) return yield* scanWorkspace(id, root);
 
     if (legacy) {
       diagnostics.push({

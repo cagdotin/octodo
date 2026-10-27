@@ -1,11 +1,13 @@
 import { NodeServices } from "@effect/platform-node";
-import { Effect } from "effect";
+import { Effect, Exit, FileSystem, Layer } from "effect";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -16,10 +18,20 @@ import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { initWorkspace, makeWorkspace } from "../src/workspace.ts";
 
-const run = <A, E>(effect: Effect.Effect<A, E, any>) =>
-  Effect.runPromise(
-    effect.pipe(Effect.scoped, Effect.provide(NodeServices.layer)) as Effect.Effect<A, E>,
-  );
+const run = <A, E>(effect: Effect.Effect<A, E, any>, layer = NodeServices.layer) =>
+  Effect.runPromise(effect.pipe(Effect.scoped, Effect.provide(layer)) as Effect.Effect<A, E>);
+
+/** The node file system with some of its methods replaced, to stage what another process does. */
+const patchedFileSystem = (
+  patch: (fs: FileSystem.FileSystem) => Partial<FileSystem.FileSystem>,
+): typeof NodeServices.layer =>
+  Layer.effect(
+    FileSystem.FileSystem,
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      return { ...fs, ...patch(fs) };
+    }),
+  ).pipe(Layer.provideMerge(NodeServices.layer));
 
 const fresh = () => {
   const root = join(mkdtempSync(join(tmpdir(), "octodo-")), "house-move");
@@ -214,6 +226,78 @@ describe("workspace", () => {
       ".octodo/sequence/task.md",
     ]);
     for (const [file, content] of Object.entries(broken)) expect(read(root, file)).toBe(content);
+  });
+
+  it("reports folders and files it cannot read and still reads the rest", async () => {
+    const root = fresh();
+    await run(initWorkspace(root));
+    write(root, "HM-1-ok/task.md", "---\nid: HM-1\n---\n");
+    symlinkSync("/nonexistent/target", join(root, ".octodo/dangling"));
+    mkdirSync(join(root, ".octodo/weird/task.md"), { recursive: true });
+    write(root, "locked/HM-2-hidden/task.md", "---\nid: HM-2\n---\n");
+    write(root, "frozen/task.md", "No id yet\n");
+    chmodSync(join(root, ".octodo/locked"), 0o000);
+    chmodSync(join(root, ".octodo/frozen"), 0o555);
+    try {
+      const snapshot = await run(Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot));
+      expect(snapshot.tasks.map((task) => task.id)).toEqual(["HM-1"]);
+      expect(snapshot.diagnostics.map((diagnostic) => diagnostic.path).toSorted()).toEqual([
+        ".octodo/frozen/task.md",
+        ".octodo/locked",
+        ".octodo/weird/task.md",
+      ]);
+    } finally {
+      chmodSync(join(root, ".octodo/locked"), 0o755);
+      chmodSync(join(root, ".octodo/frozen"), 0o755);
+    }
+  });
+
+  it("skips a folder another process renames while the scan runs", async () => {
+    const root = fresh();
+    await run(initWorkspace(root));
+    write(root, "HM-1-a/task.md", "---\nid: HM-1\n---\n");
+    write(root, "HM-2-b/task.md", "---\nid: HM-2\n---\n");
+    let renamed = false;
+    const racing = patchedFileSystem((fs) => ({
+      readDirectory: (dir, options) =>
+        Effect.tap(fs.readDirectory(dir, options), () =>
+          Effect.sync(() => {
+            if (renamed || dir !== join(root, ".octodo")) return;
+            renamed = true;
+            renameSync(join(root, ".octodo/HM-2-b"), join(root, ".octodo/HM-2-c"));
+          }),
+        ),
+    }));
+    const snapshot = await run(
+      Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot),
+      racing,
+    );
+    expect(snapshot.tasks.map((task) => task.id)).toEqual(["HM-1"]);
+    expect(snapshot.diagnostics).toEqual([]);
+  });
+
+  it("fails with a storage error, not a defect, when the workspace cannot be read back after a write", async () => {
+    const root = fresh();
+    await run(initWorkspace(root));
+    let written = false;
+    const unreadable = patchedFileSystem((fs) => ({
+      rename: (from, to) =>
+        Effect.tap(fs.rename(from, to), () => Effect.sync(() => (written = true))),
+      readDirectory: (dir, options) =>
+        written
+          ? Effect.flatMap(fs.readDirectory("/nonexistent"), () => fs.readDirectory(dir, options))
+          : fs.readDirectory(dir, options),
+    }));
+    const exit = await run(
+      Effect.exit(
+        Effect.flatMap(makeWorkspace("test", root), (ws) => ws.createTask({ title: "x" })),
+      ),
+      unreadable,
+    );
+    expect(Exit.isFailure(exit) && Exit.findErrorOption(exit)).toMatchObject({
+      _tag: "Some",
+      value: { _tag: "StorageError" },
+    });
   });
 
   it("points an old-layout workspace at octo migrate once", async () => {

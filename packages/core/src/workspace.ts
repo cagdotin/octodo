@@ -183,9 +183,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   const state = Effect.gen(function* () {
     const cached = yield* Ref.get(cache);
     if (Option.isSome(cached)) return cached.value;
-    const fresh = yield* storage("Could not read the workspace")(
-      withPlatform(scanWorkspace(id, root)),
-    );
+    const fresh = yield* withPlatform(scanWorkspace(id, root));
     yield* Ref.set(cache, Option.some(fresh));
     return fresh;
   });
@@ -325,6 +323,8 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   const write = <A, E>(effect: Effect.Effect<A, E>) =>
     lock.withPermits(1)(Effect.ensuring(effect, invalidate));
 
+  const readBack = storage("Could not read the workspace back after writing it");
+
   const reread = (taskId: string) =>
     Effect.flatMap(current, (snapshot) => findTask(snapshot, taskId));
 
@@ -352,7 +352,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           yield* createFolder(dir, name, TASK_FILE, content);
         }).pipe(storage("Could not write the task"));
         yield* invalidate;
-        return yield* reread(taskId).pipe(Effect.orDie);
+        return yield* reread(taskId).pipe(readBack);
       }),
     );
 
@@ -371,7 +371,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           if (renamed !== dir && !(yield* fs.exists(renamed))) yield* fs.rename(dir, renamed);
         }).pipe(storage("Could not write the task"));
         yield* invalidate;
-        return yield* reread(taskId).pipe(Effect.orDie);
+        return yield* reread(taskId).pipe(readBack);
       }),
     );
 
@@ -398,7 +398,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           yield* moveFolder(dir, containerDir(scan, container));
         }).pipe(storage("Could not move the task"));
         yield* invalidate;
-        return yield* reread(taskId).pipe(Effect.orDie);
+        return yield* reread(taskId).pipe(readBack);
       }),
     );
 
@@ -445,7 +445,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           yield* createFolder(dir, slug, LIST_FILE, content);
         }).pipe(storage("Could not create the list"));
         yield* invalidate;
-        return yield* rereadList(listId).pipe(Effect.orDie);
+        return yield* rereadList(listId).pipe(readBack);
       }),
     );
 
@@ -474,7 +474,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           if (parent !== list.parent) yield* fs.rename(dir, moved);
         }).pipe(storage("Could not move the list"));
         yield* invalidate;
-        return yield* rereadList(movedListId(listId, parent)).pipe(Effect.orDie);
+        return yield* rereadList(movedListId(listId, parent)).pipe(readBack);
       }),
     );
 

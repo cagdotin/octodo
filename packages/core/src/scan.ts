@@ -48,6 +48,8 @@ export interface Scan {
   };
   /** Ids that more than one task folder has. */
   readonly idClashes: ReadonlySet<string>;
+  /** Every id a markdown file on disk has, in tasks read or not: links to them are not broken. */
+  readonly idsOnDisk: ReadonlySet<string>;
   /** The number of the next new task id: past every id on disk, in tasks read or not. */
   readonly nextIdNumber: number;
   /** Whether folders of the old layout are left, which `octo migrate` converts. */
@@ -146,8 +148,11 @@ export const scanWorkspace = (
     }> = [];
     const legacyFolders: Array<string> = [];
     let highestId = 0;
+    const idsOnDisk = new Set<string>();
     const takeId = (taskId: string | null) => {
-      if (taskId !== null) highestId = Math.max(highestId, idNumber(taskId, config.key) ?? 0);
+      if (taskId === null) return;
+      idsOnDisk.add(taskId);
+      highestId = Math.max(highestId, idNumber(taskId, config.key) ?? 0);
     };
     /** Takes the ids of every markdown file under `target`, which the scan does not read. */
     const takeIdsUnder = (target: string): Effect.Effect<void> =>
@@ -474,6 +479,7 @@ export const scanWorkspace = (
     const { tasks, diagnostics: linkDiagnostics } = linkTasks(
       taskFiles.toSorted(compare),
       statuses,
+      idsOnDisk,
     );
     diagnostics.push(...linkDiagnostics);
     return {
@@ -486,6 +492,7 @@ export const scanWorkspace = (
       },
       dirs: { lists: listDirs, tasks: taskDirs },
       idClashes,
+      idsOnDisk,
       nextIdNumber: highestId + 1,
       oldLayout: legacyFolders.length > 0,
     };

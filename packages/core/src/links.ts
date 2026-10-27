@@ -22,17 +22,18 @@ const reverseIndex = (
 
 /**
  * Completes the tasks of a snapshot with what other tasks say about them: `blocks`,
- * `mentionedIn` and `blocked`, which no file stores. A link to an id that matches no task is a
- * diagnostic, never a reason not to read the task, and a blocker that matches none keeps it blocked.
+ * `mentionedIn` and `blocked`, which no file stores. A link to an id no file on disk has is a
+ * diagnostic, never a reason not to read the task. A blocker that is not read, missing or only
+ * unreadable for now, keeps the task blocked.
  */
 export const linkTasks = (
   files: ReadonlyArray<TaskFile>,
   statuses: ReadonlyArray<StatusDefinition>,
+  idsOnDisk: ReadonlySet<string>,
 ): { readonly tasks: Array<Task>; readonly diagnostics: Array<Diagnostic> } => {
-  const known = new Set(files.map((task) => task.id));
   const diagnostics = files.flatMap((task) =>
     LINK_KINDS.flatMap((kind) => {
-      const unknown = task[kind.forward].filter((id) => !known.has(id));
+      const unknown = task[kind.forward].filter((id) => !idsOnDisk.has(id));
       if (unknown.length === 0) return [];
       const which = unknown.length === 1 ? "which matches" : "which match";
       return [

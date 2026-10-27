@@ -318,6 +318,26 @@ describe("file health", () => {
     );
   });
 
+  it("keeps links to tasks that are on disk but cannot be read, and they still block", async () => {
+    const root = await fresh({
+      "HM-1-a/task.md": "---\nid: HM-1\nblocked_by: [HM-2, HM-3, HM-4, HM-9]\n---\n",
+      "HM-2-conflicted/task.md": "---\nid: HM-2\n<<<<<<< ours\ntitle: [x\n---\n",
+      "HM-1-a-copy/task.md": "---\nid: HM-1\n---\n",
+      "HM-1-a-copy/HM-3-sub/task.md": "---\nid: HM-3\n---\n",
+      "loose/HM-4-b/task.md": "---\nid: HM-4\n---\n",
+    });
+    expect((await snapshot(root)).tasks[0]).toMatchObject({ id: "HM-1", blocked: true });
+    const broken = (await diagnostics(root)).filter((found) => found.kind === "broken-link");
+    expect(broken).toEqual([
+      one("HM-1-a/task.md", "broken-link", "blocked_by", "drop-unknown-links"),
+    ]);
+    expect(
+      (await snapshot(root)).diagnostics.find((found) => found.kind === "broken-link")?.message,
+    ).toContain("lists HM-9, which matches no task");
+    await inWorkspace(root, (ws) => ws.fixAll);
+    expect(read(root, "HM-1-a/task.md")).toContain("blocked_by: [HM-2, HM-3, HM-4]");
+  });
+
   it("drops a task's link to itself, and the next run finds nothing to do", async () => {
     const root = await fresh({
       "HM-1-a/task.md": "---\nid: HM-1\nblocked_by: [HM-1]\n---\nBody\n",

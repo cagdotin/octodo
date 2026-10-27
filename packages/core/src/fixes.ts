@@ -85,7 +85,7 @@ const keepLinksWhere =
       const text = yield* fs.readFileString(target);
       const task = {
         own: frontmatterId(text),
-        known: new Set(scan.snapshot.tasks.map((known) => known.id)),
+        known: scan.idsOnDisk,
       };
       const changed = keepLinks(text, field, (id) => keep(id, task));
       if (changed !== null) yield* writeFileAtomic(target, changed);

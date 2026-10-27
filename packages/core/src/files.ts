@@ -9,10 +9,14 @@ export const tempName = {
   folder: () => `.new-${crypto.randomUUID()}`,
   /** A migration names its temporary folders after its run, so two runs never share one. */
   migration: (run: string, name: string) => `.migrate-${run}-${name}`,
+  /** The file in `.octodo/` whose exclusive creation reserves task id `id` for one process. */
+  claim: (id: string) => `.claim-${id}`,
 };
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-const LEFTOVER = new RegExp(`^\\.(?:.+\\.${UUID}\\.tmp|new-${UUID}|migrate-${UUID}-.+)$`);
+const LEFTOVER = new RegExp(
+  `^\\.(?:.+\\.${UUID}\\.tmp|new-${UUID}|migrate-${UUID}-.+|claim-.+-\\d+)$`,
+);
 
 /** How old a temporary file must be before it is taken as a crash's leftover, not a write in progress. */
 const STALE_AFTER_MS = 60_000;

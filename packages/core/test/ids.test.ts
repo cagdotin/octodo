@@ -1,6 +1,14 @@
 import { NodeServices } from "@effect/platform-node";
 import { Effect, FileSystem, Layer } from "effect";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -82,7 +90,7 @@ const ids = (root: string) =>
   }));
 
 describe("task ids across processes", () => {
-  it.fails("never gives a new task an id that another process created since this one last read", async () => {
+  it("never gives a new task an id that another process created since this one last read", async () => {
     const root = await fresh();
     const app = await openApp(root);
     await app.use((ws) => ws.snapshot);
@@ -96,7 +104,7 @@ describe("task ids across processes", () => {
     expect(await ids(root)).toEqual({ ids: ["HM-1", "HM-2"], diagnostics: [] });
   });
 
-  it.fails("gives distinct ids to creates that run at the same time in separate workspaces", async () => {
+  it("gives distinct ids to creates that run at the same time in separate workspaces", async () => {
     const root = await fresh();
     const creates = Array.from({ length: 12 }, (_, index) =>
       run(
@@ -131,7 +139,7 @@ describe("task ids across processes", () => {
     expect(read(root, "milk/task.md")).toBe(`---\nid: ${milk}\n---\n\nBuy milk\n`);
   });
 
-  it.fails("keeps the id another process gave a hand-made file after this one read it without an id", async () => {
+  it("keeps the id another process gave a hand-made file after this one read it without an id", async () => {
     const root = await fresh();
     write(root, "milk/task.md", "Buy milk\n");
     write(root, "bread/task.md", "Buy bread\n");
@@ -161,5 +169,40 @@ describe("task ids across processes", () => {
       (entry) => entry.split("/").some((part) => part.startsWith(".")),
     );
     expect(hidden).toEqual([]);
+  });
+
+  it("skips an id another process holds a claim on, and frees a claim a crash left once it is a minute old", async () => {
+    const root = await fresh();
+    write(root, ".claim-HM-1", "");
+    write(root, ".claim-HM-3", "");
+    const twoMinutesAgo = new Date(Date.now() - 120_000);
+    utimesSync(join(root, ".octodo/.claim-HM-1"), twoMinutesAgo, twoMinutesAgo);
+    const created = await run(
+      Effect.gen(function* () {
+        const ws = yield* makeWorkspace("cli", root);
+        return [
+          (yield* ws.createTask({ title: "First" })).id,
+          (yield* ws.createTask({ title: "Second" })).id,
+        ];
+      }),
+    );
+    expect(created).toEqual(["HM-1", "HM-2"]);
+    expect(existsSync(join(root, ".octodo/.claim-HM-3")), "a live claim stays").toBe(true);
+    const third = await run(
+      Effect.flatMap(makeWorkspace("cli", root), (ws) => ws.createTask({ title: "Third" })),
+    );
+    expect(third.id).toBe("HM-4");
+  });
+
+  it("finishes giving the id a crashed process picked for a hand-made file, and never hands it out again", async () => {
+    const root = await fresh();
+    write(root, "milk/task.md", "Buy milk\n");
+    write(root, "milk/.pending-id", "HM-7\n");
+    const created = await run(
+      Effect.flatMap(makeWorkspace("cli", root), (ws) => ws.createTask({ title: "New" })),
+    );
+    expect(read(root, "milk/task.md")).toMatch(/^---\nid: HM-7\n/);
+    expect(existsSync(join(root, ".octodo/milk/.pending-id"))).toBe(false);
+    expect(created.id).toBe("HM-8");
   });
 });

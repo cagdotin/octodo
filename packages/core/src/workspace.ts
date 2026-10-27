@@ -47,6 +47,7 @@ import {
   taskFolderName,
 } from "./layout.ts";
 import { editTaskFile, newListFile, newTaskFile, patchFrontmatter } from "./markdown.ts";
+import { claimIds } from "./ids.ts";
 import { scanWorkspace, type Scan } from "./scan.ts";
 
 /** One workspace on disk: a folder with a `.octodo/` directory. The files are the source of truth. */
@@ -168,9 +169,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   const lock = yield* Semaphore.make(1);
   const cache = yield* Ref.make(Option.none<Scan>());
   const changes = yield* PubSub.sliding<void>(16);
-  const withPlatform = <A, E>(
-    effect: Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
-  ): Effect.Effect<A, E> =>
+  const withPlatform = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     effect.pipe(
       Effect.provideService(FileSystem.FileSystem, fs),
       Effect.provideService(Path.Path, path),
@@ -350,6 +349,16 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   const createTask = (input: CreateTaskInput) =>
     write(
       Effect.gen(function* () {
+        const cached = yield* state;
+        const { key } = cached.snapshot.workspace;
+        const freshNext = Effect.andThen(
+          invalidate,
+          Effect.map(state, (scan) => scan.nextIdNumber),
+        );
+        const claimed = yield* withPlatform(
+          claimIds(tasksDir, key, cached.nextIdNumber, 1, freshNext),
+        ).pipe(storage("Could not claim an id for the task"));
+        const taskId = claimed[0]!;
         const scan = yield* state;
         const { snapshot } = scan;
         if (scan.oldLayout)
@@ -360,8 +369,6 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         if (status === undefined) return yield* invalid("The workspace has no statuses");
         yield* checkStatus(snapshot, status);
         const container = yield* destination(snapshot, input, TOP);
-        const { key } = snapshot.workspace;
-        const taskId = `${key}-${scan.nextIdNumber}`;
         yield* Effect.gen(function* () {
           const siblings = yield* orderedTasks(snapshot, container);
           const content = newTaskFile(input, {
@@ -376,7 +383,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         }).pipe(storage("Could not write the task"));
         yield* invalidate;
         return yield* reread(taskId).pipe(readBack);
-      }),
+      }).pipe(Effect.scoped),
     );
 
   const updateTask = (taskId: string, input: UpdateTaskInput) =>

@@ -22,6 +22,28 @@ const LEFTOVER = new RegExp(
   `^\\.(?:.+\\.${UUID}\\.tmp|new-${UUID}|migrate-${UUID}-.+|claim-.+-\\d+|pending-id)$`,
 );
 
+/** The name a sync tool's conflict copy of a bookkeeping file copies: `.claim-HM-5 2` copies `.claim-HM-5`. */
+const copied = (name: string) => name.replace(/ \d+(?=(?:\.tmp)?$)/, "");
+
+/** Patterns in `.octodo/.gitignore` matching every bookkeeping name and its conflict copies. */
+const IGNORED = [".claim-*", ".pending-id*", ".new-*", ".migrate-*", ".*.tmp"];
+
+/** Adds the bookkeeping patterns `.octodo/.gitignore` lacks, keeping the lines it has. */
+export const ignoreBookkeeping = (
+  tasksDir: string,
+): Effect.Effect<void, PlatformError.PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const file = path.join(tasksDir, ".gitignore");
+    const text = (yield* Effect.option(fs.readFileString(file))).pipe(Option.getOrElse(() => ""));
+    const lines = new Set(text.split(/\r?\n/).map((line) => line.trim()));
+    const missing = IGNORED.filter((pattern) => !lines.has(pattern));
+    if (missing.length === 0) return;
+    const kept = text.length === 0 || text.endsWith("\n") ? text : `${text}\n`;
+    yield* writeFileAtomic(file, `${kept}${missing.join("\n")}\n`);
+  });
+
 /** How old a temporary file must be before it is taken as a crash's leftover, not a write in progress. */
 const STALE_AFTER_MS = 60_000;
 
@@ -55,7 +77,7 @@ export const removeLeftovers = (
       const child = path.join(dir, name);
       yield* Effect.gen(function* () {
         const info = yield* fs.lstat(child);
-        if (LEFTOVER.test(name)) {
+        if (LEFTOVER.test(copied(name))) {
           const runs = name.startsWith(".claim-")
             ? ownerRuns(yield* fs.readFileString(child).pipe(Effect.orElseSucceed(() => "")))
             : null;

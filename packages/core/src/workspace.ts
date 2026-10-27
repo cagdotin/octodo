@@ -35,6 +35,7 @@ import {
 import {
   createFolder as createFolderIn,
   freeName as freeNameIn,
+  ignoreBookkeeping,
   isNotFound,
   removeLeftovers,
   writeFileAtomic,
@@ -178,6 +179,7 @@ export const initWorkspace = Effect.fnUntraced(function* (
   yield* Effect.gen(function* () {
     yield* fs.makeDirectory(tasksDir, { recursive: true });
     yield* writeFileAtomic(configPath, `${JSON.stringify(config, null, 2)}\n`);
+    yield* ignoreBookkeeping(tasksDir);
   }).pipe(storage("Could not create the workspace"));
 });
 
@@ -199,6 +201,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     );
 
   yield* withPlatform(removeLeftovers(tasksDir));
+  yield* withPlatform(Effect.ignore(ignoreBookkeeping(tasksDir)));
 
   const writeAtomic = (file: string, content: string | Uint8Array) =>
     withPlatform(writeFileAtomic(file, content));

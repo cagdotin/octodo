@@ -36,10 +36,10 @@ const write = (root: string, file: string, content: string) => {
 
 const read = (root: string, file: string) => readFileSync(join(root, ".octodo", file), "utf8");
 
-/** Every file under `.octodo/`, relative to it and sorted. */
+/** Every file under `.octodo/` but its `.gitignore`, relative to it and sorted. */
 const files = (root: string) =>
   readdirSync(join(root, ".octodo"), { recursive: true, encoding: "utf8" })
-    .filter((entry) => statSync(join(root, ".octodo", entry)).isFile())
+    .filter((entry) => statSync(join(root, ".octodo", entry)).isFile() && entry !== ".gitignore")
     .toSorted();
 
 const inWorkspace = <A>(root: string, use: (ws: Workspace) => Effect.Effect<A, unknown>) =>

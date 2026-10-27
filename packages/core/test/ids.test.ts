@@ -91,6 +91,12 @@ const age = (root: string, ms: number) => {
       utimesSync(join(root, ".octodo", entry.name), then, then);
 };
 
+/** Hidden entries under `.octodo/` other than its `.gitignore`. */
+const leftovers = (root: string) =>
+  readdirSync(join(root, ".octodo"), { recursive: true, encoding: "utf8" }).filter(
+    (entry) => entry !== ".gitignore" && entry.split("/").some((part) => part.startsWith(".")),
+  );
+
 const fresh = async () => {
   const root = join(mkdtempSync(join(tmpdir(), "octodo-")), "house-move");
   mkdirSync(root);
@@ -224,9 +230,7 @@ describe("task ids across processes", () => {
     write(root, "junk/task.md", "Junk\n");
     write(root, "junk/.pending-id", "not an id\n");
     expect(await ids(root)).toEqual({ ids: ["HM-1", "HM-2", "HM-3"], diagnostics: [] });
-    const hidden = readdirSync(join(root, ".octodo"), { recursive: true, encoding: "utf8" }).filter(
-      (entry) => entry.split("/").some((part) => part.startsWith(".")),
-    );
+    const hidden = leftovers(root);
     expect(hidden, "a task with its id keeps no marker").toEqual([]);
   });
 
@@ -293,9 +297,7 @@ describe("task ids across processes", () => {
         ),
       ),
     );
-    const hidden = readdirSync(join(root, ".octodo"), { recursive: true, encoding: "utf8" }).filter(
-      (entry) => entry.split("/").some((part) => part.startsWith(".")),
-    );
+    const hidden = leftovers(root);
     expect(hidden).toEqual([]);
   });
 

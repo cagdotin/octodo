@@ -14,6 +14,7 @@ import {
   utimesSync,
   writeFileSync,
 } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -46,10 +47,15 @@ const open = (root: string) =>
     return yield* makeWorkspace("test", root);
   });
 
-/** Every file under `.octodo/` but the config, relative to it and sorted. */
+/** Every file under `.octodo/` but the config and `.gitignore`, relative to it and sorted. */
 const files = (root: string) =>
   readdirSync(join(root, ".octodo"), { recursive: true, encoding: "utf8" })
-    .filter((entry) => statSync(join(root, ".octodo", entry)).isFile() && entry !== "config.json")
+    .filter(
+      (entry) =>
+        statSync(join(root, ".octodo", entry)).isFile() &&
+        entry !== "config.json" &&
+        entry !== ".gitignore",
+    )
     .toSorted();
 
 const read = (root: string, file: string) => readFileSync(join(root, ".octodo", file), "utf8");
@@ -73,7 +79,7 @@ describe("workspace", () => {
       "done",
       "archived",
     ]);
-    expect(readdirSync(join(root, ".octodo"))).toEqual(["config.json"]);
+    expect(readdirSync(join(root, ".octodo")).toSorted()).toEqual([".gitignore", "config.json"]);
   });
 
   it("creates each task as a folder with task.md, in the default status, defaults left out", async () => {
@@ -102,7 +108,9 @@ describe("workspace", () => {
       `---\nid: HM-1\ntitle: First\nstatus: todo\ncreated: ${a!.created}\norder: ${a!.order}\n---\n`,
     );
     expect(read(root, "HM-2-second/task.md")).toContain("priority: high\n");
-    expect(readdirSync(join(root, ".octodo")).filter((name) => name.startsWith("."))).toEqual([]);
+    expect(readdirSync(join(root, ".octodo")).filter((name) => name.startsWith("."))).toEqual([
+      ".gitignore",
+    ]);
   });
 
   it("creates subtasks inside their parent's folder, in the parent's list", async () => {
@@ -386,9 +394,14 @@ describe("workspace", () => {
       `HM-1-a/.task.md.${uuid()}.tmp`,
       `.new-${uuid()}/task.md`,
       `home/.migrate-${uuid()}-HM-2-b/task.md`,
+      `.new-${uuid()} 2/task.md`,
+      `HM-1-a/.task.md.${uuid()} 2.tmp`,
+      `HM-1-a/.pending-id 2`,
+      `.claim-HM-5 2`,
     ];
     const kept = [
       `.DS_Store`,
+      `.DS_Store 2`,
       `HM-1-a/.notes.tmp`,
       `.new-folder/task.md`,
       `HM-1-a/.${uuid()}.tmp.keep`,
@@ -413,6 +426,50 @@ describe("workspace", () => {
     expect(stale.filter(exists)).toEqual([]);
     expect(kept.filter(exists)).toEqual(kept);
     expect(live.filter(exists)).toEqual(live);
+  });
+
+  it("keeps octodo's bookkeeping files out of git, in new workspaces and ones opened again", async () => {
+    const git = (cwd: string, ...args: Array<string>) =>
+      execFileSync("git", args, { cwd, encoding: "utf8" });
+    const visibleToGit = [
+      "?? .octodo/.gitignore",
+      "?? .octodo/HM-1-a/task.md",
+      "?? .octodo/config.json",
+    ];
+    const untracked = (root: string) =>
+      git(root, "status", "--porcelain", "--untracked-files=all", ".octodo")
+        .split("\n")
+        .filter(Boolean);
+    const bookkeeping = (root: string) => {
+      write(root, "HM-1-a/task.md", "---\nid: HM-1\n---\n");
+      for (const file of [
+        ".claim-HM-2",
+        ".claim-HM-2 2",
+        "HM-1-a/.pending-id",
+        "HM-1-a/.pending-id 2",
+        `HM-1-a/.task.md.${crypto.randomUUID()}.tmp`,
+        `.new-${crypto.randomUUID()}/task.md`,
+        `.migrate-${crypto.randomUUID()}-HM-3-b/task.md`,
+      ])
+        write(root, file, "x");
+    };
+    const created = fresh();
+    git(created, "init", "-q");
+    await run(initWorkspace(created));
+    bookkeeping(created);
+    expect(untracked(created)).toEqual(visibleToGit);
+
+    const older = fresh();
+    git(older, "init", "-q");
+    write(older, "config.json", '{ "name": "Older", "key": "HM" }');
+    write(older, ".gitignore", "notes.txt\n");
+    bookkeeping(older);
+    for (let open = 0; open < 2; open++)
+      await run(Effect.flatMap(makeWorkspace("test", older), (ws) => ws.snapshot));
+    const ignore = readFileSync(join(older, ".octodo/.gitignore"), "utf8");
+    expect(ignore.startsWith("notes.txt\n"), "keeps the lines it had").toBe(true);
+    expect(ignore.split("\n").filter((line) => line === ".claim-*")).toHaveLength(1);
+    expect(untracked(older)).toEqual(visibleToGit);
   });
 
   it("updates task.md in place, keeps unknown keys and renames the folder after the title", async () => {
@@ -721,7 +778,7 @@ describe("workspace", () => {
       }),
     );
     expect(result.reordered).toEqual(["c", "a", "b"]);
-    expect(result.folders).toEqual(["a", "b", "c", "config.json"]);
+    expect(result.folders).toEqual([".gitignore", "a", "b", "c", "config.json"]);
     expect(result.moved).toEqual({ id: "b/c", name: "C", parent: "b", folder: "b/c" });
     expect(result.task).toMatchObject({
       list: "b/c",
@@ -945,6 +1002,6 @@ describe("attachments", () => {
       }),
     );
     expect(error._tag).toBe("StorageError");
-    expect(readdirSync(join(root, ".octodo"))).toEqual(["config.json"]);
+    expect(readdirSync(join(root, ".octodo")).toSorted()).toEqual([".gitignore", "config.json"]);
   });
 });

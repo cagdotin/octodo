@@ -124,7 +124,7 @@ export const scanWorkspace = (
     /** Takes the ids of every markdown file under `target`, which the scan does not read. */
     const takeIdsUnder = (target: string): Effect.Effect<void> =>
       Effect.gen(function* () {
-        const info = yield* fs.stat(target);
+        const info = yield* fs.lstat(target);
         if (info.type === "File") {
           if (target.endsWith(".md")) takeId(frontmatterId(yield* fs.readFileString(target)));
           return;

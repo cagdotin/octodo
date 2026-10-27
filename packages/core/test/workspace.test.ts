@@ -398,7 +398,13 @@ describe("workspace", () => {
       const leftover = join(root, ".octodo", file.slice(0, file.indexOf(top) + top.length));
       utimesSync(leftover, twoMinutesAgo, twoMinutesAgo);
     }
+    const outside = join(root, "outside");
+    const foreign = join(outside, `.new-${uuid()}`);
+    mkdirSync(foreign, { recursive: true });
+    utimesSync(foreign, twoMinutesAgo, twoMinutesAgo);
+    symlinkSync(outside, join(root, ".octodo/linked"));
     await run(Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot));
+    expect(existsSync(foreign), "a symlink out of .octodo is not followed").toBe(true);
     const exists = (file: string) => existsSync(join(root, ".octodo", file));
     expect(stale.filter(exists)).toEqual([]);
     expect(kept.filter(exists)).toEqual(kept);

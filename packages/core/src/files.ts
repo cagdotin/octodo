@@ -2,7 +2,7 @@ import { Effect, FileSystem, Option, Path, PlatformError } from "effect";
 
 /**
  * Names of the temporary files and folders that writes build and rename into place. Each holds a
- * random UUID, so `isLeftover` matches only octodo's own.
+ * random UUID, so `removeLeftovers` takes only octodo's own.
  */
 export const tempName = {
   file: (name: string) => `.${name}.${crypto.randomUUID()}.tmp`,
@@ -30,7 +30,7 @@ export const removeLeftovers = (
     for (const name of yield* fs.readDirectory(dir)) {
       const child = path.join(dir, name);
       yield* Effect.gen(function* () {
-        const info = yield* fs.stat(child);
+        const info = yield* fs.lstat(child);
         if (LEFTOVER.test(name)) {
           const modified = Option.getOrElse(info.mtime, () => new Date());
           if (Date.now() - modified.getTime() > STALE_AFTER_MS)

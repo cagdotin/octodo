@@ -8,7 +8,7 @@ import {
   type Task,
   type WorkspaceSnapshot,
 } from "./domain.ts";
-import { isNotFound, writeFileAtomic } from "./files.ts";
+import { isNotFound } from "./files.ts";
 import {
   CONFIG_FILE,
   LIST_FILE,
@@ -24,7 +24,8 @@ import {
 } from "./layout.ts";
 import { linkTasks, type ReadTask } from "./links.ts";
 import { oldLayoutFolder } from "./migrate.ts";
-import { frontmatterId, patchFrontmatter, readListFile, readTaskFile } from "./markdown.ts";
+import { frontmatterId, readListFile, readTaskFile } from "./markdown.ts";
+import { claimIds, giveId, pendingId } from "./ids.ts";
 
 /** A snapshot plus where its lists and tasks are on disk, which is nobody else's business. */
 export interface Scan {
@@ -78,6 +79,7 @@ const compareTasks =
 export const scanWorkspace = (
   id: string,
   root: string,
+  options: { readonly assignIds: boolean } = { assignIds: true },
 ): Effect.Effect<Scan, never, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -116,7 +118,7 @@ export const scanWorkspace = (
     const taskFiles: Array<ReadTask> = [];
     const listDirs = new Map<string, { dir: string; order: string }>();
     const taskDirs = new Map<string, string>();
-    const missingId: Array<{ file: string; text: string }> = [];
+    const missingId: Array<string> = [];
     const legacyFolders: Array<string> = [];
     let highestId = 0;
     const takeId = (taskId: string | null) => {
@@ -166,7 +168,7 @@ export const scanWorkspace = (
       dir: string,
       list: string | null,
       parent: string | null,
-    ): Effect.Effect<void> =>
+    ): Effect.Effect<void, never, FileSystem.FileSystem | Path.Path> =>
       Effect.gen(function* () {
         const file = path.join(dir, TASK_FILE);
         const contents = yield* attempt(
@@ -192,7 +194,8 @@ export const scanWorkspace = (
         }
         let id: string | null = null;
         if (read._tag === "MissingId") {
-          missingId.push({ file, text });
+          missingId.push(dir);
+          takeId(yield* pendingId(dir));
         } else if (taskDirs.has(read.value.id)) {
           report(
             file,
@@ -276,21 +279,47 @@ export const scanWorkspace = (
     yield* readList(tasksDir, null);
 
     // Files made by hand or by another tool get an id the first time the app sees them.
-    let next = highestId + 1;
-    let assignedAny = false;
-    for (const { file, text } of missingId) {
-      const assigned = `${config.key}-${next++}`;
-      const written = yield* attempt(
-        file,
-        Effect.as(writeFileAtomic(file, patchFrontmatter(text, { id: assigned })), true),
-        "Could not give it an id; it is not read",
+    if (options.assignIds && missingId.length > 0) {
+      const nextOnDisk = Effect.map(
+        scanWorkspace(id, root, { assignIds: false }),
+        (scan) => scan.nextIdNumber,
       );
-      if (written === null) continue;
-      assignedAny = true;
-      yield* Effect.logInfo(`Assigned ${assigned} to ${rel(file)}`);
+      const assignedAny = yield* Effect.gen(function* () {
+        let assigned = false;
+        const ids = yield* claimIds(
+          tasksDir,
+          config.key,
+          highestId + 1,
+          missingId.length,
+          nextOnDisk,
+        );
+        for (const [index, dir] of missingId.entries()) {
+          const file = path.join(dir, TASK_FILE);
+          const given = yield* attempt(
+            file,
+            giveId(dir, ids[index]!),
+            "Could not give it an id; it is not read",
+          );
+          if (given === null) continue;
+          assigned = true;
+          yield* Effect.logInfo(`Assigned ${given} to ${rel(file)}`);
+        }
+        return assigned;
+      }).pipe(
+        Effect.scoped,
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            report(
+              tasksDir,
+              `Could not claim ids for new tasks; they are not read: ${String(error)}`,
+            );
+            return false;
+          }),
+        ),
+      );
+      // Assigning ids rewrites files, so the scan repeats to read them back.
+      if (assignedAny) return yield* scanWorkspace(id, root);
     }
-    // Assigning ids rewrites files, so the scan repeats to read them back.
-    if (assignedAny) return yield* scanWorkspace(id, root);
 
     if (legacyFolders.length > 0) {
       diagnostics.push({

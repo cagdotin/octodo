@@ -5,36 +5,38 @@ description: Read and manage this project's tasks, stored as markdown files unde
 
 # octodo
 
-This project's tasks live in `.octodo/`, one markdown file per task with YAML frontmatter. The
-files are the source of truth; the octodo app, CLI and MCP server all read and write them.
+This project's tasks live in `.octodo/`, one folder per task with a `task.md` inside. The files
+are the source of truth; the octodo app, CLI and MCP server read and write them.
 
 ## Layout
 
-- `.octodo/config.json`: workspace name, the id key (e.g. `HM`), statuses and their categories.
-- `.octodo/s<NN>-<status>/`: tasks in that status, e.g. `s01-todo`, `s02-in-progress`. The
-  number is only the workflow order; the status id is `todo`.
-- `.octodo/l<NN>-<name>/` folders are lists, nested up to three levels; each holds its own status
-  folders. List ids are the names without numbers, joined by `/` (`garden/seeds`).
-- Changing a task's status moves its file to another status folder.
-- Each task has a stable `id` (`HM-42`). Refer to tasks by id, never by file path.
-
-Frontmatter the app manages: `id`, `title`, `priority` (none, low, medium, high, urgent),
-`tags`, `due` (YYYY-MM-DD), `created`, `updated`, `order`. Any other keys are kept as-is.
+- `.octodo/config.json`: workspace name, the id key (e.g. `CT`), statuses and their categories.
+- A folder with `task.md` is a task (`CT-12-redo-the-bedroom/task.md`). Its frontmatter holds
+  `id`, `title`, `status`, `priority` (none, low, medium, high, urgent), `tags`, `due`
+  (YYYY-MM-DD), `created` and `order`; the body is markdown. Other keys are kept as-is.
+- A task folder inside another task folder is a subtask. Any other file in a task folder, such as
+  `images/plan.png`, is an attachment of that task.
+- A folder with `list.md` is a list, nested up to three levels. List ids are the folder names
+  joined by `/` (`garden/seeds`). Tasks directly in `.octodo/` are in no list.
+- Folder names are only for people. Each task has a stable `id` (`CT-42`): refer to tasks by id,
+  never by path.
 
 ## How to act
 
-Prefer the `octodo` MCP tools when they are available (`get_workspace` first, then
-`list_tasks`, `get_task`, `create_task`, `update_task`, `move_task`). Otherwise use the CLI:
+Change tasks through the `octodo` MCP tools or the CLI, not by editing or moving files: they keep
+ids, order and folders consistent. With MCP, call `get_workspace` first, then `list_tasks`,
+`get_task`, `create_task`, `update_task`, `move_task`. Otherwise:
 
 ```sh
-octo list                          # open tasks in board order (--status, --list, --tag, --json)
-octo show HM-42                    # one task with its body
+octo list                          # open tasks in board order, subtasks under their parent
+octo show CT-42                    # one task with its subtasks and body
 octo create "Title" --priority high --tag infra --status todo
-octo update HM-42 --body "Notes in markdown"
-octo move HM-42 in-progress        # change status (moves the file)
-octo move HM-42 done
+octo create "Buy primer" --parent CT-42   # a subtask
+octo update CT-42 --body "Notes in markdown"
+octo move CT-42 in-progress        # change status
+octo move CT-43 --parent CT-42     # make it a subtask; --no-parent lifts it out
+octo move CT-42 done
 ```
 
-Editing a file by hand also works; the app notices the change. Keep the frontmatter valid YAML,
-and do not change `id`. Prefer moving finished or abandoned work to `done` or `archived`
-over deleting it.
+If a command warns about the old layout (`s01-todo`, `l00-home` folders), run `octo migrate`.
+Prefer moving finished or abandoned work to `done` or `archived` over deleting it.

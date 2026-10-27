@@ -314,20 +314,22 @@ export const editTaskFile = (text: string, input: UpdateTaskInput): string =>
   patchFrontmatter(text, editChanges(input), input.body);
 
 /**
- * The file without `ids` in any link field, or null when no link field lists one, so a rerun
- * after a partial cleanup rewrites only the files still left. Throws on invalid frontmatter.
+ * The file with link field `field` rewritten as the list of ids it holds that `keep` accepts, and
+ * without the key once none is left. Null when that changes nothing (no id dropped and the field
+ * already a list of ids) or the frontmatter does not parse, so a rerun after a partial cleanup
+ * rewrites only the files still left.
  */
-export const removeLinks = (text: string, ids: ReadonlySet<string>): string | null => {
+export const keepLinks = (
+  text: string,
+  field: LinkField,
+  keep: (id: string) => boolean,
+): string | null => {
   const read = readFrontmatter(text);
-  if ("error" in read) throw new Error(read.error);
-  const changes: Record<string, unknown> = {};
-  for (const kind of LINK_KINDS) {
-    const { ids: linked } = readLinkField(read.data[kind.field]);
-    if (!linked.some((id) => ids.has(id))) continue;
-    const kept = linked.filter((id) => !ids.has(id));
-    changes[kind.field] = kept.length > 0 ? kept : undefined;
-  }
-  return Object.keys(changes).length > 0 ? patchFrontmatter(text, changes) : null;
+  if ("error" in read) return null;
+  const { ids, malformed } = readLinkField(read.data[field]);
+  const kept = ids.filter(keep);
+  if (kept.length === ids.length && !malformed) return null;
+  return patchFrontmatter(text, { [field]: kept.length > 0 ? kept : undefined });
 };
 
 export interface ListFile {
@@ -366,26 +368,5 @@ export const migratedTaskFile = (text: string, status: string): string => {
     status,
     updated: undefined,
     ...Object.fromEntries(defaults.map((key) => [key, undefined])),
-  });
-};
-
-/**
- * The file without the ids in frontmatter key `field` that `known` does not hold, removing the
- * key once nothing is left; null when there is nothing to remove. Works for any key that holds a
- * task id or a list of them.
- */
-export const withoutUnknownIds = (
-  text: string,
-  field: string,
-  known: ReadonlySet<string>,
-): string | null => {
-  const read = readFrontmatter(text);
-  if ("error" in read) return null;
-  const value = read.data[field];
-  const ids = Array.isArray(value) ? value : [value];
-  const kept = ids.filter((id) => typeof id !== "string" || known.has(id));
-  if (value === undefined || kept.length === ids.length) return null;
-  return patchFrontmatter(text, {
-    [field]: kept.length === 0 ? undefined : Array.isArray(value) ? kept : kept[0],
   });
 };

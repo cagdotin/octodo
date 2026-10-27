@@ -6,7 +6,6 @@ import {
   patchFrontmatter,
   readListFile,
   readTaskFile,
-  withoutUnknownIds,
 } from "../src/markdown.ts";
 
 const place = {
@@ -100,28 +99,6 @@ describe("readTaskFile", () => {
     const read = readTaskFile("---\ntitle: [unclosed\n---\n", place);
     expect(read._tag).toBe("Invalid");
     expect(read).toMatchObject({ _tag: "Invalid", problem: { kind: "invalid-frontmatter" } });
-  });
-});
-
-describe("withoutUnknownIds", () => {
-  const known = new Set(["GA-1", "GA-2"]);
-
-  it("drops unknown ids from a list, keeping the rest of the file", () => {
-    expect(
-      withoutUnknownIds(
-        "---\nid: GA-3\nblocked_by: [GA-1, GA-9]\n# note\n---\nBody\n",
-        "blocked_by",
-        known,
-      ),
-    ).toBe("---\nid: GA-3\nblocked_by: [GA-1]\n\n# note\n---\n\nBody\n");
-  });
-
-  it("removes the key once no id is left, and changes nothing when all are known", () => {
-    expect(withoutUnknownIds("---\nid: GA-3\nblocks: GA-9\n---\n", "blocks", known)).toBe(
-      "---\nid: GA-3\n---\n",
-    );
-    expect(withoutUnknownIds("---\nblocks: [GA-1]\n---\n", "blocks", known)).toBeNull();
-    expect(withoutUnknownIds("---\nid: GA-3\n---\n", "blocks", known)).toBeNull();
   });
 });
 

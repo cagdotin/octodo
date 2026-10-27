@@ -57,13 +57,7 @@ import {
   sortStatuses,
   taskFolderName,
 } from "./layout.ts";
-import {
-  editTaskFile,
-  newListFile,
-  newTaskFile,
-  patchFrontmatter,
-  removeLinks,
-} from "./markdown.ts";
+import { editTaskFile, newListFile, newTaskFile, patchFrontmatter, keepLinks } from "./markdown.ts";
 import { claimIds } from "./ids.ts";
 import { applyFix } from "./fixes.ts";
 import { scanWorkspace, type Scan } from "./scan.ts";
@@ -468,14 +462,18 @@ export const makeWorkspace = Effect.fnUntraced(function* (
             .filter((task) => inTaskSubtree(snapshot.tasks, task.id, taskId))
             .map((task) => task.id),
         );
+        const isRemoved = (id: string) => removed.has(id);
         yield* Effect.gen(function* () {
           for (const task of snapshot.tasks) {
-            const links = LINK_KINDS.flatMap((kind) => task[kind.forward]);
-            if (removed.has(task.id) || !links.some((id) => removed.has(id))) continue;
+            const fields = LINK_KINDS.filter((kind) => task[kind.forward].some(isRemoved));
+            if (removed.has(task.id) || fields.length === 0) continue;
             const file = path.join(root, task.path);
-            const text = yield* fs.readFileString(file);
-            const unlinked = yield* Effect.try(() => removeLinks(text, removed));
-            if (unlinked !== null) yield* writeAtomic(file, unlinked);
+            const original = yield* fs.readFileString(file);
+            const text = fields.reduce(
+              (text, kind) => keepLinks(text, kind.field, (id) => !isRemoved(id)) ?? text,
+              original,
+            );
+            if (text !== original) yield* writeAtomic(file, text);
           }
           yield* fs.remove(dirs.tasks.get(taskId)!, { recursive: true });
         }).pipe(storage("Could not delete the task"));

@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_STATUSES } from "../src/domain.ts";
 import { findMentions, isReady } from "../src/layout.ts";
-import { editTaskFile, readTaskFile, removeLinks } from "../src/markdown.ts";
+import { editTaskFile, keepLinks, readTaskFile } from "../src/markdown.ts";
 import { initWorkspace, makeWorkspace } from "../src/workspace.ts";
 
 const run = <A, E>(effect: Effect.Effect<A, E, any>) =>
@@ -121,13 +121,26 @@ describe("link fields in task.md", () => {
     );
   });
 
-  it("removes ids from link fields, and leaves a file that lists none of them alone", () => {
+  it("keeps the ids a link field holds that pass, and leaves a field it would not change alone", () => {
     const text = taskFile("HM-1", "blocked_by: [HM-3, HM-7]\n", "\nAfter [[HM-3]]\n");
-    expect(removeLinks(text, new Set(["HM-3"]))).toBe(
+    const without = (ids: ReadonlyArray<string>) =>
+      keepLinks(text, "blocked_by", (id) => !ids.includes(id));
+    expect(without(["HM-3"])).toBe(
       "---\nid: HM-1\ntitle: Task HM-1\nblocked_by: [HM-7]\n---\n\nAfter [[HM-3]]\n",
     );
-    expect(removeLinks(text, new Set(["HM-3", "HM-7"]))).not.toContain("blocked_by");
-    expect(removeLinks(text, new Set(["HM-9"]))).toBeNull();
+    expect(without(["HM-3", "HM-7"])).not.toContain("blocked_by");
+    expect(without(["HM-9"])).toBeNull();
+    expect(keepLinks(taskFile("HM-1"), "blocked_by", () => false)).toBeNull();
+    expect(keepLinks("---\ntitle: [unclosed\n---\n", "blocked_by", () => false)).toBeNull();
+  });
+
+  it.each([
+    ["blocked_by: [[HM-3]]\n", "blocked_by: [HM-3]\n"],
+    ["blocked_by: HM-3\n", "blocked_by: [HM-3]\n"],
+  ])("rewrites the malformed field %j as a list of the ids in it", (field, written) => {
+    expect(keepLinks(taskFile("HM-1", field), "blocked_by", () => true)).toBe(
+      taskFile("HM-1", written),
+    );
   });
 });
 

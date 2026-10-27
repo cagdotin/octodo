@@ -8,9 +8,10 @@ import {
   conflictCopyOf,
   humanize,
   idNumber,
+  isLinkField,
   taskFolderName,
 } from "./layout.ts";
-import { frontmatterId, patchFrontmatter, readFrontmatter, withoutUnknownIds } from "./markdown.ts";
+import { frontmatterId, keepLinks, patchFrontmatter, readFrontmatter } from "./markdown.ts";
 import { migrateWorkspace } from "./migrate.ts";
 import type { Scan } from "./scan.ts";
 
@@ -92,9 +93,10 @@ const FIXES: Record<FixAction, Handler> = {
   "drop-unknown-links": ({ target, diagnostic, scan }) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      if (diagnostic.field === null) return;
+      if (diagnostic.field === null || !isLinkField(diagnostic.field)) return;
       const known = new Set(scan.snapshot.tasks.map((task) => task.id));
-      const changed = withoutUnknownIds(yield* fs.readFileString(target), diagnostic.field, known);
+      const text = yield* fs.readFileString(target);
+      const changed = keepLinks(text, diagnostic.field, (id) => known.has(id));
       if (changed !== null) yield* writeFileAtomic(target, changed);
     }),
   migrate: ({ root }) => Effect.asVoid(migrateWorkspace(root)),

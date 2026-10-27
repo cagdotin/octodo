@@ -488,3 +488,89 @@ describe("workspace", () => {
     expect(config.statuses[2]).toEqual({ id: "in-review", name: "In Review", category: "started" });
   });
 });
+
+describe("attachments", () => {
+  const bytes = new TextEncoder().encode("png");
+
+  it("saves files in the task folder, creating folders on the way, without new names clashing", async () => {
+    const root = fresh();
+    const result = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        const task = yield* ws.createTask({ title: "Plan" });
+        const first = yield* ws.writeAttachment(task.id, "images/floor plan.png", bytes);
+        const second = yield* ws.writeAttachment(task.id, "images/floor plan.png", bytes);
+        const top = yield* ws.writeAttachment(task.id, "quote", bytes);
+        const absolute = yield* ws.attachmentPath(task.id, "images/floor plan.png");
+        return { first, second, top, absolute, snapshot: yield* ws.snapshot };
+      }),
+    );
+    expect([result.first, result.second, result.top]).toEqual([
+      "images/floor plan.png",
+      "images/floor plan-2.png",
+      "quote",
+    ]);
+    expect(result.absolute).toBe(join(root, ".octodo/HM-1-plan/images/floor plan.png"));
+    expect(readFileSync(result.absolute, "utf8")).toBe("png");
+    expect(files(root)).toEqual([
+      "HM-1-plan/images/floor plan-2.png",
+      "HM-1-plan/images/floor plan.png",
+      "HM-1-plan/quote",
+      "HM-1-plan/task.md",
+    ]);
+    expect(result.snapshot.tasks).toHaveLength(1);
+    expect(result.snapshot.diagnostics).toEqual([]);
+  });
+
+  it("refuses paths outside the folder, task.md, hidden names and subtasks", async () => {
+    const root = fresh();
+    const errors = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        const task = yield* ws.createTask({ title: "Plan" });
+        yield* ws.createTask({ title: "Sub", parent: task.id });
+        const paths = [
+          "/etc/passwd",
+          "../escape.png",
+          "images/../../escape.png",
+          "task.md",
+          "./task.md",
+          ".hidden",
+          "HM-2-sub/x.png",
+          "",
+        ];
+        return [
+          ...(yield* Effect.forEach(paths, (path) =>
+            Effect.flip(ws.writeAttachment(task.id, path, bytes)),
+          )),
+          ...(yield* Effect.forEach(paths, (path) =>
+            Effect.flip(ws.attachmentPath(task.id, path)),
+          )),
+          yield* Effect.flip(ws.writeAttachment("HM-99", "x.png", bytes)),
+        ];
+      }),
+    );
+    expect(errors.map((error) => error._tag)).toEqual([
+      ...Array(16).fill("InvalidRequest"),
+      "TaskNotFound",
+    ]);
+    expect(files(root)).toEqual(["HM-1-plan/HM-2-sub/task.md", "HM-1-plan/task.md"]);
+    expect(existsSync(join(root, "escape.png"))).toBe(false);
+    expect(existsSync(join(root, ".octodo/escape.png"))).toBe(false);
+  });
+
+  it("does not recreate a task folder another process removed", async () => {
+    const root = fresh();
+    const error = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        const task = yield* ws.createTask({ title: "Gone" });
+        yield* ws.snapshot;
+        rmSync(join(root, ".octodo/HM-1-gone"), { recursive: true });
+        return yield* Effect.flip(ws.writeAttachment(task.id, "images/x.png", bytes));
+      }),
+    );
+    expect(error._tag).toBe("StorageError");
+    expect(readdirSync(join(root, ".octodo"))).toEqual(["config.json"]);
+  });
+});

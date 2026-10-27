@@ -79,6 +79,23 @@ export interface Workspace {
   readonly reorderStatuses: (
     input: ReorderStatusesInput,
   ) => Effect.Effect<ReadonlyArray<StatusDefinition>, InvalidRequest | StorageError>;
+  /**
+   * The absolute path of a file in a task's folder, from a path relative to it. Refuses anything
+   * outside the folder, `task.md` itself, hidden names and paths into a subtask.
+   */
+  readonly attachmentPath: (
+    taskId: string,
+    relativePath: string,
+  ) => Effect.Effect<string, TaskNotFound | InvalidRequest | StorageError>;
+  /**
+   * Saves a file in a task's folder, creating the folders on the way (`images/`), and returns the
+   * path relative to the task folder it got: a taken name gets `-2`, `-3`, ... before its extension.
+   */
+  readonly writeAttachment: (
+    taskId: string,
+    relativePath: string,
+    bytes: Uint8Array,
+  ) => Effect.Effect<string, TaskNotFound | InvalidRequest | StorageError>;
   /** Emits after files under `.octodo/` change, whoever changed them. Empty unless watching. */
   readonly changes: Stream.Stream<void>;
 }
@@ -483,6 +500,52 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       }),
     );
 
+  /** The task folder and the path segments of a file inside it, refusing anything else. */
+  const attachmentTarget = (taskId: string, relativePath: string) =>
+    Effect.gen(function* () {
+      const { snapshot, dirs } = yield* state;
+      yield* findTask(snapshot, taskId);
+      const dir = dirs.tasks.get(taskId)!;
+      const segments = relativePath.split(/[\\/]/).filter((part) => part !== "" && part !== ".");
+      if (path.isAbsolute(relativePath) || segments.length === 0)
+        return yield* invalid("Give a path relative to the task folder");
+      if (segments.some((part) => part.startsWith(".")))
+        return yield* invalid("Attachment paths cannot leave the task folder or name hidden files");
+      if (segments.length === 1 && segments[0] === TASK_FILE)
+        return yield* invalid(`${TASK_FILE} is the task itself, not an attachment`);
+      const subtask = yield* storage("Could not read the task folder")(
+        fs.exists(path.join(dir, segments[0]!, TASK_FILE)),
+      );
+      if (subtask) return yield* invalid("That path is inside a subtask");
+      return { dir, segments };
+    });
+
+  const attachmentPath = (taskId: string, relativePath: string) =>
+    lock.withPermits(1)(
+      Effect.map(attachmentTarget(taskId, relativePath), ({ dir, segments }) =>
+        path.join(dir, ...segments),
+      ),
+    );
+
+  const writeAttachment = (taskId: string, relativePath: string, bytes: Uint8Array) =>
+    lock.withPermits(1)(
+      Effect.gen(function* () {
+        const { dir, segments } = yield* attachmentTarget(taskId, relativePath);
+        return yield* Effect.gen(function* () {
+          // One level at a time, so a task folder that has gone is not created again.
+          let folder = dir;
+          for (const segment of segments.slice(0, -1)) {
+            folder = path.join(folder, segment);
+            if (!(yield* fs.exists(folder))) yield* fs.makeDirectory(folder);
+          }
+          const name = segments.at(-1)!;
+          const free = yield* freeName(folder, name, path.extname(name));
+          yield* writeAtomic(path.join(folder, free), bytes);
+          return [...segments.slice(0, -1), free].join("/");
+        }).pipe(storage("Could not save the attachment"));
+      }),
+    );
+
   if (options.watch === true) {
     yield* fs.watch(tasksDir, { recursive: true }).pipe(
       Stream.filter((event) => !event.path.endsWith(".tmp")),
@@ -506,6 +569,8 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     createList,
     moveList,
     reorderStatuses,
+    attachmentPath,
+    writeAttachment,
     changes: Stream.fromPubSub(changes),
   } satisfies Workspace;
 });

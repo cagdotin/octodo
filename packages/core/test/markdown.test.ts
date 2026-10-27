@@ -210,6 +210,17 @@ describe("frontmatter", () => {
     }
   };
 
+  it("reads a key at and past YAML's 1024-character limit as the YAML parser does", () => {
+    for (const length of [1000, 1022, 1023, 1024, 1025, 1100]) {
+      const yaml = `${"k".repeat(length)}: x`;
+      const read = readFrontmatter(`---\n${yaml}\n---\n`);
+      expect({ length, read: "error" in read ? "error" : read.data }).toEqual({
+        length,
+        read: parsed(yaml),
+      });
+    }
+  });
+
   it("reads every frontmatter as the YAML parser does", () => {
     const keys = ["id", "title", "a_b", "x-1", "_x", "null", "True", "false", "__proto__", "1a"];
     const tricky = ["-a", "a b", "~", "a#", "Id", "ID"];

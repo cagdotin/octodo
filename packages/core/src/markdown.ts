@@ -206,7 +206,7 @@ const parseYaml = (yaml: string | null): Document => {
   return doc;
 };
 
-const KEY_VALUE = /^([A-Za-z_][\w-]*): (.+)$/;
+const KEY_VALUE = /^([A-Za-z_][\w-]{0,999}): (.+)$/;
 const INDICATOR_OR_SPACE = /^[\s\-?:,[\]{}#&*!|>'"%@`]/;
 /** The words and numbers YAML's core schema reads as something other than a string. */
 const NOT_A_STRING =

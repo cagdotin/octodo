@@ -210,6 +210,9 @@ const readListing = (
             file: list,
             listing: yield* listing(child, names),
           };
+        // A folder that can be listed but not entered fails here, and is reported unreadable.
+        yield* fs.exists(taskFile);
+        yield* fs.exists(path.join(child, LIST_FILE));
         return { name, path: child, type: "folder" as const };
       }).pipe(
         Effect.catch((error) =>

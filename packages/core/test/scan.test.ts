@@ -1,6 +1,6 @@
 import { NodeServices } from "@effect/platform-node";
 import { Effect, FileSystem, Layer } from "effect";
-import { mkdirSync, mkdtempSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -101,5 +101,23 @@ describe("scanWorkspace", () => {
       ["HM-1", "2020-01-01T00:00:00.000Z"],
     ]);
     expect(snapshot.diagnostics.map((diagnostic) => diagnostic.kind)).toEqual(["symlink"]);
+  });
+
+  it("reports a folder it can list but not enter as unreadable, in a list and in a task", async () => {
+    const root = await fresh({ "HM-1-a/task.md": "---\nid: HM-1\n---\n" });
+    const locked = [join(root, ".octodo/noexec"), join(root, ".octodo/HM-1-a/images")];
+    for (const dir of locked) {
+      mkdirSync(join(dir, "inner"), { recursive: true });
+      chmodSync(dir, 0o644);
+    }
+    try {
+      const { snapshot } = await run(scanWorkspace("test", root));
+      expect(snapshot.diagnostics.map((diagnostic) => [diagnostic.path, diagnostic.kind])).toEqual([
+        [".octodo/noexec", "unreadable"],
+        [".octodo/HM-1-a/images", "unreadable"],
+      ]);
+    } finally {
+      for (const dir of locked) chmodSync(dir, 0o755);
+    }
   });
 });

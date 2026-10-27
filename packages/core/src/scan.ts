@@ -198,6 +198,29 @@ const readListing = (
         return { type: "folder" as const, names, task, list };
       });
 
+    /**
+     * Whether the folder `dir` has a `task.md` or `list.md` that is a link: what a folder like that
+     * is follows its targets, whose changes report no path in the workspace, so it is read anew
+     * each scan.
+     */
+    const linksMarker = (
+      cache: ScanCache,
+      dir: string,
+      names: Result.Result<ReadonlyArray<string>, PlatformError.PlatformError>,
+    ) =>
+      Effect.forEach(
+        [TASK_FILE, LIST_FILE].filter(
+          (marker) => Result.isSuccess(names) && names.success.includes(marker),
+        ),
+        (marker) => {
+          const file = path.join(dir, marker);
+          return Effect.map(
+            cache.read(file, "node", readNode(file), settled),
+            (node) => node?.type === "symlink",
+          );
+        },
+      ).pipe(Effect.map((links) => links.includes(true)));
+
     /** A `task.md` that is a link, read anew each scan: a change to its target reports neither path. */
     const readLinkedTask = (file: string) =>
       Effect.all({
@@ -211,11 +234,17 @@ const readListing = (
     ): Effect.Effect<Entry | null, never, FileSystem.FileSystem | Path.Path> => {
       const child = path.join(dir, name);
       return Effect.gen(function* () {
-        const node: Node | null = yield* cache === undefined
-          ? readNode(child)
-          : cache.read(child, "node", readNode(child), settled);
-        if (node === null) return null;
-        if (node.type !== "folder") return { name, path: child, ...node };
+        const kept: Node | null =
+          cache === undefined
+            ? yield* readNode(child)
+            : yield* cache.read(child, "node", readNode(child), settled);
+        if (kept === null) return null;
+        if (kept.type !== "folder") return { name, path: child, ...kept };
+        const node =
+          cache !== undefined && (yield* linksMarker(cache, child, kept.names))
+            ? yield* readNode(child)
+            : kept;
+        if (node?.type !== "folder") return null;
         const { names, task, list } = node;
         if (task !== null && list !== null) return { name, path: child, type: "both" as const };
         if (task !== null) {

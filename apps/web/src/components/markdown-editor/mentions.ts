@@ -13,6 +13,8 @@ import {
   type TransactionSpec,
 } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, WidgetType } from "@codemirror/view";
+import { syntaxTree } from "@codemirror/language";
+import type { SyntaxNode } from "@lezer/common";
 import { findMentions } from "@octodo/core/layout";
 
 /** A task a body can mention, as its chip and the `[[` completions show it. */
@@ -20,6 +22,8 @@ export interface MentionTarget {
   readonly id: string;
   readonly title: string;
   readonly closed: boolean;
+  /** The task whose body is being edited: it gets a chip but is never offered. */
+  readonly own: boolean;
 }
 
 /** Replaces the tasks mentions resolve to, such as after the snapshot changes. */
@@ -124,11 +128,27 @@ export const completeMention = (
 
 const OPEN_MENTION = /\[\[[^[\]\n]*$/;
 
-/** Completes `[[` with the tasks whose id or title matches what follows, inserting `[[HM-3]]`. */
+/** Syntax nodes whose text is code or a comment, where `[[` is no mention. */
+const CODE = new Set(["FencedCode", "CodeBlock", "InlineCode", "Comment", "CommentBlock"]);
+
+const inCode = (state: EditorState, pos: number) => {
+  for (
+    let node: SyntaxNode | null = syntaxTree(state).resolveInner(pos, -1);
+    node;
+    node = node.parent
+  )
+    if (CODE.has(node.name)) return true;
+  return false;
+};
+
+/**
+ * Completes `[[` outside code with the other tasks whose id or title matches what follows,
+ * inserting `[[HM-3]]`.
+ */
 export const mentionCompletions = (context: CompletionContext): CompletionResult | null => {
   const typed = context.matchBefore(OPEN_MENTION);
-  if (typed === null) return null;
-  const targets = [...context.state.field(targetsField).values()];
+  if (typed === null || inCode(context.state, context.pos)) return null;
+  const targets = [...context.state.field(targetsField).values()].filter((target) => !target.own);
   if (targets.length === 0) return null;
   const start = typed.from;
   return {

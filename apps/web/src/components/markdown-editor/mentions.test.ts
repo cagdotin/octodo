@@ -11,8 +11,9 @@ import {
 } from "./mentions.ts";
 
 const TARGETS = new Map<string, MentionTarget>([
-  ["HM-1", { id: "HM-1", title: "Buy primer", closed: false }],
-  ["HM-2", { id: "HM-2", title: "Paint the bedroom", closed: true }],
+  ["HM-1", { id: "HM-1", title: "Buy primer", closed: false, own: false }],
+  ["HM-2", { id: "HM-2", title: "Paint the bedroom", closed: true, own: false }],
+  ["HM-4", { id: "HM-4", title: "The task being edited", closed: false, own: true }],
 ]);
 
 const create = (doc: string) =>
@@ -52,7 +53,7 @@ describe("mention chips", () => {
     expect(chips(state)[0]?.title).toBeUndefined();
     const renamed = state.update({
       effects: setMentionTargets.of(
-        new Map([["HM-3", { id: "HM-3", title: "Hang pictures", closed: false }]]),
+        new Map([["HM-3", { id: "HM-3", title: "Hang pictures", closed: false, own: false }]]),
       ),
     }).state;
     expect(chips(renamed)[0]?.title).toBe("Hang pictures");
@@ -64,7 +65,15 @@ describe("completing [[", () => {
   const complete = (doc: string, pos = doc.length) =>
     mentionCompletions(new CompletionContext(create(doc), pos, false));
 
-  it("offers every task by id and title once [[ is typed", () => {
+  it("offers no completion inside code, where [[ stays text", () => {
+    expect(complete("See `[[pai")).not.toBeNull();
+    for (const doc of ["```\n[[pai", "See `[[pai` now", "para\n\n    [[pai", "<!-- [[pai"]) {
+      const cursor = doc.indexOf("pai") + 3;
+      expect({ doc, result: complete(doc, cursor) }).toEqual({ doc, result: null });
+    }
+  });
+
+  it("offers every task but the one being edited by id and title once [[ is typed", () => {
     const result = complete("See [[pai");
     expect(result?.from).toBe(6);
     expect(result?.options.map((option) => option.label)).toEqual([

@@ -42,8 +42,11 @@ export function BlockedChip({ snapshot, task }: { snapshot: WorkspaceSnapshot; t
   );
 }
 
-/** What the body editor needs for `[[HM-3]]`: every task's title, and a way to open one. */
-export function useMentions(workspace: string, snapshot: WorkspaceSnapshot) {
+/**
+ * What the body editor of task `own` needs for `[[HM-3]]`: every task's title, and a way to open
+ * one.
+ */
+export function useMentions(workspace: string, snapshot: WorkspaceSnapshot, own: string) {
   const navigate = useNavigate();
   const mentionTargets = useMemo(() => {
     const statuses = statusMap(snapshot.statuses);
@@ -54,10 +57,11 @@ export function useMentions(workspace: string, snapshot: WorkspaceSnapshot) {
           id: task.id,
           title: task.title,
           closed: isClosedCategory(statuses.get(task.status)?.category),
+          own: task.id === own,
         },
       ]),
     );
-  }, [snapshot.tasks, snapshot.statuses]);
+  }, [snapshot.tasks, snapshot.statuses, own]);
   const onOpenMention = (task: string) =>
     void navigate({
       to: "/w/$workspace",

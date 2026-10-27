@@ -113,7 +113,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
     };
   }, [editor, task.id]);
 
-  const mentions = useMentions(workspace, snapshot);
+  const mentions = useMentions(workspace, snapshot, task.id);
   const setDue = (due: string | null) => update.mutate({ id: task.id, patch: { due } });
   const due = dueInfo(task.due);
 

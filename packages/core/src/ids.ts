@@ -84,24 +84,40 @@ export const pendingId = (
 export const giveId = (
   dir: string,
   candidate: string,
-): Effect.Effect<string | null, PlatformError.PlatformError, FileSystem.FileSystem | Path.Path> =>
+): Effect.Effect<
+  string | null,
+  PlatformError.PlatformError | Error,
+  FileSystem.FileSystem | Path.Path
+> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const marker = path.join(dir, tempName.pendingId);
-    const temp = path.join(dir, tempName.file(tempName.pendingId));
-    yield* fs.writeFileString(temp, `${candidate}\n`);
-    const won = yield* fs.link(temp, marker).pipe(
-      Effect.as(true),
-      Effect.catchIf(alreadyExists, () => Effect.succeed(false)),
-      Effect.ensuring(Effect.ignore(fs.remove(temp))),
-    );
-    // The marker goes only once task.md holds an id, so one gone by now means the file has it.
-    const pending = won ? Option.some(candidate) : yield* Effect.option(fs.readFileString(marker));
     const file = path.join(dir, TASK_FILE);
-    const text = yield* fs.readFileString(file);
-    const id = needsId(text) ? Option.getOrThrow(pending).trim() : null;
-    if (id !== null) yield* writeFileAtomic(file, patchFrontmatter(text, { id }));
-    yield* Effect.ignore(fs.remove(marker));
-    return id;
+    /** The id the marker names, after placing ours if there was none; none if it is unreadable. */
+    const markedId = Effect.gen(function* () {
+      const temp = path.join(dir, tempName.file(tempName.pendingId));
+      yield* fs.writeFileString(temp, `${candidate}\n`);
+      const won = yield* fs.link(temp, marker).pipe(
+        Effect.as(true),
+        Effect.catchIf(alreadyExists, () => Effect.succeed(false)),
+        Effect.ensuring(Effect.ignore(fs.remove(temp))),
+      );
+      if (won) return Option.some(candidate);
+      return Option.map(yield* Effect.option(fs.readFileString(marker)), (id) => id.trim());
+    });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const id = yield* markedId;
+      const text = yield* fs.readFileString(file);
+      if (!needsId(text)) {
+        yield* Effect.ignore(fs.remove(marker));
+        return null;
+      }
+      // A marker gone between the link and the read was a crash's, taken by removeLeftovers.
+      if (Option.isNone(id)) continue;
+      yield* writeFileAtomic(file, patchFrontmatter(text, { id: id.value }));
+      yield* Effect.ignore(fs.remove(marker));
+      return id.value;
+    }
+    return yield* Effect.fail(new Error(`${tempName.pendingId} is there but cannot be read`));
   });

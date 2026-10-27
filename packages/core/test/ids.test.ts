@@ -163,6 +163,18 @@ describe("task ids across processes", () => {
     expect(read(root, "bread/task.md")).toMatch(/^---\nid: HM-\d\n---\n\nBuy bread\n$/);
   });
 
+  it("reports a task it cannot give an id to and reads the rest", async () => {
+    const root = await fresh();
+    write(root, "milk/task.md", "Buy milk\n");
+    mkdirSync(join(root, ".octodo/milk/.pending-id"));
+    write(root, "bread/task.md", "Buy bread\n");
+    const onDisk = await ids(root);
+    expect(onDisk.ids).toEqual(["HM-1"]);
+    expect(onDisk.diagnostics).toEqual([
+      expect.stringMatching(/^This task has no id and writing one failed/),
+    ]);
+  });
+
   it("leaves nothing behind in .octodo once creates finish", async () => {
     const root = await fresh();
     await Promise.all(

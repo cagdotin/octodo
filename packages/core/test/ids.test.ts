@@ -1,14 +1,15 @@
 import { NodeServices } from "@effect/platform-node";
 import { Effect, FileSystem, Layer } from "effect";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
+  statSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -20,7 +21,7 @@ const run = <A, E>(effect: Effect.Effect<A, E, any>, layer = NodeServices.layer)
 
 /**
  * A file system that sees `.octodo/` as it was before another process wrote, until this process
- * writes: `hidden` is left out of its listing and `stale` reads as `before`.
+ * changes any file: `hidden` is left out of its listing and `stale` reads as `before`.
  */
 const lateReader = (
   root: string,
@@ -31,6 +32,15 @@ const lateReader = (
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       let wrote = false;
+      const writing =
+        <Args extends ReadonlyArray<unknown>, A, E>(
+          method: (...args: Args) => Effect.Effect<A, E>,
+        ) =>
+        (...args: Args) =>
+          Effect.suspend(() => {
+            wrote = true;
+            return method(...args);
+          });
       return {
         ...fs,
         readDirectory: (path, options) =>
@@ -43,13 +53,27 @@ const lateReader = (
           wrote || path !== join(root, ".octodo", view.stale)
             ? fs.readFileString(path, encoding)
             : Effect.succeed(view.before),
-        writeFileString: (path, data, options) => {
-          wrote = true;
-          return fs.writeFileString(path, data, options);
-        },
+        writeFile: writing(fs.writeFile),
+        writeFileString: writing(fs.writeFileString),
+        link: writing(fs.link),
+        rename: writing(fs.rename),
+        remove: writing(fs.remove),
+        makeDirectory: writing(fs.makeDirectory),
       };
     }),
   ).pipe(Layer.provideMerge(NodeServices.layer));
+
+/** Runs `operation` on the workspace in another process that dies as it publishes its first write. */
+const crash = (root: string, operation: "create" | "read") => {
+  const child = spawnSync(process.execPath, [
+    join(import.meta.dirname, "crash.ts"),
+    root,
+    operation,
+  ]);
+  expect({ signal: child.signal, stderr: String(child.stderr) }).toMatchObject({
+    signal: "SIGKILL",
+  });
+};
 
 /**
  * A file system that holds the first rename publishing a hidden name under a visible one (a new
@@ -83,12 +107,10 @@ const publishGate = () => {
   return { layer, reached, open };
 };
 
-/** Sets the hidden files in `.octodo/` back `ms`, as if the process owning them were slow. */
-const age = (root: string, ms: number) => {
-  const then = new Date(Date.now() - ms);
-  for (const entry of readdirSync(join(root, ".octodo"), { withFileTypes: true }))
-    if (entry.isFile() && entry.name.startsWith("."))
-      utimesSync(join(root, ".octodo", entry.name), then, then);
+/** Sets `entries` under `.octodo/` two minutes back, as if the process owning them were slow. */
+const age = (root: string, entries: ReadonlyArray<string>) => {
+  const then = new Date(Date.now() - 120_000);
+  for (const entry of entries) utimesSync(join(root, ".octodo", entry), then, then);
 };
 
 /** Hidden entries under `.octodo/` other than its `.gitignore`. */
@@ -242,7 +264,10 @@ describe("task ids across processes", () => {
       gate.layer,
     );
     await gate.reached;
-    age(root, 120_000);
+    age(
+      root,
+      leftovers(root).filter((entry) => statSync(join(root, ".octodo", entry)).isFile()),
+    );
     const quick = await run(
       Effect.flatMap(makeWorkspace("quick", root), (ws) => ws.createTask({ title: "Quick" })),
     );
@@ -301,55 +326,66 @@ describe("task ids across processes", () => {
     expect(hidden).toEqual([]);
   });
 
-  it("skips an id another process holds a claim on, and frees a claim a crash left once it is a minute old", async () => {
+  it("skips the id of a create still running in another process", async () => {
     const root = await fresh();
-    write(root, ".claim-HM-1", "");
-    write(root, ".claim-HM-3", "");
-    const twoMinutesAgo = new Date(Date.now() - 120_000);
-    utimesSync(join(root, ".octodo/.claim-HM-1"), twoMinutesAgo, twoMinutesAgo);
-    const created = await run(
-      Effect.gen(function* () {
-        const ws = yield* makeWorkspace("cli", root);
-        return [
-          (yield* ws.createTask({ title: "First" })).id,
-          (yield* ws.createTask({ title: "Second" })).id,
-        ];
-      }),
+    const gate = publishGate();
+    const slow = run(
+      Effect.flatMap(makeWorkspace("slow", root), (ws) => ws.createTask({ title: "Slow" })),
+      gate.layer,
     );
-    expect(created).toEqual(["HM-1", "HM-2"]);
-    expect(existsSync(join(root, ".octodo/.claim-HM-3")), "a live claim stays").toBe(true);
-    const third = await run(
-      Effect.flatMap(makeWorkspace("cli", root), (ws) => ws.createTask({ title: "Third" })),
+    await gate.reached;
+    const quick = await run(
+      Effect.flatMap(makeWorkspace("quick", root), (ws) => ws.createTask({ title: "Quick" })),
     );
-    expect(third.id).toBe("HM-4");
+    gate.open();
+    expect([(await slow).id, quick.id]).toEqual(["HM-1", "HM-2"]);
+    expect(leftovers(root)).toEqual([]);
   });
 
+  it("hands out the id of a create that crashed before its task was written, and cleans up after it", async () => {
+    const root = await fresh();
+    crash(root, "create");
+    expect(leftovers(root), "the crash leaves its claim and new folder").not.toEqual([]);
+    age(root, leftovers(root));
+    const created = await run(
+      Effect.flatMap(makeWorkspace("cli", root), (ws) => ws.createTask({ title: "Next" })),
+    );
+    expect(created.id).toBe("HM-1");
+    expect(leftovers(root)).toEqual([]);
+    expect(await ids(root)).toEqual({ ids: ["HM-1"], diagnostics: [] });
+  });
   it("finishes giving the id a crashed process picked for a hand-made file, and never hands it out again", async () => {
     const root = await fresh();
     write(root, "milk/task.md", "Buy milk\n");
-    write(root, "milk/.pending-id", "HM-7\n");
+    crash(root, "read");
+    expect(read(root, "milk/task.md"), "the crash came before the id was written").toBe(
+      "Buy milk\n",
+    );
+    age(root, leftovers(root));
     const created = await run(
       Effect.flatMap(makeWorkspace("cli", root), (ws) => ws.createTask({ title: "New" })),
     );
-    expect(read(root, "milk/task.md")).toMatch(/^---\nid: HM-7\n/);
-    expect(existsSync(join(root, ".octodo/milk/.pending-id"))).toBe(false);
-    expect(created.id).toBe("HM-8");
-    expect(await ids(root), "a marker the read finishes is no problem").toEqual({
-      ids: ["HM-7", "HM-8"],
-      diagnostics: [],
-    });
+    expect(read(root, "milk/task.md")).toMatch(/^---\nid: HM-1\n/);
+    expect(created.id).toBe("HM-2");
+    expect(leftovers(root)).toEqual([]);
+    expect(await ids(root)).toEqual({ ids: ["HM-1", "HM-2"], diagnostics: [] });
   });
-
-  it("gives a copied task a new id past one another process holds a claim on", async () => {
+  it("gives a copied task a new id past the one a create in another process holds", async () => {
     const root = await fresh();
     write(root, "HM-1-paint/task.md", "---\nid: HM-1\n---\n");
     write(root, "HM-1-paint-copy/task.md", "---\nid: HM-1\n---\n");
-    write(root, ".claim-HM-2", "");
+    const gate = publishGate();
+    const slow = run(
+      Effect.flatMap(makeWorkspace("slow", root), (ws) => ws.createTask({ title: "Slow" })),
+      gate.layer,
+    );
+    await gate.reached;
     const result = await run(Effect.flatMap(makeWorkspace("app", root), (ws) => ws.fixAll));
+    gate.open();
     expect(result.failed).toEqual([]);
+    expect((await slow).id).toBe("HM-2");
     expect(read(root, "HM-3-paint-copy/task.md")).toBe("---\nid: HM-3\n---\n");
   });
-
   it("never gives a fixed copy the id of a task another workspace creates at the same time", async () => {
     const root = await fresh();
     write(root, "HM-1-a/task.md", "---\nid: HM-1\n---\n");

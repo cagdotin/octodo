@@ -96,6 +96,10 @@ export const imageUrl = Facet.define<
   (src: string) => string | null
 >({ combine: (values) => values[0] ?? (() => null) });
 
+/** A link destination without the angle brackets that let it hold spaces: `<a b.png>`. */
+const destination = (url: string) =>
+  url.startsWith("<") && url.endsWith(">") ? url.slice(1, -1) : url;
+
 class ImageWidget extends WidgetType {
   readonly url: string;
   readonly alt: string;
@@ -305,7 +309,9 @@ export const previewDecorations = (state: EditorState): DecorationSet => {
           .getChildren("LinkMark")
           .find((mark) => state.sliceDoc(mark.from, mark.to) === "]");
         const resolved =
-          url === null ? null : state.facet(imageUrl)(state.sliceDoc(url.from, url.to));
+          url === null
+            ? null
+            : state.facet(imageUrl)(destination(state.sliceDoc(url.from, url.to)));
         if (revealed || resolved === null || close === undefined) return;
         const alt = state.sliceDoc(from + 2, close.from);
         out.push(Decoration.replace({ widget: new ImageWidget(resolved, alt) }).range(from, to));

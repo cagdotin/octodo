@@ -192,6 +192,13 @@ describe("images", () => {
     ]);
   });
 
+  it("resolves a destination written in angle brackets without them", () => {
+    const doc = "![](<images/a b.png>)";
+    expect(images(create(doc))).toEqual([
+      { from: 0, to: doc.length, url: "/files/images/a b.png" },
+    ]);
+  });
+
   it("shows the source while the cursor is on its line, and when the src is refused", () => {
     expect(images(focusedAt("![plan](images/plan.png)", 3))).toEqual([]);
     expect(images(create("![x](javascript:alert(1))"))).toEqual([]);

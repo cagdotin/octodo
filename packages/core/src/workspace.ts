@@ -513,11 +513,36 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         return yield* invalid("Attachment paths cannot leave the task folder or name hidden files");
       if (segments.length === 1 && segments[0] === TASK_FILE)
         return yield* invalid(`${TASK_FILE} is the task itself, not an attachment`);
-      const subtask = yield* storage("Could not read the task folder")(
+      const subtask = yield* Effect.orElseSucceed(
         fs.exists(path.join(dir, segments[0]!, TASK_FILE)),
+        () => false,
       );
       if (subtask) return yield* invalid("That path is inside a subtask");
+      if (!(yield* staysInFolder(dir, segments)))
+        return yield* invalid("Attachment paths cannot follow symlinks out of the task folder");
       return { dir, segments };
+    });
+
+  /**
+   * Whether the deepest existing part of `dir/segments` resolves, symlinks and all, to a place
+   * inside `dir`, and the file itself is not a symlink.
+   */
+  const staysInFolder = (dir: string, segments: ReadonlyArray<string>) =>
+    Effect.gen(function* () {
+      let deepest = dir;
+      for (const [index, segment] of segments.entries()) {
+        const next = path.join(deepest, segment);
+        const info = yield* Effect.option(fs.lstat(next));
+        if (Option.isNone(info)) break;
+        if (info.value.type === "SymbolicLink" && index === segments.length - 1) return false;
+        deepest = next;
+      }
+      const realDir = yield* storage("Could not read the task folder")(fs.realPath(dir));
+      const real = yield* Effect.option(fs.realPath(deepest));
+      return (
+        Option.isSome(real) &&
+        (real.value === realDir || real.value.startsWith(`${realDir}${path.sep}`))
+      );
     });
 
   const attachmentPath = (taskId: string, relativePath: string) =>

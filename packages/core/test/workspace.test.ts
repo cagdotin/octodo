@@ -8,6 +8,7 @@ import {
   readdirSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -502,7 +503,8 @@ describe("attachments", () => {
         const second = yield* ws.writeAttachment(task.id, "images/floor plan.png", bytes);
         const top = yield* ws.writeAttachment(task.id, "quote", bytes);
         const absolute = yield* ws.attachmentPath(task.id, "images/floor plan.png");
-        return { first, second, top, absolute, snapshot: yield* ws.snapshot };
+        const topFile = yield* ws.attachmentPath(task.id, "quote");
+        return { first, second, top, absolute, topFile, snapshot: yield* ws.snapshot };
       }),
     );
     expect([result.first, result.second, result.top]).toEqual([
@@ -512,6 +514,7 @@ describe("attachments", () => {
     ]);
     expect(result.absolute).toBe(join(root, ".octodo/HM-1-plan/images/floor plan.png"));
     expect(readFileSync(result.absolute, "utf8")).toBe("png");
+    expect(result.topFile).toBe(join(root, ".octodo/HM-1-plan/quote"));
     expect(files(root)).toEqual([
       "HM-1-plan/images/floor plan-2.png",
       "HM-1-plan/images/floor plan.png",
@@ -557,6 +560,38 @@ describe("attachments", () => {
     expect(files(root)).toEqual(["HM-1-plan/HM-2-sub/task.md", "HM-1-plan/task.md"]);
     expect(existsSync(join(root, "escape.png"))).toBe(false);
     expect(existsSync(join(root, ".octodo/escape.png"))).toBe(false);
+  });
+
+  it("refuses symlinks that lead out of the task folder and symlinked files", async () => {
+    const root = fresh();
+    const outside = join(root, "outside");
+    mkdirSync(outside);
+    writeFileSync(join(outside, "secret.txt"), "secret");
+    const result = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        const task = yield* ws.createTask({ title: "Plan" });
+        const dir = join(root, ".octodo/HM-1-plan");
+        symlinkSync(outside, join(dir, "images"));
+        symlinkSync(join(outside, "secret.txt"), join(dir, "secret.txt"));
+        mkdirSync(join(dir, "notes"));
+        writeFileSync(join(dir, "notes/a.txt"), "a");
+        symlinkSync(join(dir, "notes/a.txt"), join(dir, "notes/link.txt"));
+        symlinkSync(join(dir, "notes"), join(dir, "inside"));
+        const refused = [
+          ...(yield* Effect.forEach(["images/secret.txt", "images/new.png", "secret.txt"], (path) =>
+            Effect.flip(ws.attachmentPath(task.id, path)),
+          )),
+          yield* Effect.flip(ws.writeAttachment(task.id, "images/new.png", bytes)),
+          yield* Effect.flip(ws.attachmentPath(task.id, "notes/link.txt")),
+        ];
+        const allowed = yield* ws.attachmentPath(task.id, "inside/a.txt");
+        return { refused, allowed };
+      }),
+    );
+    expect(result.refused.map((error) => error._tag)).toEqual(Array(5).fill("InvalidRequest"));
+    expect(result.allowed).toBe(join(root, ".octodo/HM-1-plan/inside/a.txt"));
+    expect(readdirSync(outside)).toEqual(["secret.txt"]);
   });
 
   it("does not recreate a task folder another process removed", async () => {

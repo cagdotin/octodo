@@ -166,7 +166,6 @@ export const createApi = ({ runtime, token, serverUrl }: AppOptions) => {
       .delete("/workspaces/:ws/tasks/:id", (c) =>
         runInWorkspace(c, (ws) => Effect.as(ws.deleteTask(c.req.param("id")), { ok: true })),
       )
-      // A file in the task's folder, such as an image the body links to as `images/plan.png`.
       .get("/workspaces/:ws/tasks/:id/files/:path{.+}", async (c) => {
         const exit = await runtime.runPromiseExit(
           inWorkspace(c, (ws) => ws.attachmentPath(c.req.param("id"), c.req.param("path"))),

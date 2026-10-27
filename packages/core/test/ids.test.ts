@@ -175,6 +175,21 @@ describe("task ids across processes", () => {
     ]);
   });
 
+  it("gives a copied folder a new id when its pending marker names a task that has it", async () => {
+    const root = await fresh();
+    write(root, "HM-1-milk/task.md", "---\nid: HM-1\n---\n\nBuy milk\n");
+    write(root, "HM-1-milk/.pending-id", "HM-1\n");
+    write(root, "milk-copy/task.md", "Buy milk\n");
+    write(root, "milk-copy/.pending-id", "HM-1\n");
+    write(root, "junk/task.md", "Junk\n");
+    write(root, "junk/.pending-id", "not an id\n");
+    expect(await ids(root)).toEqual({ ids: ["HM-1", "HM-2", "HM-3"], diagnostics: [] });
+    const hidden = readdirSync(join(root, ".octodo"), { recursive: true, encoding: "utf8" }).filter(
+      (entry) => entry.split("/").some((part) => part.startsWith(".")),
+    );
+    expect(hidden, "a task with its id keeps no marker").toEqual([]);
+  });
+
   it("leaves nothing behind in .octodo once creates finish", async () => {
     const root = await fresh();
     await Promise.all(

@@ -8,7 +8,6 @@ import {
   readFileSync,
   readdirSync,
   statSync,
-  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -371,18 +370,13 @@ describe("file health", () => {
     expect(served).toMatchObject({ _tag: "InvalidRequest" });
   });
 
-  it("removes a pending-id marker a crash left beside a task that has its id", async () => {
+  it("removes a pending-id marker beside a task that has its id, however fresh", async () => {
     const root = await fresh({
       "HM-1-a/task.md": "---\nid: HM-1\n---\n",
       "HM-1-a/.pending-id": "HM-1\n",
-      "HM-2-b/task.md": "---\nid: HM-2\n---\n",
-      "HM-2-b/.pending-id": "HM-2\n",
     });
-    const twoMinutesAgo = new Date(Date.now() - 120_000);
-    utimesSync(join(root, ".octodo/HM-1-a/.pending-id"), twoMinutesAgo, twoMinutesAgo);
     expect(await diagnostics(root)).toEqual([]);
     expect(existsSync(join(root, ".octodo/HM-1-a/.pending-id"))).toBe(false);
-    expect(existsSync(join(root, ".octodo/HM-2-b/.pending-id")), "a fresh marker stays").toBe(true);
   });
 
   it("reports folder-grammar problems without a fix", async () => {

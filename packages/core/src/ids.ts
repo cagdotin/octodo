@@ -1,6 +1,6 @@
 import { Effect, FileSystem, Option, Path, PlatformError, Scope } from "effect";
 import { tempName, writeFileAtomic } from "./files.ts";
-import { TASK_FILE } from "./layout.ts";
+import { TASK_FILE, isTaskId } from "./layout.ts";
 import { frontmatterId, needsId, patchFrontmatter } from "./markdown.ts";
 
 const alreadyExists = (error: PlatformError.PlatformError) => error.reason._tag === "AlreadyExists";
@@ -79,11 +79,13 @@ export const pendingId = (
  * Writes `candidate` into the task folder's `task.md` unless another process is already giving it
  * an id, in which case it writes that one: the first `.pending-id` marker decides, so concurrent
  * readers of one new file agree on its id, and a marker a crash left behind is finished here.
- * Returns the id written, or null when the file needs none by now.
+ * A marker naming an id that is `taken` came with a copied folder and is dropped. Returns the id
+ * written, or null when the file needs none by now.
  */
 export const giveId = (
   dir: string,
   candidate: string,
+  taken: (id: string) => boolean,
 ): Effect.Effect<
   string | null,
   PlatformError.PlatformError | Error,
@@ -115,6 +117,10 @@ export const giveId = (
       }
       // A marker gone between the link and the read was a crash's, taken by removeLeftovers.
       if (Option.isNone(id)) continue;
+      if (!isTaskId(id.value) || taken(id.value)) {
+        yield* fs.remove(marker);
+        continue;
+      }
       yield* writeFileAtomic(file, patchFrontmatter(text, { id: id.value }));
       yield* Effect.ignore(fs.remove(marker));
       return id.value;

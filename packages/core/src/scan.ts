@@ -10,7 +10,7 @@ import {
   type Task,
   type WorkspaceSnapshot,
 } from "./domain.ts";
-import { isNotFound, sameTree } from "./files.ts";
+import { isNotFound, sameTree, tempName } from "./files.ts";
 import {
   CONFIG_FILE,
   LIST_FILE,
@@ -132,6 +132,8 @@ export const scanWorkspace = (
     const listDirs = new Map<string, { dir: string; order: string }>();
     const taskDirs = new Map<string, string>();
     const missingId: Array<string> = [];
+    /** Folders holding a `.pending-id` marker. */
+    const markerDirs = new Set<string>();
     /** Markdown files that are not tasks: loose in a list, or a sync tool's copy of a marker file. */
     const strays: Array<{
       file: string;
@@ -166,6 +168,7 @@ export const scanWorkspace = (
           type: "file" | "task" | "list" | "both" | "folder";
         }> = [];
         for (const name of ((yield* attempt(dir, fs.readDirectory(dir))) ?? []).toSorted()) {
+          if (name === tempName.pendingId) markerDirs.add(dir);
           if (name.startsWith(".")) continue;
           const child = path.join(dir, name);
           const type = yield* attempt(
@@ -307,6 +310,9 @@ export const scanWorkspace = (
             yield* takeIdsUnder(entry.path);
           }
         }
+        // A marker outlives its write when a crash cut giveId short or the folder was copied.
+        if (id !== null && markerDirs.has(dir) && options.assignIds)
+          yield* Effect.ignore(fs.remove(path.join(dir, tempName.pendingId)));
       });
 
     const readList = (
@@ -398,16 +404,19 @@ export const scanWorkspace = (
           missingId.length,
           nextOnDisk,
         );
+        const given = new Set<string>();
+        const taken = (taskId: string) => taskDirs.has(taskId) || given.has(taskId);
         for (const [index, dir] of missingId.entries()) {
-          const given = yield* giveId(dir, ids[index]!).pipe(
+          const id = yield* giveId(dir, ids[index]!, taken).pipe(
             Effect.catch((error) =>
               Effect.sync(() => unwritten(dir, error)).pipe(Effect.as(undefined)),
             ),
           );
-          if (given === undefined) continue;
+          if (id === undefined) continue;
           assigned = true;
-          if (given !== null)
-            yield* Effect.logInfo(`Assigned ${given} to ${rel(path.join(dir, TASK_FILE))}`);
+          if (id === null) continue;
+          given.add(id);
+          yield* Effect.logInfo(`Assigned ${id} to ${rel(path.join(dir, TASK_FILE))}`);
         }
         return assigned;
       }).pipe(

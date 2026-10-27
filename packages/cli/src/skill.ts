@@ -39,6 +39,8 @@ octo move CT-43 --parent CT-42     # make it a subtask; --no-parent lifts it out
 octo move CT-42 done
 \`\`\`
 
-If a command warns about the old layout (\`s01-todo\`, \`l00-home\` folders), run \`octo migrate\`.
+If a command warns about a file, run \`octo doctor\`: it lists each problem and what to do about
+it, and \`octo doctor --fix\` applies the fixes octodo can make (with MCP, \`list_diagnostics\` and
+\`fix_diagnostic\`). Leave the rest to the user rather than repairing files by hand.
 Prefer moving finished or abandoned work to \`done\` or \`archived\` over deleting it.
 `;

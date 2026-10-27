@@ -6,6 +6,7 @@ import {
   inTaskSubtree,
   isClosedCategory,
   migrateWorkspace,
+  type Diagnostic,
   type Task,
 } from "@octodo/core";
 import { stdioLayer } from "@octodo/mcp";
@@ -62,12 +63,15 @@ const target = Effect.map(octo, (root) => Option.getOrElse(root.workspace, () =>
 
 /**
  * The workspace named by `--workspace`, or the one containing the current directory. Prints what
- * its files have wrong on stderr, such as an old layout that needs `octo migrate`.
+ * its files have wrong on stderr, and points at `octo doctor --fix` when some of it can be fixed.
  */
 const workspace = Effect.gen(function* () {
   const ws = yield* (yield* Workspaces).open(yield* target);
-  for (const diagnostic of (yield* ws.snapshot).diagnostics)
+  const { diagnostics } = yield* ws.snapshot;
+  for (const diagnostic of diagnostics)
     yield* Console.error(`warning: ${diagnostic.path}: ${diagnostic.message}`);
+  if (diagnostics.some((diagnostic) => diagnostic.fix !== null))
+    yield* Console.error("Run `octo doctor --fix` to fix what octodo can.");
   return ws;
 });
 
@@ -320,6 +324,47 @@ const migrateCommand = Command.make(
   ),
 );
 
+const describeDiagnostic = (diagnostic: Diagnostic) =>
+  [
+    `${diagnostic.path}  [${diagnostic.kind}${diagnostic.field === null ? "" : ` ${diagnostic.field}`}]`,
+    `  ${diagnostic.message}`,
+    ...(diagnostic.fix === null ? [] : [`  fix: ${diagnostic.fix.label}`]),
+  ].join("\n");
+
+const doctorCommand = Command.make(
+  "doctor",
+  {
+    fix: Flag.Boolean("fix").pipe(
+      Flag.withDescription("Apply every fix octodo offers, then list what is left"),
+      Flag.withDefault(false),
+    ),
+    json,
+  },
+  Effect.fn(function* (options) {
+    const ws = yield* (yield* Workspaces).open(yield* target);
+    const result = options.fix
+      ? yield* ws.fixAll
+      : { fixed: [], failed: [], diagnostics: (yield* ws.snapshot).diagnostics };
+    if (result.diagnostics.length > 0) process.exitCode = 1;
+    if (options.json) return yield* Console.log(JSON.stringify(result, null, 2));
+    for (const fixed of result.fixed)
+      yield* Console.log(`fixed: ${fixed.path}: ${fixed.fix?.label ?? fixed.kind}`);
+    for (const { diagnostic, error } of result.failed)
+      yield* Console.error(`could not fix ${diagnostic.path}: ${error}`);
+    if (result.diagnostics.length === 0) return yield* Console.log(`No problems in ${ws.root}`);
+    if (result.fixed.length > 0 || result.failed.length > 0) yield* Console.log("");
+    yield* Console.log(result.diagnostics.map(describeDiagnostic).join("\n\n"));
+    const fixable = result.diagnostics.filter((diagnostic) => diagnostic.fix !== null).length;
+    yield* Console.log(
+      `\n${result.diagnostics.length} problems${fixable > 0 && !options.fix ? `; run \`octo doctor --fix\` to fix ${fixable}` : ""}`,
+    );
+  }),
+).pipe(
+  Command.withDescription(
+    "List problems with the workspace's files, with what to do about each; --fix applies the safe fixes",
+  ),
+);
+
 const initCommand = Command.make(
   "init",
   {
@@ -503,6 +548,7 @@ octo.pipe(
     moveCommand,
     deleteCommand,
     migrateCommand,
+    doctorCommand,
     initCommand,
     workspaceCommand,
     listsCommand,

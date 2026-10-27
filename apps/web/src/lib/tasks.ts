@@ -335,7 +335,8 @@ export const applyMove = (
 
 /**
  * Picks `before`/`after` for dropping `task` at `index` of a rendered column. Order keys only
- * mean something within one folder (status + list), so neighbours from other lists are skipped.
+ * mean something among one container's tasks in one status, so neighbours from other lists are
+ * skipped.
  */
 export const neighbours = (
   column: ReadonlyArray<Task>,

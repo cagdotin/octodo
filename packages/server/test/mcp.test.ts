@@ -20,14 +20,28 @@ const rpc = (method: string, params: unknown) =>
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
   });
 
-/** Calls an MCP tool on the workspace and returns its structured result. */
-const call = async (name: string, args: Record<string, unknown>) => {
-  const response = (await (
+type Result = Record<string, unknown> & Array<Record<string, unknown>>;
+
+/** Calls an MCP tool on the workspace and returns whether it failed and what it returned. */
+const attempt = async (name: string, args: Record<string, unknown>) => {
+  const { result } = (await (
     await rpc("tools/call", { name, arguments: { workspace: root, ...args } })
-  ).json()) as { result: { structuredContent: unknown; isError?: boolean } };
-  expect(response.result.isError ?? false).toBe(false);
-  return response.result.structuredContent as Record<string, unknown> &
-    Array<Record<string, unknown>>;
+  ).json()) as {
+    result: {
+      structuredContent?: unknown;
+      content: Array<{ text: string }>;
+      isError?: boolean;
+    };
+  };
+  // Structured content is an object only, so a list comes back as text alone.
+  const value = result.structuredContent ?? JSON.parse(result.content[0]!.text);
+  return { isError: result.isError ?? false, value: value as Result };
+};
+
+const call = async (name: string, args: Record<string, unknown>) => {
+  const { isError, value } = await attempt(name, args);
+  expect(isError).toBe(false);
+  return value;
 };
 
 beforeAll(async () => {
@@ -59,5 +73,25 @@ describe("task links over MCP", () => {
     const ref = { id: primer["id"], title: "Buy primer", status: "todo" };
     expect(updated["blockedBy"]).toEqual([ref]);
     expect(updated).toEqual(read);
+  });
+
+  it("lists only open, unblocked tasks as ready, and refuses a blocker that matches no task", async () => {
+    const tile = await call("create_task", { title: "Tile" });
+    const grout = await call("create_task", { title: "Grout" });
+    await call("update_task", { id: grout["id"], blocked_by: [tile["id"]] });
+    const readyIds = async () =>
+      (await call("list_tasks", { ready: true })).map((task) => task["id"]);
+    expect(await readyIds()).toContain(tile["id"]);
+    expect(await readyIds()).not.toContain(grout["id"]);
+    const all = await call("list_tasks", {});
+    expect(all.find((task) => task["id"] === grout["id"])).toMatchObject({ blocked: true });
+    expect((await call("get_task", { id: tile["id"] }))["blocks"]).toEqual([
+      { id: grout["id"], title: "Grout", status: "todo" },
+    ]);
+    await call("move_task", { id: tile["id"], status: "done" });
+    expect(await readyIds()).toContain(grout["id"]);
+    expect(await readyIds()).not.toContain(tile["id"]);
+    const unknown = await attempt("update_task", { id: grout["id"], blocked_by: ["HOU-404"] });
+    expect(unknown.isError).toBe(true);
   });
 });

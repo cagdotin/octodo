@@ -1,5 +1,5 @@
 import { NodeServices } from "@effect/platform-node";
-import { Effect } from "effect";
+import { Effect, FileSystem, Layer } from "effect";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -333,6 +333,78 @@ describe("links in a workspace", () => {
     );
     expect(result).toMatchObject({ list: "walls", blockedBy: [], blocked: false });
     expect(read(root, result.path)).not.toContain("blocked_by");
+  });
+
+  it("keeps both tasks of a blocking cycle blocked", async () => {
+    const root = fresh();
+    const snapshot = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        const wall = yield* ws.createTask({ title: "Wall" });
+        const door = yield* ws.createTask({ title: "Door" });
+        yield* ws.updateTask(wall.id, { blocked_by: [door.id] });
+        yield* ws.updateTask(door.id, { blocked_by: [wall.id] });
+        return yield* ws.snapshot;
+      }),
+    );
+    expect(snapshot.tasks.map(({ id, blocked, blocks }) => ({ id, blocked, blocks }))).toEqual([
+      { id: "HM-1", blocked: true, blocks: ["HM-2"] },
+      { id: "HM-2", blocked: true, blocks: ["HM-1"] },
+    ]);
+    expect(snapshot.tasks.filter((task) => isReady(task, snapshot.statuses))).toEqual([]);
+  });
+
+  it("finishes a delete that failed partway when it runs again", async () => {
+    const root = fresh();
+    let renames = 0;
+    const failsSecondWrite = Layer.effect(
+      FileSystem.FileSystem,
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        return {
+          ...fs,
+          rename: (from, to) =>
+            to.endsWith("/task.md") && ++renames === 2
+              ? fs.rename(from, join(from, "not-a-folder"))
+              : fs.rename(from, to),
+        };
+      }),
+    ).pipe(Layer.provideMerge(NodeServices.layer));
+    const ids = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        const primer = yield* ws.createTask({ title: "Buy primer" });
+        const waiting = [];
+        for (const title of ["Paint", "Tile", "Trim"]) {
+          const task = yield* ws.createTask({ title });
+          yield* ws.updateTask(task.id, { blocked_by: [primer.id] });
+          waiting.push(task.id);
+        }
+        return { primer: primer.id, waiting };
+      }),
+    );
+    const failed = await Effect.runPromise(
+      Effect.flatMap(makeWorkspace("crashy", root), (ws) =>
+        Effect.flip(ws.deleteTask(ids.primer)),
+      ).pipe(Effect.scoped, Effect.provide(failsSecondWrite)),
+    );
+    expect(failed).toMatchObject({ _tag: "StorageError" });
+    const partway = await run(Effect.flatMap(makeWorkspace("check", root), (ws) => ws.snapshot));
+    expect(
+      partway.tasks.map(({ id, blockedBy }) => [id, blockedBy]),
+      "the first waiting task was cleaned, the second failed",
+    ).toEqual([
+      ["HM-1", []],
+      ["HM-2", []],
+      ["HM-3", ["HM-1"]],
+      ["HM-4", ["HM-1"]],
+    ]);
+    await run(Effect.flatMap(makeWorkspace("again", root), (ws) => ws.deleteTask(ids.primer)));
+    const done = await run(Effect.flatMap(makeWorkspace("check", root), (ws) => ws.snapshot));
+    expect(done.tasks.map(({ id, blockedBy, blocked }) => ({ id, blockedBy, blocked }))).toEqual(
+      ids.waiting.map((id) => ({ id, blockedBy: [], blocked: false })),
+    );
+    expect(done.diagnostics).toEqual([]);
   });
 
   it("counts a task as ready when it is open and not blocked", () => {

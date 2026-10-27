@@ -10,7 +10,9 @@ import {
   UpdateTaskInput,
   WorkspaceInfo,
   Workspaces,
+  isReady,
   type Workspace,
+  type WorkspaceSnapshot,
 } from "@octodo/core";
 import { Effect, Layer, Schema } from "effect";
 import { McpProtocol, McpServer, Tool, Toolkit } from "effect/ai";
@@ -22,6 +24,7 @@ export const INSTRUCTIONS = `octodo manages tasks stored as markdown files under
 - A task folder inside another task is a subtask: create_task and move_task take a parent task id, and get_task lists a task's subtasks.
 - Folders with list.md are lists, nested up to 3 levels. List ids are folder names joined by slashes: garden/seeds.
 - Every task has a stable id like HM-42 (the workspace key plus a number). Refer to tasks by id, never by path.
+- blocked_by in a task's frontmatter lists the task ids it waits for. A task is blocked while any of them is open or missing; update_task sets blocked_by, and list_tasks with ready: true lists open tasks that are not blocked. [[HM-3]] in a body mentions task HM-3.
 - Call get_workspace first to learn the statuses and lists before creating or moving tasks. If it reports the old layout, tell the user to run octo migrate.
 - The workspace parameter takes a registered workspace id or an absolute folder path; omit it to use the workspace containing the server's working directory.`;
 
@@ -40,6 +43,14 @@ const TaskSummary = Schema.Struct({
   priority: Priority,
   tags: Schema.Array(Schema.String),
   due: Schema.NullOr(Schema.String),
+  blocked: Schema.Boolean,
+});
+
+/** Another task named by a link, with a null title and status when no task has its id. */
+const TaskRef = Schema.Struct({
+  id: Schema.String,
+  title: Schema.NullOr(Schema.String),
+  status: Schema.NullOr(Schema.String),
 });
 
 const ListWorkspaces = Tool.make("list_workspaces", {
@@ -83,6 +94,9 @@ const ListTasks = Tool.make("list_tasks", {
     query: Schema.optionalKey(Schema.String).annotate({
       description: "Case-insensitive text to find in title or body.",
     }),
+    ready: Schema.optionalKey(Schema.Boolean).annotate({
+      description: "true: only tasks that can start now, open and not blocked.",
+    }),
   }),
   success: Schema.Array(TaskSummary),
   failure: ToolFailure,
@@ -93,10 +107,14 @@ const ListTasks = Tool.make("list_tasks", {
 
 const GetTask = Tool.make("get_task", {
   description:
-    "Read one task, including its markdown body, any extra frontmatter, its parent and its direct subtasks.",
+    "Read one task, including its markdown body, any extra frontmatter, its parent, its direct subtasks, the tasks it is blocked by and blocks, and the tasks it mentions and is mentioned in.",
   parameters: Schema.Struct({ workspace: WorkspaceParam, id: Schema.String }),
   success: Schema.Struct({
     ...Task.fields,
+    blockedBy: Schema.Array(TaskRef),
+    blocks: Schema.Array(TaskRef),
+    mentions: Schema.Array(TaskRef),
+    mentionedIn: Schema.Array(TaskRef),
     subtasks: Schema.Array(
       Schema.Struct({ id: Schema.String, title: Schema.String, status: Schema.String }),
     ),
@@ -118,7 +136,7 @@ const CreateTask = Tool.make("create_task", {
 
 const UpdateTask = Tool.make("update_task", {
   description:
-    "Change a task's title, priority, tags, due date (YYYY-MM-DD, null clears it) or markdown body. Use move_task to change status or list.",
+    "Change a task's title, priority, tags, due date (YYYY-MM-DD, null clears it), markdown body or blocked_by (the task ids it waits for, replacing the current ones; [] clears them). Use move_task to change status or list.",
   parameters: Schema.Struct({
     workspace: WorkspaceParam,
     id: Schema.String,
@@ -189,6 +207,12 @@ export const TasksToolkit = Toolkit.make(
 
 const toFailure = (error: { readonly message: string }) => ({ error: error.message });
 
+const taskRefs = (snapshot: WorkspaceSnapshot, ids: ReadonlyArray<string>) =>
+  ids.map((id) => {
+    const task = snapshot.tasks.find((candidate) => candidate.id === id);
+    return { id, title: task?.title ?? null, status: task?.status ?? null };
+  });
+
 /**
  * Tool handlers. `defaultDir` is where a call without a `workspace` looks for one: the directory
  * the stdio server was started in, or none over HTTP, where the caller has no meaningful cwd.
@@ -227,7 +251,7 @@ export const toolkitLayer = (options: { readonly defaultDir?: string | undefined
               diagnostics: snapshot.diagnostics,
             };
           }),
-        list_tasks: ({ workspace, status, list, parent, tag, query }) =>
+        list_tasks: ({ workspace, status, list, parent, tag, query, ready }) =>
           Effect.gen(function* () {
             const ws = yield* open(workspace);
             const snapshot = yield* Effect.mapError(ws.snapshot, toFailure);
@@ -239,11 +263,12 @@ export const toolkitLayer = (options: { readonly defaultDir?: string | undefined
                   (list === undefined || task.list === list) &&
                   (parent === undefined || task.parent === parent) &&
                   (tag === undefined || task.tags.includes(tag)) &&
+                  (ready !== true || isReady(task, snapshot.statuses)) &&
                   (needle === undefined ||
                     task.title.toLowerCase().includes(needle) ||
                     task.body.toLowerCase().includes(needle)),
               )
-              .map(({ id, title, status, list, parent, priority, tags, due }) => ({
+              .map(({ id, title, status, list, parent, priority, tags, due, blocked }) => ({
                 id,
                 title,
                 status,
@@ -252,6 +277,7 @@ export const toolkitLayer = (options: { readonly defaultDir?: string | undefined
                 priority,
                 tags,
                 due,
+                blocked,
               }));
           }),
         get_task: ({ workspace, id }) =>
@@ -262,7 +288,14 @@ export const toolkitLayer = (options: { readonly defaultDir?: string | undefined
             const subtasks = snapshot.tasks
               .filter((candidate) => candidate.parent === id)
               .map(({ id, title, status }) => ({ id, title, status }));
-            return { ...task, subtasks };
+            return {
+              ...task,
+              subtasks,
+              blockedBy: taskRefs(snapshot, task.blockedBy),
+              blocks: taskRefs(snapshot, task.blocks),
+              mentions: taskRefs(snapshot, task.mentions),
+              mentionedIn: taskRefs(snapshot, task.mentionedIn),
+            };
           }),
         create_task: ({ workspace, ...input }) =>
           Effect.flatMap(open(workspace), (ws) => Effect.mapError(ws.createTask(input), toFailure)),

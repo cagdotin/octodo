@@ -15,6 +15,8 @@ are the source of truth; the octodo app, CLI and MCP server read and write them.
 - A folder with \`task.md\` is a task (\`CT-12-redo-the-bedroom/task.md\`). Its frontmatter holds
   \`id\`, \`title\`, \`status\`, \`priority\` (none, low, medium, high, urgent), \`tags\`, \`due\`
   (YYYY-MM-DD), \`created\` and \`order\`; the body is markdown. Other keys are kept as-is.
+- \`blocked_by: [CT-3, CT-7]\` lists the task ids a task waits for. It is blocked while any of them
+  is open or missing; ready tasks are open and not blocked. \`[[CT-3]]\` in a body mentions CT-3.
 - A task folder inside another task folder is a subtask. Any other file in a task folder, such as
   \`images/plan.png\`, is an attachment of that task.
 - A folder with \`list.md\` is a list, nested up to three levels. List ids are the folder names
@@ -34,6 +36,8 @@ octo show CT-42                    # one task with its subtasks and body
 octo create "Title" --priority high --tag infra --status todo
 octo create "Buy primer" --parent CT-42   # a subtask
 octo update CT-42 --body "Notes in markdown"
+octo update CT-42 --blocked-by CT-40,CT-41   # waits for both; --blocked-by '' clears
+octo list --ready                  # open tasks that are not blocked
 octo move CT-42 in-progress        # change status
 octo move CT-43 --parent CT-42     # make it a subtask; --no-parent lifts it out
 octo move CT-42 done

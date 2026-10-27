@@ -5,6 +5,7 @@ import {
   defaultHome,
   inTaskSubtree,
   isClosedCategory,
+  isReady,
   migrateWorkspace,
   type Task,
 } from "@octodo/core";
@@ -90,6 +91,7 @@ const line = (task: Task) =>
     ...task.tags.map((tag) => `#${tag}`),
     task.due === null ? "" : `due ${task.due}`,
     task.list === null ? "" : `(${task.list})`,
+    task.blocked ? "[blocked]" : "",
   ]
     .filter((part) => part !== "")
     .join("  ");
@@ -128,6 +130,10 @@ const listCommand = Command.make(
       Flag.withDescription("Include done and archived tasks"),
       Flag.withDefault(false),
     ),
+    ready: Flag.Boolean("ready").pipe(
+      Flag.withDescription("Only tasks that can start now: open and not blocked"),
+      Flag.withDefault(false),
+    ),
     json,
   },
   Effect.fn(function* (options) {
@@ -145,7 +151,8 @@ const listCommand = Command.make(
             ? task.status === options.status.value
             : options.all || !closed.has(task.status)) &&
           (Option.isNone(options.list) || task.list === options.list.value) &&
-          (Option.isNone(options.tag) || task.tags.includes(options.tag.value)),
+          (Option.isNone(options.tag) || task.tags.includes(options.tag.value)) &&
+          (!options.ready || isReady(task, snapshot.statuses)),
       )
       .toSorted((a, b) => (order.get(a.status) ?? 0) - (order.get(b.status) ?? 0));
     if (options.json) return yield* Console.log(JSON.stringify(tasks, null, 2));
@@ -175,6 +182,21 @@ const showCommand = Command.make(
     }
     yield* Console.log(line(task));
     if (task.parent !== null) yield* Console.log(`parent: ${task.parent}`);
+    const named = (ids: ReadonlyArray<string>) =>
+      ids
+        .map((linked) => {
+          const other = tasks.find((candidate) => candidate.id === linked);
+          return other === undefined ? `${linked} (no such task)` : `${linked} ${other.title}`;
+        })
+        .join(", ");
+    for (const [label, ids] of [
+      ["blocked by", task.blockedBy],
+      ["blocks", task.blocks],
+      ["mentions", task.mentions],
+      ["mentioned in", task.mentionedIn],
+    ] as const) {
+      if (ids.length > 0) yield* Console.log(`${label}: ${named(ids)}`);
+    }
     yield* Console.log(`path: ${task.path}`);
     if (subtasks.length > 0) yield* Console.log("subtasks:");
     for (const { task: sub, depth } of subtasks)
@@ -224,7 +246,19 @@ const createCommand = Command.make(
 
 const updateCommand = Command.make(
   "update",
-  { id: taskId, title: Flag.String("title").pipe(Flag.optional), priority, tags, due, body, json },
+  {
+    id: taskId,
+    title: Flag.String("title").pipe(Flag.optional),
+    priority,
+    tags,
+    due,
+    body,
+    blockedBy: Flag.String("blocked-by").pipe(
+      Flag.withDescription("Task ids it waits for, comma-separated; empty clears them"),
+      Flag.optional,
+    ),
+    json,
+  },
   Effect.fn(function* (options) {
     const ws = yield* workspace;
     const task = yield* ws.updateTask(options.id, {
@@ -235,10 +269,24 @@ const updateCommand = Command.make(
       ...(options.tags.length > 0 ? { tags: options.tags } : {}),
       ...(Option.isSome(options.due) ? { due: options.due.value || null } : {}),
       ...(Option.isSome(options.body) ? { body: options.body.value } : {}),
+      ...(Option.isSome(options.blockedBy)
+        ? {
+            blocked_by: options.blockedBy.value
+              .split(",")
+              .map((id) => id.trim())
+              .filter((id) => id !== ""),
+          }
+        : {}),
     });
     yield* print(task, options.json);
   }),
-).pipe(Command.withDescription("Change a task's title, priority, tags, due date or body"));
+).pipe(
+  Command.withDescription("Change a task's title, priority, tags, due date, body or blockers"),
+  Command.withExamples([
+    { command: "octo update HM-4 --blocked-by HM-2,HM-3", description: "HM-4 waits for both" },
+    { command: "octo update HM-4 --blocked-by ''", description: "HM-4 waits for nothing" },
+  ]),
+);
 
 const moveCommand = Command.make(
   "move",

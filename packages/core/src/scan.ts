@@ -375,9 +375,13 @@ export const scanWorkspace = (
           } else if (entry.type === "both") {
             report("both-markers", entry.path, "This folder has both task.md and list.md");
             yield* takeIdsUnder(entry.path);
-          } else if (entry.type === "file" && conflictCopyOf(entry.name) === TASK_FILE) {
+          } else if (
+            entry.type === "file" &&
+            conflictCopyOf(entry.name) === TASK_FILE &&
+            id !== null &&
+            frontmatterId((yield* readText(entry.path)) ?? "") === id
+          ) {
             strays.push({ file: entry.path, kind: "conflict-copy", copyOf: file });
-            yield* takeIdsUnder(entry.path);
           }
         }
         // A marker outlives its write when a crash cut giveId short or the folder was copied.

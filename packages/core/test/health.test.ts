@@ -374,6 +374,22 @@ describe("file health", () => {
     expect(await diagnostics(root)).toEqual([]);
   });
 
+  it("leaves an attachment named like a copy of task.md alone unless it has the task's id", async () => {
+    const root = await fresh({
+      "HM-1-a/task.md": "---\nid: HM-1\n---\n",
+      "HM-1-a/task 2.md": "Meeting notes\n",
+      "HM-1-a/task 3.md": "---\ntitle: Agenda\n---\n",
+    });
+    expect(await diagnostics(root)).toEqual([]);
+    await inWorkspace(root, (ws) => ws.fixAll);
+    expect(files(root)).toEqual([
+      "HM-1-a/task 2.md",
+      "HM-1-a/task 3.md",
+      "HM-1-a/task.md",
+      "config.json",
+    ]);
+  });
+
   it("resolves a conflict copy of a task folder by its contents", async () => {
     const root = await fresh({
       "HM-1-paint/task.md": "---\nid: HM-1\n---\n",

@@ -19,10 +19,10 @@ import {
   deriveKey,
   humanize,
   idNumber,
-  legacyFolder,
   listDepth,
   sortStatuses,
 } from "./layout.ts";
+import { oldLayoutFolder } from "./migrate.ts";
 import { patchFrontmatter, readListFile, readTaskFile } from "./markdown.ts";
 
 /** A snapshot plus where its lists and tasks are on disk, which is nobody else's business. */
@@ -183,7 +183,10 @@ export const scanWorkspace = (
         }
       });
 
-    const readList = (dir: string, list: string | null): Effect.Effect<void> =>
+    const readList = (
+      dir: string,
+      list: string | null,
+    ): Effect.Effect<void, never, FileSystem.FileSystem | Path.Path> =>
       Effect.gen(function* () {
         const children: Array<{ name: string; path: string; order: string; list: List }> = [];
         for (const entry of yield* entries(dir)) {
@@ -195,7 +198,7 @@ export const scanWorkspace = (
           } else if (entry.type === "both") {
             report(entry.path, "Folder has both task.md and list.md; it is not read");
           } else if (entry.type === "folder") {
-            if (legacyFolder(entry.name) !== null) legacy = true;
+            if ((yield* attempt(entry.path, oldLayoutFolder(entry.path))) !== null) legacy = true;
             else report(entry.path, "Folder has neither task.md nor list.md; it is not read");
           } else if (listDepth(list) >= MAX_LIST_DEPTH) {
             report(

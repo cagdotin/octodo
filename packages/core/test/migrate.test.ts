@@ -143,6 +143,26 @@ describe("migrateWorkspace", () => {
     expect(crashes).toBeGreaterThan(20);
   });
 
+  it("leaves folders of the new layout alone, whatever their names", async () => {
+    const root = join(mkdtempSync(join(tmpdir(), "octodo-migrate-")), "house-move");
+    mkdirSync(root);
+    await run(
+      Effect.gen(function* () {
+        yield* initWorkspace(root);
+        const ws = yield* makeWorkspace("test", root);
+        const desk = yield* ws.createList({ name: "L-shaped desk" });
+        yield* ws.createTask({ title: "Measure", list: desk.id });
+        yield* ws.createList({ name: "S1 tier" });
+      }),
+    );
+    mkdirSync(join(root, ".octodo/s-tier"));
+    writeFileSync(join(root, ".octodo/s-tier/readme.txt"), "not a status");
+    const before = tree(root);
+    const summary = await run(migrateWorkspace(root));
+    expect(summary).toEqual({ tasks: 0, lists: 0, statusFolders: 0, skipped: [] });
+    expect(tree(root)).toEqual(before);
+  });
+
   it("keeps what it cannot convert and says why", async () => {
     const root = await oldWorkspace();
     writeFileSync(join(root, ".octodo/s03-done/receipt.pdf"), "pdf");

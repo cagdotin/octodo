@@ -313,6 +313,23 @@ describe("workspace", () => {
     expect(snapshot.diagnostics[0]!.message).toContain("octo migrate");
   });
 
+  it("takes old-layout names for old layout only when the folder holds the old layout", async () => {
+    const root = fresh();
+    await run(initWorkspace(root));
+    write(root, "s-tier/readme.txt", "x");
+    write(root, "s01-notes/plan.txt", "x");
+    write(root, "l-shaped/HM-1-a/task.md", "---\nid: HM-1\n---\n");
+    const snapshot = await run(Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot));
+    expect(snapshot.diagnostics.map((diagnostic) => diagnostic.message)).not.toContainEqual(
+      expect.stringContaining("octo migrate"),
+    );
+    expect(snapshot.diagnostics.map((diagnostic) => diagnostic.path).toSorted()).toEqual([
+      ".octodo/l-shaped",
+      ".octodo/s-tier",
+      ".octodo/s01-notes",
+    ]);
+  });
+
   it("updates task.md in place, keeps unknown keys and renames the folder after the title", async () => {
     const root = fresh();
     const task = await run(

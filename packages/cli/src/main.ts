@@ -3,10 +3,10 @@ import {
   Priority,
   Workspaces,
   defaultHome,
-  inTaskSubtree,
   isClosedCategory,
   isReady,
   migrateWorkspace,
+  taskSubtree,
   type Diagnostic,
   type Task,
 } from "@octodo/core";
@@ -175,9 +175,8 @@ const showCommand = Command.make(
     const ws = yield* workspace;
     const task = yield* ws.getTask(id);
     const { tasks } = yield* ws.snapshot;
-    const subtasks = tree(
-      tasks.filter((other) => other.id !== id && inTaskSubtree(tasks, other.id, id)),
-    );
+    const subtree = taskSubtree(tasks, id);
+    const subtasks = tree(tasks.filter((other) => other.id !== id && subtree.has(other.id)));
     if (asJson) {
       const summaries = subtasks
         .filter(({ task: sub }) => sub.parent === id)

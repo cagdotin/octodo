@@ -50,13 +50,13 @@ import {
   defaultStatus,
   deriveKey,
   humanize,
-  inTaskSubtree,
   listDepth,
   listMoveError,
   movedListId,
   slugify,
   sortStatuses,
   taskFolderName,
+  taskSubtree,
 } from "./layout.ts";
 import { editTaskFile, newListFile, newTaskFile, patchFrontmatter, keepLinks } from "./markdown.ts";
 import { claimIds, nextIdOnDisk } from "./ids.ts";
@@ -452,7 +452,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         const status = input.status ?? task.status;
         yield* checkStatus(snapshot, status);
         const container = yield* destination(snapshot, input, task);
-        if (container.parent !== null && inTaskSubtree(snapshot.tasks, container.parent, taskId))
+        if (container.parent !== null && taskSubtree(snapshot.tasks, taskId).has(container.parent))
           return yield* invalid("A task cannot move inside itself or its subtasks");
         yield* Effect.gen(function* () {
           const changes: Record<string, string> = {};
@@ -480,11 +480,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       Effect.gen(function* () {
         const { snapshot, dirs } = yield* state;
         yield* findTask(snapshot, taskId);
-        const removed = new Set(
-          snapshot.tasks
-            .filter((task) => inTaskSubtree(snapshot.tasks, task.id, taskId))
-            .map((task) => task.id),
-        );
+        const removed = taskSubtree(snapshot.tasks, taskId);
         const isRemoved = (id: string) => removed.has(id);
         yield* Effect.gen(function* () {
           for (const task of snapshot.tasks) {

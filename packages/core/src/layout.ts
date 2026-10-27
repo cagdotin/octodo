@@ -127,20 +127,21 @@ export const taskFolderName = (id: string, title: string): string => {
   return slug.length > 0 ? `${id}-${slug}` : id;
 };
 
-/** Whether task `id` is `root` or one of its subtasks at any depth, following `parent` links. */
-export const inTaskSubtree = (
+/** Task `root` and its subtasks at any depth. */
+export const taskSubtree = (
   tasks: ReadonlyArray<Pick<Task, "id" | "parent">>,
-  id: string,
   root: string,
-): boolean => {
-  const parents = new Map(tasks.map((task) => [task.id, task.parent]));
-  const seen = new Set<string>();
-  for (let current: string | null = id; current !== null; current = parents.get(current) ?? null) {
-    if (current === root) return true;
-    if (seen.has(current)) return false;
-    seen.add(current);
+): ReadonlySet<string> => {
+  const children = new Map<string, Array<string>>();
+  for (const task of tasks) {
+    if (task.parent === null) continue;
+    const siblings = children.get(task.parent);
+    if (siblings === undefined) children.set(task.parent, [task.id]);
+    else siblings.push(task.id);
   }
-  return false;
+  const subtree = new Set([root]);
+  for (const id of subtree) for (const child of children.get(id) ?? []) subtree.add(child);
+  return subtree;
 };
 
 /** How many levels down a list sits: 1 for a top-level list, 0 for the workspace itself. */

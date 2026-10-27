@@ -3,13 +3,13 @@ import type { List, StatusDefinition } from "../src/domain.ts";
 import {
   defaultStatus,
   deriveKey,
-  inTaskSubtree,
   isClosedCategory,
   legacyFolder,
   listMoveError,
   movedListId,
   sortStatuses,
   taskFolderName,
+  taskSubtree,
 } from "../src/layout.ts";
 
 const lists = (...ids: Array<string>): Array<List> =>
@@ -137,9 +137,19 @@ describe("layout", () => {
       { id: "C", parent: "B" },
       { id: "D", parent: null },
     ];
-    expect(inTaskSubtree(tasks, "C", "A")).toBe(true);
-    expect(inTaskSubtree(tasks, "A", "A")).toBe(true);
-    expect(inTaskSubtree(tasks, "A", "C")).toBe(false);
-    expect(inTaskSubtree(tasks, "D", "A")).toBe(false);
+    expect([...taskSubtree(tasks, "A")].toSorted()).toEqual(["A", "B", "C"]);
+    expect([...taskSubtree(tasks, "C")]).toEqual(["C"]);
+    expect([...taskSubtree(tasks, "D")]).toEqual(["D"]);
+  });
+
+  it("finds a subtree among 20,000 tasks in well under a second", () => {
+    const tasks = Array.from({ length: 20_000 }, (_, index) => ({
+      id: `T-${index}`,
+      parent: index % 2 === 1 ? `T-${index - 1}` : null,
+    }));
+    const started = performance.now();
+    const subtree = taskSubtree(tasks, "T-10");
+    expect([...subtree]).toEqual(["T-10", "T-11"]);
+    expect(performance.now() - started).toBeLessThan(200);
   });
 });

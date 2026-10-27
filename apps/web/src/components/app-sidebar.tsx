@@ -11,6 +11,7 @@ import {
   FolderOpenIcon,
   InboxIcon,
   LayersIcon,
+  LockOpenIcon,
   type LucideIcon,
   PlusIcon,
   SearchIcon,
@@ -74,7 +75,7 @@ export function AppSidebar({
   const { counts, none, open } = listCounts(snapshot);
   const statuses = statusMap(snapshot.statuses);
   const openCount = (list: string) =>
-    filterTasks(snapshot.tasks, list).filter(
+    filterTasks(snapshot, list).filter(
       (task) => !isClosedCategory(statuses.get(task.status)?.category),
     ).length;
   const [newListOpen, setNewListOpen] = useState(false);
@@ -154,6 +155,7 @@ export function AppSidebar({
               {entry(SMART.all, "All tasks", InboxIcon, open)}
               {entry(SMART.today, "Today", CalendarDaysIcon, openCount(SMART.today))}
               {entry(SMART.upcoming, "Next 7 days", CalendarRangeIcon, openCount(SMART.upcoming))}
+              {entry(SMART.ready, "Ready", LockOpenIcon, openCount(SMART.ready))}
               {snapshot.tasks.some((task) => task.list === null) &&
                 snapshot.lists.length > 0 &&
                 entry(SMART.none, "No list", LayersIcon, none)}

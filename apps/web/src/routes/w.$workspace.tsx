@@ -152,7 +152,7 @@ function WorkspacePage() {
 
   const statuses = snapshot.statuses.filter((status) => visibleCategory(status.category, display));
   const shown = new Set(statuses.map((status) => status.id));
-  const inList = filterTasks(snapshot.tasks, search.list);
+  const inList = filterTasks(snapshot, search.list);
   const tasks = inList.filter((task) => shown.has(task.status) && matchesFilter(task, filter));
   const title = viewTitle(search.list, snapshot.lists);
   const selected =

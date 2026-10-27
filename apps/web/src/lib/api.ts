@@ -160,7 +160,12 @@ export const useUpdateTask = (ws: string) =>
     ws,
     ({ id, patch }: { id: string; patch: UpdateTaskInput }) =>
       unwrap(api.workspaces[":ws"].tasks[":id"].$patch({ param: { ws, id }, json: patch })),
-    (snapshot, { id, patch }) => mapTask(snapshot, id, (task) => ({ ...task, ...patch })),
+    (snapshot, { id, patch: { blocked_by, ...fields } }) =>
+      mapTask(snapshot, id, (task) => ({
+        ...task,
+        ...fields,
+        blockedBy: blocked_by ?? task.blockedBy,
+      })),
   );
 
 export const useMoveTask = (ws: string) =>

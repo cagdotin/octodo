@@ -8,6 +8,7 @@ import {
   InboxIcon,
   KanbanIcon,
   ListIcon,
+  LockOpenIcon,
   MoonIcon,
   PlusIcon,
   SettingsIcon,
@@ -126,6 +127,10 @@ export function CommandPalette({
               <CommandItem onSelect={goList(SMART.upcoming)}>
                 <CalendarRangeIcon />
                 Next 7 days
+              </CommandItem>
+              <CommandItem onSelect={goList(SMART.ready)}>
+                <LockOpenIcon />
+                Ready
               </CommandItem>
               <CommandItem
                 onSelect={run(

@@ -8,7 +8,7 @@ import type {
   Task,
   WorkspaceSnapshot,
 } from "@octodo/core";
-import { inSubtree, isClosedCategory, movedListId } from "@octodo/core/layout";
+import { inSubtree, isClosedCategory, isReady, movedListId } from "@octodo/core/layout";
 import {
   addDays,
   format,
@@ -67,6 +67,7 @@ export const SMART = {
   all: undefined,
   today: "@today",
   upcoming: "@upcoming",
+  ready: "@ready",
   none: "@none",
 } as const;
 
@@ -124,10 +125,11 @@ export const todayKey = () => format(new Date(), "yyyy-MM-dd");
 
 /**
  * The tasks a view shows. Views of a list show top-level tasks, with subtasks inside their parent;
- * the date views show every task due in their range, subtasks too.
+ * the date views show every task due in their range, subtasks too; Ready shows the top-level tasks
+ * that are open and not blocked.
  */
 export const filterTasks = (
-  all: ReadonlyArray<Task>,
+  { tasks: all, statuses }: Pick<WorkspaceSnapshot, "tasks" | "statuses">,
   list: string | undefined,
 ): ReadonlyArray<Task> => {
   const dueBy = (last: string) => all.filter((task) => task.due !== null && task.due <= last);
@@ -139,6 +141,8 @@ export const filterTasks = (
       return dueBy(todayKey());
     case SMART.upcoming:
       return dueBy(format(addDays(new Date(), 7), "yyyy-MM-dd"));
+    case SMART.ready:
+      return tasks.filter((task) => isReady(task, statuses));
     case SMART.none:
       return tasks.filter((task) => task.list === null);
     default:
@@ -154,6 +158,8 @@ export const viewTitle = (list: string | undefined, lists: ReadonlyArray<List>) 
       return "Today";
     case SMART.upcoming:
       return "Next 7 days";
+    case SMART.ready:
+      return "Ready";
     case SMART.none:
       return "No list";
     default:

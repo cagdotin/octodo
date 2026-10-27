@@ -55,7 +55,7 @@ export function ParentChip({ snapshot, task }: { snapshot: WorkspaceSnapshot; ta
   );
 }
 
-function TaskLink({
+export function TaskLink({
   workspace,
   task,
   className,

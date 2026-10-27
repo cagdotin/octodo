@@ -21,6 +21,7 @@ import {
   TaskDate,
 } from "@/components/task-bits";
 import { TaskComposer } from "@/components/task-composer";
+import { BlockedChip } from "@/components/task-relations";
 import { ParentChip, SubtaskCount } from "@/components/task-subtasks";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -286,6 +287,7 @@ function TaskRow({
         )}
         {task.title}
       </Link>
+      <BlockedChip snapshot={snapshot} task={task} />
       <ParentChip snapshot={snapshot} task={task} />
       <SubtaskCount progress={subtasks} />
       <ChecklistCount body={task.body} />

@@ -26,6 +26,7 @@ import {
   TagChips,
 } from "@/components/task-bits";
 import { TagsEditor } from "@/components/tags-editor";
+import { TaskRelations, useMentions } from "@/components/task-relations";
 import { ParentLink, SubtasksGoing, TaskSubtasks } from "@/components/task-subtasks";
 import {
   AlertDialog,
@@ -112,6 +113,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
     };
   }, [editor, task.id]);
 
+  const mentions = useMentions(workspace, snapshot);
   const setDue = (due: string | null) => update.mutate({ id: task.id, patch: { due } });
   const due = dueInfo(task.due);
 
@@ -197,6 +199,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
         aria-label="Notes"
         placeholder="Add notes in markdown…"
         attachments={taskAttachments(workspace, task.id)}
+        {...mentions}
         value={draft.body}
         onChange={(value) =>
           open.current
@@ -206,6 +209,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
         onBlur={() => editor.send({ type: "FLUSH" })}
         className="min-h-0 flex-1 text-base md:text-sm"
       />
+      <TaskRelations workspace={workspace} snapshot={snapshot} task={task} />
       <TaskSubtasks workspace={workspace} snapshot={snapshot} task={task} />
 
       <div className="flex h-11 shrink-0 items-center gap-0.5 border-t pr-3.5 pl-2">

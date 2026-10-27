@@ -57,13 +57,28 @@ describe("subtasks in views", () => {
       task("HM-6", { list: "home", parent: "HM-1", due: "2000-01-01" }),
       task("HM-7", { due: "2000-01-01" }),
     ];
-    const ids = (list: string | undefined) => filterTasks(tasks, list).map((entry) => entry.id);
+    const ids = (list: string | undefined) =>
+      filterTasks(snapshot(tasks), list).map((entry) => entry.id);
     expect(ids(undefined)).toEqual(["HM-1", "HM-5", "HM-7"]);
     expect(ids("home")).toEqual(["HM-1"]);
     expect(ids(SMART.none)).toEqual(["HM-5", "HM-7"]);
     expect(ids(SMART.today)).toEqual(["HM-6", "HM-7"]);
     expect(ids(SMART.upcoming)).toEqual(["HM-6", "HM-7"]);
     expect(listCounts(snapshot(tasks)).counts.get("home")).toBe(1);
+  });
+
+  it("shows open top-level tasks that are not blocked in the Ready view", () => {
+    const tasks = [
+      task("HM-1"),
+      task("HM-2", { blocked: true, blockedBy: ["HM-1"] }),
+      task("HM-3", { status: "done" }),
+      task("HM-4", { parent: "HM-1" }),
+      task("HM-5", { status: "in-progress" }),
+    ];
+    expect(filterTasks(snapshot(tasks), SMART.ready).map((entry) => entry.id)).toEqual([
+      "HM-1",
+      "HM-5",
+    ]);
   });
 
   it("counts direct subtasks in a completed status as done, and leaves canceled ones out", () => {

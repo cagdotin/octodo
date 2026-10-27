@@ -588,6 +588,30 @@ describe("workspace", () => {
     expect(files(root)).toEqual(["HM-3-keep/task.md"]);
   });
 
+  it("updates and moves a task that another process moved or renamed since the last read", async () => {
+    const root = fresh();
+    const result = await run(
+      Effect.gen(function* () {
+        const app = yield* open(root);
+        yield* app.createList({ name: "Home" });
+        const paint = yield* app.createTask({ title: "Paint" });
+        const sand = yield* app.createTask({ title: "Sand" });
+        yield* app.snapshot;
+        const cli = yield* makeWorkspace("cli", root);
+        yield* cli.moveTask(paint.id, { list: "home" });
+        yield* cli.updateTask(sand.id, { title: "Sand floors" });
+        return [
+          yield* app.moveTask(paint.id, { status: "done" }),
+          yield* app.updateTask(sand.id, { priority: "high" }),
+        ];
+      }),
+    );
+    expect(result).toMatchObject([
+      { status: "done", path: ".octodo/home/HM-1-paint/task.md" },
+      { priority: "high", path: ".octodo/HM-2-sand-floors/task.md" },
+    ]);
+  });
+
   it("never recreates a container another process removed", async () => {
     const root = fresh();
     const result = await run(
@@ -603,7 +627,7 @@ describe("workspace", () => {
         ];
       }),
     );
-    expect(result.map((error) => error._tag)).toEqual(["StorageError", "InvalidRequest"]);
+    expect(result.map((error) => error._tag)).toEqual(["InvalidRequest", "InvalidRequest"]);
     expect(existsSync(join(root, ".octodo/home"))).toBe(false);
     expect(files(root)).toEqual(["HM-1-stay/task.md"]);
   });

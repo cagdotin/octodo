@@ -62,7 +62,7 @@ import { editTaskFile, newListFile, newTaskFile, patchFrontmatter, keepLinks } f
 import { claimIds, idElsewhereOnDisk, nextIdOnDisk } from "./ids.ts";
 import { applyFix } from "./fixes.ts";
 import { scanWorkspace, type Scan } from "./scan.ts";
-import { makeScanCache, reportingChanges } from "./scan-cache.ts";
+import { invisibleToScans, makeScanCache, reportingChanges } from "./scan-cache.ts";
 
 /** One workspace on disk: a folder with a `.octodo/` directory. The files are the source of truth. */
 export interface Workspace {
@@ -205,6 +205,8 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   const tasksDir = path.join(root, TASKS_DIR);
   const lock = yield* Semaphore.make(1);
   const changes = yield* PubSub.sliding<void>(16);
+  /** Whether a watcher reports what other processes and sync tools change. */
+  let watching = options.watch === true;
   const withPlatform = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     effect.pipe(
       Effect.provideService(FileSystem.FileSystem, fs),
@@ -345,7 +347,14 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       return renamed;
     });
 
-  const write = lock.withPermits(1);
+  /** Serialises writes. Unless a watcher reports what others change, the next read rereads it all. */
+  const write = <A, E>(effect: Effect.Effect<A, E>) =>
+    lock.withPermits(1)(
+      Effect.ensuring(
+        effect,
+        Effect.suspend(() => (watching ? Effect.void : forgetAll)),
+      ),
+    );
 
   /**
    * `write`, run once more on a fresh read when it finds a path gone: another process moved or
@@ -712,13 +721,20 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         diagnostic.fix?.action === request.action,
     );
 
-  if (options.watch === true) {
+  if (watching) {
     yield* fs.watch(tasksDir, { recursive: true }).pipe(
-      Stream.filter((event) => !event.path.endsWith(".tmp")),
-      Stream.tap((event) => Effect.sync(() => reads.changed(path.join(tasksDir, event.path)))),
+      Stream.map((event) => path.join(tasksDir, event.path)),
+      Stream.filter((changed) => !invisibleToScans(changed)),
+      Stream.tap((changed) => Effect.sync(() => reads.changed(changed))),
       Stream.debounce("75 millis"),
       Stream.runForEach(() => PubSub.publish(changes, undefined)),
       Effect.catch((error) => Effect.logWarning(`Stopped watching ${tasksDir}`, error)),
+      Effect.ensuring(
+        Effect.sync(() => {
+          watching = false;
+          reads.clear();
+        }),
+      ),
       Effect.forkScoped,
     );
   }

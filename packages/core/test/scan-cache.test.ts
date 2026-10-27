@@ -82,6 +82,9 @@ const steps: ReadonlyArray<Step> = [
     }),
   ),
   byHand("add a loose markdown file", (root) => write(root, "beds/notes.md", "Loose notes\n")),
+  byHand("add a task folder named like a temporary file", (root) =>
+    write(root, "backup.tmp/task.md", "---\nid: HM-50\ntitle: Backup\n---\n"),
+  ),
   byHand("delete a task folder by hand", (root) =>
     rmSync(join(root, ".octodo/garden/HM-10-paint"), { recursive: true }),
   ),
@@ -115,6 +118,25 @@ describe("the kept snapshot", () => {
       );
     },
   );
+
+  it("reads everything again after a write when nothing reports changes by hand", async () => {
+    const root = fresh();
+    const { kept, scanned } = await run(
+      Effect.gen(function* () {
+        yield* initWorkspace(root);
+        const ws = yield* makeWorkspace("test", root);
+        const first = yield* ws.createTask({ title: "Alpha" });
+        yield* ws.createTask({ title: "Beta" });
+        const file = join(root, first.path);
+        writeFileSync(file, readFileSync(file, "utf8").replace("Alpha", "Edited"));
+        yield* ws.updateTask("HM-2", { title: "Gamma" });
+        yield* ws.updateTask("HM-2", { title: "Delta" });
+        return { kept: yield* ws.snapshot, scanned: yield* fullScan(root) };
+      }),
+    );
+    expect(kept.tasks.map((task) => task.title)).toEqual(["Edited", "Delta"]);
+    expect(kept).toEqual(scanned);
+  });
 
   it(
     "does not keep a snapshot read while a file changed under it",

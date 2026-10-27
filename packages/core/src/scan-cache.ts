@@ -26,7 +26,7 @@ export interface ScanCache {
 /** Dot names a scan reads: every other one (claims, temporary files) is invisible to it. */
 const SCANNED_DOT_NAMES = new Set([tempName.pendingId]);
 
-const invisibleToScans = (path: string) => {
+export const invisibleToScans = (path: string): boolean => {
   const name = basename(path);
   return name.startsWith(".") && !SCANNED_DOT_NAMES.has(name);
 };

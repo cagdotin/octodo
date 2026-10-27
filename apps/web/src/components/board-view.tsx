@@ -4,7 +4,7 @@ import { CSS } from "@dnd-kit/utilities";
 import type { StatusDefinition, Task, WorkspaceSnapshot } from "@octodo/core";
 import { useNavigate } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
   COLUMN_PREFIX,
   useTaskColumns,
@@ -21,8 +21,10 @@ import {
   TaskDate,
 } from "@/components/task-bits";
 import { TaskComposer } from "@/components/task-composer";
+import { SubtaskCount } from "@/components/task-subtasks";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { subtaskProgress, type Progress } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -52,6 +54,7 @@ export function BoardView({
     statuses: snapshot.statuses,
     tasks,
   });
+  const progress = useMemo(() => subtaskProgress(snapshot), [snapshot]);
 
   return (
     <ScrollArea orientation="horizontal" className="min-h-0 flex-1">
@@ -62,6 +65,7 @@ export function BoardView({
             status={status}
             ids={columns[status.id] ?? []}
             byId={byId}
+            progress={progress}
             workspace={workspace}
             snapshot={snapshot}
             selected={selected}
@@ -89,6 +93,7 @@ function BoardColumn({
   status,
   ids,
   byId,
+  progress,
   workspace,
   snapshot,
   selected,
@@ -98,6 +103,7 @@ function BoardColumn({
   status: StatusDefinition;
   ids: Array<string>;
   byId: Map<string, Task>;
+  progress: ReadonlyMap<string, Progress>;
   workspace: string;
   snapshot: WorkspaceSnapshot;
   selected: string | undefined;
@@ -139,6 +145,7 @@ function BoardColumn({
                   workspace={workspace}
                   snapshot={snapshot}
                   task={task}
+                  subtasks={progress.get(id)}
                   active={id === selected}
                 />
               ) : null;
@@ -154,6 +161,7 @@ function SortableCard(props: {
   workspace: string;
   snapshot: WorkspaceSnapshot;
   task: Task;
+  subtasks: Progress | undefined;
   active: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -182,12 +190,14 @@ function TaskCard({
   workspace,
   snapshot,
   task,
+  subtasks,
   active = false,
   overlay = false,
 }: {
   workspace: string;
   snapshot: WorkspaceSnapshot;
   task: Task;
+  subtasks: Progress | undefined;
   active?: boolean;
   overlay?: boolean;
 }) {
@@ -225,7 +235,10 @@ function TaskCard({
         <PriorityMenu workspace={workspace} task={task} className="-ml-1" />
         <TagChips tags={task.tags} />
         <ListChip lists={snapshot.lists} list={task.list} />
-        <ChecklistCount body={task.body} className="ml-auto" />
+        <span className="ml-auto flex items-center gap-2">
+          <SubtaskCount progress={subtasks} />
+          <ChecklistCount body={task.body} />
+        </span>
       </div>
     </div>
   );

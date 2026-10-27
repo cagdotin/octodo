@@ -11,7 +11,7 @@ import { sortStatuses } from "@octodo/core/layout";
 import { createClient } from "@octodo/server/client";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { applyListMove, applyMove } from "@/lib/tasks";
+import { applyListMove, applyMove, withoutSubtree } from "@/lib/tasks";
 
 export const api = createClient(typeof window === "undefined" ? "" : window.location.origin);
 
@@ -175,7 +175,7 @@ export const useDeleteTask = (ws: string) =>
   useSnapshotMutation(
     ws,
     (id: string) => unwrap(api.workspaces[":ws"].tasks[":id"].$delete({ param: { ws, id } })),
-    (snapshot, id) => ({ ...snapshot, tasks: snapshot.tasks.filter((task) => task.id !== id) }),
+    (snapshot, id) => ({ ...snapshot, tasks: withoutSubtree(snapshot.tasks, id) }),
   );
 
 export const useCreateList = (ws: string) =>

@@ -16,8 +16,10 @@ import {
 import { Cause, Effect, Exit, Fiber, Option, Schema, Stream, type ManagedRuntime } from "effect";
 import { Hono, type Context } from "hono";
 import { homedir } from "node:os";
+import { bodyLimit } from "hono/body-limit";
 import { setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
+import { fileResponse, MAX_ATTACHMENT_BYTES } from "./attachments.ts";
 import { SESSION_COOKIE, pairUrl, requireToken, tokenMatches } from "./auth.ts";
 
 type ApiError = TaskNotFound | WorkspaceNotFound | InvalidRequest | StorageError;
@@ -73,25 +75,29 @@ const pairCookie = (c: Context, token: string) =>
   });
 
 export const createApi = ({ runtime, token, serverUrl }: AppOptions) => {
-  const run = async <A>(c: Context, effect: Effect.Effect<A, ApiError, Workspaces>) => {
-    const exit = await runtime.runPromiseExit(effect);
-    if (Exit.isSuccess(exit)) return c.json(exit.value, 200);
-    const failure = Cause.findErrorOption(exit.cause);
+  const failed = (c: Context, cause: Cause.Cause<ApiError>) => {
+    const failure = Cause.findErrorOption(cause);
     if (Option.isSome(failure)) {
       return c.json({ error: failure.value.message }, STATUS[failure.value._tag]);
     }
-    console.error(Cause.pretty(exit.cause));
+    console.error(Cause.pretty(cause));
     return c.json({ error: "Internal error" }, 500);
   };
+
+  const run = async <A>(c: Context, effect: Effect.Effect<A, ApiError, Workspaces>) => {
+    const exit = await runtime.runPromiseExit(effect);
+    return Exit.isSuccess(exit) ? c.json(exit.value, 200) : failed(c, exit.cause);
+  };
+
+  const inWorkspace = <A>(
+    c: Context<any, `/workspaces/:ws${string}`>,
+    effect: (workspace: Workspace) => Effect.Effect<A, ApiError, Workspaces>,
+  ) => Workspaces.use((workspaces) => Effect.flatMap(workspaces.get(c.req.param("ws")), effect));
 
   const runInWorkspace = <A>(
     c: Context<any, `/workspaces/:ws${string}`>,
     effect: (workspace: Workspace) => Effect.Effect<A, ApiError, Workspaces>,
-  ) =>
-    run(
-      c,
-      Workspaces.use((workspaces) => Effect.flatMap(workspaces.get(c.req.param("ws")), effect)),
-    );
+  ) => run(c, inWorkspace(c, effect));
 
   return (
     new Hono()
@@ -159,6 +165,32 @@ export const createApi = ({ runtime, token, serverUrl }: AppOptions) => {
       )
       .delete("/workspaces/:ws/tasks/:id", (c) =>
         runInWorkspace(c, (ws) => Effect.as(ws.deleteTask(c.req.param("id")), { ok: true })),
+      )
+      // A file in the task's folder, such as an image the body links to as `images/plan.png`.
+      .get("/workspaces/:ws/tasks/:id/files/:path{.+}", async (c) => {
+        const exit = await runtime.runPromiseExit(
+          inWorkspace(c, (ws) => ws.attachmentPath(c.req.param("id"), c.req.param("path"))),
+        );
+        if (Exit.isFailure(exit)) return failed(c, exit.cause);
+        return (await fileResponse(exit.value)) ?? c.json({ error: "No such file" }, 404);
+      })
+      // The raw request body becomes the file; a taken name gets -2, -3, and the reply says which.
+      .put(
+        "/workspaces/:ws/tasks/:id/files/:path{.+}",
+        bodyLimit({
+          maxSize: MAX_ATTACHMENT_BYTES,
+          onError: (c) =>
+            c.json({ error: `Attachments are limited to ${MAX_ATTACHMENT_BYTES >> 20} MB` }, 413),
+        }),
+        async (c) => {
+          const bytes = new Uint8Array(await c.req.arrayBuffer());
+          return runInWorkspace(c, (ws) =>
+            Effect.map(
+              ws.writeAttachment(c.req.param("id"), c.req.param("path"), bytes),
+              (path) => ({ path }),
+            ),
+          );
+        },
       )
       .post("/workspaces/:ws/lists", body(CreateListInput), (c) =>
         runInWorkspace(c, (ws) => ws.createList(c.req.valid("json"))),

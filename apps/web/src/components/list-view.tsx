@@ -5,7 +5,7 @@ import type { StatusDefinition, Task, WorkspaceSnapshot } from "@octodo/core";
 import { isClosedCategory } from "@octodo/core/layout";
 import { Link } from "@tanstack/react-router";
 import { InboxIcon, PlusIcon } from "lucide-react";
-import { useState, type ComponentProps, type ReactNode } from "react";
+import { useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import {
   COLUMN_PREFIX,
   useTaskColumns,
@@ -21,6 +21,7 @@ import {
   TaskDate,
 } from "@/components/task-bits";
 import { TaskComposer } from "@/components/task-composer";
+import { SubtaskCount } from "@/components/task-subtasks";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -32,7 +33,7 @@ import {
 } from "@/components/ui/empty";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { listViewOrder } from "@/lib/tasks";
+import { listViewOrder, subtaskProgress, type Progress } from "@/lib/tasks";
 
 interface Props {
   workspace: string;
@@ -76,6 +77,7 @@ export function ListView({
   // Remember toggles per status id; untouched groups use the category default.
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const { columns, byId } = useTaskColumns({ workspace, statuses: snapshot.statuses, tasks });
+  const progress = useMemo(() => subtaskProgress(snapshot), [snapshot]);
   // Groups come from the saved tasks, so one emptied mid-drag stays until the drop lands.
   const groups = listViewOrder(statuses).filter(
     (status) => tasks.some((task) => task.status === status.id) || status.id === composing,
@@ -152,6 +154,7 @@ export function ListView({
                           workspace={workspace}
                           snapshot={snapshot}
                           task={task}
+                          subtasks={progress.get(id)}
                           active={id === selected}
                           idWidth={idWidth}
                         />
@@ -200,6 +203,7 @@ function SortableRow(props: {
   workspace: string;
   snapshot: WorkspaceSnapshot;
   task: Task;
+  subtasks: Progress | undefined;
   active: boolean;
   idWidth: string;
 }) {
@@ -234,6 +238,7 @@ function TaskRow({
   workspace,
   snapshot,
   task,
+  subtasks,
   active,
   idWidth,
   className,
@@ -242,6 +247,7 @@ function TaskRow({
   workspace: string;
   snapshot: WorkspaceSnapshot;
   task: Task;
+  subtasks: Progress | undefined;
   active: boolean;
   idWidth: string;
 } & ComponentProps<"li">) {
@@ -280,6 +286,7 @@ function TaskRow({
         )}
         {task.title}
       </Link>
+      <SubtaskCount progress={subtasks} />
       <ChecklistCount body={task.body} />
       {/* Chips make way for the title as the list narrows (details panel open, small windows). */}
       <span className="mr-1 hidden min-w-0 shrink-0 items-center gap-2 @lg:flex">

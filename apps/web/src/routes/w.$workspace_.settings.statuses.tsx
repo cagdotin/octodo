@@ -69,9 +69,10 @@ function StatusSettings() {
       description={
         <>
           The workflow tasks go through from start to completion. The category decides where a
-          status shows and how it behaves; drag to reorder statuses within one. Each status is a{" "}
-          <code className="font-mono text-xs">s&lt;NN&gt;-&lt;id&gt;</code> folder, numbered in this
-          order.
+          status shows and how it behaves; drag to reorder statuses within one. A task keeps its
+          status id in the <code className="font-mono text-xs">status</code> field of its{" "}
+          <code className="font-mono text-xs">task.md</code>, and this order lives in{" "}
+          <code className="font-mono text-xs">config.json</code>.
         </>
       }
     >

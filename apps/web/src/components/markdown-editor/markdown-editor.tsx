@@ -1,9 +1,20 @@
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, placeholder as placeholderText } from "@codemirror/view";
 import { useEffect, useLayoutEffect, useRef } from "react";
+import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { imageMarkdown, type Attachments } from "@/lib/attachments";
 import { bodyExtensions, fromFile, syncToFile } from "./body-state.ts";
+import { imageUrl } from "./live-preview.ts";
 import { bodyTheme } from "./theme.ts";
+
+const imagesIn = (data: DataTransfer | null) =>
+  [...(data?.files ?? [])].filter((file) => file.type.startsWith("image/"));
+
+/** A spot in the document that follows the edits made while an upload is on its way. */
+interface Anchor {
+  pos: number;
+}
 
 interface Props {
   /** The text to show; a new value that differs from the editor's is applied as a minimal change. */
@@ -13,6 +24,8 @@ interface Props {
   placeholder?: string;
   "aria-label"?: string;
   className?: string;
+  /** Lets images be pasted or dropped in, and shows the ones the body links to. */
+  attachments?: Attachments;
 }
 
 /**
@@ -25,6 +38,7 @@ export function MarkdownEditor({
   onBlur,
   placeholder,
   className,
+  attachments,
   ...aria
 }: Props) {
   const host = useRef<HTMLDivElement>(null);
@@ -35,9 +49,32 @@ export function MarkdownEditor({
   });
 
   // The view is created once; `value` changes reach it through the sync effect below.
-  const initial = useRef({ value, placeholder, label: aria["aria-label"] });
+  const initial = useRef({ value, placeholder, label: aria["aria-label"], attachments });
+  const anchors = useRef(new Set<Anchor>());
   useEffect(() => {
-    const { value: doc, placeholder: hint, label } = initial.current;
+    const { value: doc, placeholder: hint, label, attachments: files } = initial.current;
+
+    /** Uploads the images one by one, each landing where the anchor has moved to by then. */
+    const attach = async (target: EditorView, images: ReadonlyArray<File>, pos: number) => {
+      if (files === undefined) return;
+      const anchor: Anchor = { pos };
+      anchors.current.add(anchor);
+      try {
+        for (const image of images) {
+          const insert = imageMarkdown(await files.upload(image));
+          target.dispatch({
+            changes: { from: anchor.pos, insert },
+            selection: { anchor: anchor.pos + insert.length },
+            userEvent: "input.paste",
+          });
+        }
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not save the image");
+      } finally {
+        anchors.current.delete(anchor);
+      }
+    };
+
     const editor = new EditorView({
       parent: host.current!,
       state: EditorState.create({
@@ -47,6 +84,7 @@ export function MarkdownEditor({
           bodyTheme,
           hint === undefined ? [] : placeholderText(hint),
           label === undefined ? [] : EditorView.contentAttributes.of({ "aria-label": label }),
+          files === undefined ? [] : imageUrl.of(files.url),
           keymap.of([
             {
               key: "Escape",
@@ -57,12 +95,30 @@ export function MarkdownEditor({
             },
           ]),
           EditorView.updateListener.of((update) => {
+            for (const anchor of anchors.current) anchor.pos = update.changes.mapPos(anchor.pos);
             const typed = update.transactions.some(
               (tr) => tr.docChanged && tr.annotation(fromFile) === undefined,
             );
             if (typed) handlers.current.onChange(update.state.doc.toString());
           }),
-          EditorView.domEventHandlers({ blur: () => handlers.current.onBlur?.() }),
+          EditorView.domEventHandlers({
+            blur: () => handlers.current.onBlur?.(),
+            paste: (event, target) => {
+              const images = imagesIn(event.clipboardData);
+              if (files === undefined || images.length === 0) return false;
+              event.preventDefault();
+              void attach(target, images, target.state.selection.main.head);
+              return true;
+            },
+            drop: (event, target) => {
+              const images = imagesIn(event.dataTransfer);
+              if (files === undefined || images.length === 0) return false;
+              event.preventDefault();
+              const at = target.posAtCoords({ x: event.clientX, y: event.clientY });
+              void attach(target, images, at ?? target.state.selection.main.head);
+              return true;
+            },
+          }),
         ],
       }),
     });

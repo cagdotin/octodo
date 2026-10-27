@@ -3,7 +3,7 @@ import { syntaxTree } from "@codemirror/language";
 import { EditorSelection, EditorState, type Transaction } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import { bodyExtensions, syncToFile } from "./body-state.ts";
-import { previewDecorations, setFocused, toggleTask } from "./live-preview.ts";
+import { imageUrl, previewDecorations, setFocused, toggleTask } from "./live-preview.ts";
 
 const BODY = [
   "# Garden plan",
@@ -35,10 +35,14 @@ const BODY = [
   "===",
   "",
   "***",
+  "![floor plan](images/floor%20plan.png) and ![](<images/a b.png>)",
   "emoji ✅ and combining é and astral 𝄞",
 ].join("\n");
 
-const create = (doc: string) => EditorState.create({ doc, extensions: bodyExtensions });
+const resolve = (src: string) => (src.startsWith("javascript:") ? null : `/files/${src}`);
+
+const create = (doc: string) =>
+  EditorState.create({ doc, extensions: [bodyExtensions, imageUrl.of(resolve)] });
 
 /** Builds the preview with the editor focused and the cursor at `head`. */
 const focusedAt = (doc: string, head: number) => {
@@ -167,5 +171,37 @@ describe("live preview", () => {
         checkboxes.push([from, to]);
     });
     expect(checkboxes).toEqual(taskMarkers(state).map((marker) => [marker, marker + 3]));
+  });
+});
+
+const images = (state: EditorState) => {
+  const found: Array<{ from: number; to: number; url: string }> = [];
+  previewDecorations(state).between(0, state.doc.length, (from, to, decoration) => {
+    const widget: unknown = decoration.spec.widget;
+    if (widget !== null && typeof widget === "object" && "url" in widget)
+      found.push({ from, to, url: String(widget.url) });
+  });
+  return found;
+};
+
+describe("images", () => {
+  it("draws an image over its markdown with the URL the editor resolves it to", () => {
+    const doc = "see ![plan](images/plan.png) here";
+    expect(images(create(doc))).toEqual([
+      { from: 4, to: doc.indexOf(" here"), url: "/files/images/plan.png" },
+    ]);
+  });
+
+  it("shows the source while the cursor is on its line, and when the src is refused", () => {
+    expect(images(focusedAt("![plan](images/plan.png)", 3))).toEqual([]);
+    expect(images(create("![x](javascript:alert(1))"))).toEqual([]);
+  });
+
+  it("leaves images as source without a resolver", () => {
+    const state = EditorState.create({
+      doc: "![plan](images/plan.png)",
+      extensions: bodyExtensions,
+    });
+    expect(images(state)).toEqual([]);
   });
 });

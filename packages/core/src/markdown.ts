@@ -1,4 +1,5 @@
 import { Option, Predicate, Schema } from "effect";
+import { generateKeyBetween } from "fractional-indexing";
 import { isMap, parseDocument, type Document } from "yaml";
 import { Priority, type CreateTaskInput, type Task, type UpdateTaskInput } from "./domain.ts";
 import { humanize } from "./layout.ts";
@@ -50,6 +51,18 @@ const decodePriority = Schema.decodeUnknownOption(Priority);
 
 const stringOrNull = (value: unknown): string | null =>
   typeof value === "string" && value.length > 0 ? value : null;
+
+/** A fractional order key, or "" (unordered) for none or one written by hand that is not a key. */
+const readOrder = (value: unknown): string => {
+  const key = stringOrNull(value);
+  if (key === null) return "";
+  try {
+    generateKeyBetween(key, null);
+    return key;
+  } catch {
+    return "";
+  }
+};
 
 const readTags = (value: unknown): Array<string> =>
   Array.isArray(value) ? value.map(String) : typeof value === "string" ? [value] : [];
@@ -151,7 +164,7 @@ export const readTaskFile = (text: string, place: TaskPlace): TaskFileRead => {
       due: stringOrNull(data["due"]),
       created: stringOrNull(data["created"]),
       updated: place.updated,
-      order: stringOrNull(data["order"]) ?? "",
+      order: readOrder(data["order"]),
       body,
       path: place.path,
       extra: Object.fromEntries(Object.entries(data).filter(([key]) => !MANAGED.has(key))),
@@ -190,7 +203,7 @@ export const readListFile = (text: string): FrontmatterRead<ListFile> => {
     _tag: "Read",
     value: {
       name: stringOrNull(read.data["name"]),
-      order: stringOrNull(read.data["order"]) ?? "",
+      order: readOrder(read.data["order"]),
       body: read.body,
     },
   };

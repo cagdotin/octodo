@@ -427,6 +427,37 @@ describe("workspace", () => {
     expect(read(root, "HM-3-three/task.md")).toContain("status: done\n");
   });
 
+  it("places tasks and lists among siblings with duplicate or hand-written order keys", async () => {
+    const root = fresh();
+    await run(initWorkspace(root));
+    write(root, "HM-1-a/task.md", "---\nid: HM-1\norder: a0\n---\n");
+    write(root, "HM-2-b/task.md", "---\nid: HM-2\norder: a0\n---\n");
+    write(root, "HM-3-c/task.md", "---\nid: HM-3\norder: a1\n---\n");
+    write(root, "HM-4-d/task.md", "---\nid: HM-4\norder: first\n---\n");
+    write(root, "x/list.md", "---\norder: a0\n---\n");
+    write(root, "y/list.md", "---\norder: a0\n---\n");
+    write(root, "z/list.md", "---\norder: last!\n---\n");
+    const result = await run(
+      Effect.gen(function* () {
+        const ws = yield* makeWorkspace("test", root);
+        const hand = yield* ws.getTask("HM-4");
+        yield* ws.moveTask("HM-3", { before: "HM-2" });
+        yield* ws.createTask({ title: "E" });
+        yield* ws.moveList("z", { before: "y" });
+        return { hand, snapshot: yield* ws.snapshot };
+      }),
+    );
+    expect(result.hand.order).toBe("");
+    expect(result.snapshot.tasks.map((task) => task.id)).toEqual([
+      "HM-1",
+      "HM-3",
+      "HM-2",
+      "HM-4",
+      "HM-5",
+    ]);
+    expect(result.snapshot.lists.map((list) => list.id)).toEqual(["x", "z", "y"]);
+  });
+
   it("moves a task with its subtasks into a list, under another task, and back out", async () => {
     const root = fresh();
     const result = await run(

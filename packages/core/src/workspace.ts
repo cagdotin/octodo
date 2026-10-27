@@ -248,13 +248,19 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         task.id !== except,
     );
 
-  /** Gives every item an order key, so a new key can be placed between any two. */
+  /**
+   * Gives sorted items distinct, ascending order keys, renumbering them all when some have none or
+   * share one, so a new key can be placed between any two.
+   */
   const ensureOrdered = <A extends { readonly order: string }>(
     items: ReadonlyArray<A>,
     file: (item: A) => string,
   ) =>
     Effect.gen(function* () {
-      if (items.every((item) => item.order !== "")) return items;
+      const ascending = items.every(
+        (item, index) => item.order !== "" && (index === 0 || items[index - 1]!.order < item.order),
+      );
+      if (ascending) return items;
       const keys = generateNKeysBetween(null, null, items.length);
       const ordered: Array<A> = [];
       for (const [index, item] of items.entries()) {

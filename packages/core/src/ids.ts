@@ -89,7 +89,7 @@ export const nextIdOnDisk = (
             if (name === tempName.pendingId) return take(child);
             if (name.startsWith(".")) return Effect.void;
             if (name.endsWith(".md")) return take(child);
-            return Effect.flatMap(fs.stat(child), (info) =>
+            return Effect.flatMap(fs.lstat(child), (info) =>
               info.type === "Directory" ? walk(child) : Effect.void,
             );
           },

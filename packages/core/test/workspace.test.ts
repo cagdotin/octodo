@@ -251,6 +251,7 @@ describe("workspace", () => {
       const snapshot = await run(Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot));
       expect(snapshot.tasks.map((task) => task.id)).toEqual(["HM-1"]);
       expect(snapshot.diagnostics.map((diagnostic) => diagnostic.path).toSorted()).toEqual([
+        ".octodo/dangling",
         ".octodo/frozen/task.md",
         ".octodo/locked",
         ".octodo/weird/task.md",

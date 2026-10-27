@@ -89,6 +89,11 @@ export const PROBLEMS = {
     remedy: `Lists nest at most ${MAX_LIST_DEPTH} levels deep; move it up. Until then it is not read`,
     fixes: [],
   },
+  symlink: {
+    remedy:
+      "octodo does not follow links, so what it points to is not read; move the real file or folder here instead",
+    fixes: [],
+  },
   unreadable: {
     remedy: "Check that octodo may read it",
     fixes: [],

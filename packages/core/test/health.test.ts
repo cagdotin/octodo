@@ -8,6 +8,7 @@ import {
   readFileSync,
   readdirSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -622,6 +623,35 @@ describe("file health", () => {
     });
     expect(await diagnostics(root)).toEqual([]);
     expect(existsSync(join(root, ".octodo/HM-1-a/.pending-id"))).toBe(false);
+  });
+
+  it("reports a symlink without following it, and no fix writes through it", async () => {
+    const outside = mkdtempSync(join(tmpdir(), "octodo-outside-"));
+    mkdirSync(join(outside, "HM-5-away"));
+    writeFileSync(join(outside, "HM-5-away/task.md"), "---\nid: HM-5\nblocked_by: [HM-9]\n---\n");
+    writeFileSync(join(outside, "loose.md"), "---\ntitle: Away\n---\n");
+    const root = await fresh({
+      "home/list.md": "",
+      "HM-1-a/task.md": "---\nid: HM-1\n---\n",
+    });
+    symlinkSync(outside, join(root, ".octodo/home/linked"));
+    symlinkSync(join(outside, "loose.md"), join(root, ".octodo/home/notes.md"));
+    symlinkSync(join(outside, "HM-5-away"), join(root, ".octodo/HM-1-a/HM-5-away"));
+    expect((await snapshot(root)).tasks.map((task) => task.id)).toEqual(["HM-1"]);
+    expect(await diagnostics(root)).toEqual([
+      one("HM-1-a/HM-5-away", "symlink", null, null),
+      one("home/linked", "symlink", null, null),
+      one("home/notes.md", "symlink", null, null),
+    ]);
+    await inWorkspace(root, (ws) => ws.fixAll);
+    expect(
+      readdirSync(outside, { recursive: true, encoding: "utf8" }).toSorted((a, b) =>
+        a.localeCompare(b),
+      ),
+    ).toEqual(["HM-5-away", "HM-5-away/task.md", "loose.md"]);
+    expect(readFileSync(join(outside, "HM-5-away/task.md"), "utf8")).toBe(
+      "---\nid: HM-5\nblocked_by: [HM-9]\n---\n",
+    );
   });
 
   it("reports folder-grammar problems without a fix", async () => {

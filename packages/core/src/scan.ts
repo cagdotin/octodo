@@ -199,7 +199,11 @@ export const scanWorkspace = (
           const type = yield* attempt(
             child,
             Effect.gen(function* () {
-              const info = yield* fs.stat(child);
+              const info = yield* fs.lstat(child);
+              if (info.type === "SymbolicLink") {
+                report("symlink", child, `This is a link to ${yield* fs.readLink(child)}`);
+                return null;
+              }
               if (info.type === "File") return "file";
               if (info.type !== "Directory") return null;
               const task = yield* fs.exists(path.join(child, TASK_FILE));

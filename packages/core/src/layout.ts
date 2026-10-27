@@ -101,11 +101,25 @@ export const deriveKey = (name: string): string => {
     .toUpperCase();
 };
 
-const TASK_ID = /[A-Za-z][A-Za-z0-9]*-\d+/.source;
-const WHOLE_TASK_ID = new RegExp(`^${TASK_ID}$`);
+/** A workspace key: letters and digits, starting with a letter, as `HM` in `HM-42`. */
+export const WORKSPACE_KEY = /^[A-Za-z][A-Za-z0-9]*$/;
+const KEY = WORKSPACE_KEY.source.slice(1, -1);
+const TASK_ID = `${KEY}-\\d+`;
 
-/** Whether `id` has the shape of a task id: a key, a dash and a number, as in `HM-42`. */
-export const isTaskId = (id: string): boolean => WHOLE_TASK_ID.test(id);
+export const isWorkspaceKey = (key: string): boolean => WORKSPACE_KEY.test(key);
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Task ids with a usual key, or with workspace key `key` when it is not a usual one. */
+const taskIdSource = (key?: string) =>
+  key === undefined || isWorkspaceKey(key) ? TASK_ID : `(?:${escapeRegExp(key)}|${KEY})-\\d+`;
+
+/**
+ * Whether `id` has the shape of a task id: a key, a dash and a number, as in `HM-42`. A workspace
+ * whose `key` has another shape still accepts the ids made with it.
+ */
+export const isTaskId = (id: string, key?: string): boolean =>
+  new RegExp(`^${taskIdSource(key)}$`).test(id);
 
 /**
  * The task ids written in `text`, and whether they are all it says: `HM-2, HM-3` is two ids,
@@ -113,8 +127,9 @@ export const isTaskId = (id: string): boolean => WHOLE_TASK_ID.test(id);
  */
 export const taskIdsIn = (
   text: string,
+  key?: string,
 ): { readonly ids: Array<string>; readonly only: boolean } => {
-  const pattern = new RegExp(TASK_ID, "g");
+  const pattern = new RegExp(taskIdSource(key), "g");
   return {
     ids: text.match(pattern) ?? [],
     only: text.replace(pattern, "").replace(/[\s,;]+/g, "") === "",
@@ -132,7 +147,7 @@ export const conflictCopyOf = (name: string): string | null => {
 
 /** The number in a task id such as `HM-42`, or null when the id is not in the workspace's format. */
 export const idNumber = (id: string, key: string): number | null => {
-  const match = new RegExp(`^${key}-(\\d+)$`).exec(id);
+  const match = new RegExp(`^${escapeRegExp(key)}-(\\d+)$`).exec(id);
   return match === null ? null : Number(match[1]);
 };
 

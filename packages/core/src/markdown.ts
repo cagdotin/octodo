@@ -33,6 +33,8 @@ export interface TaskPlace {
   readonly defaultStatus: string;
   /** The file's modification time. */
   readonly updated: string | null;
+  /** The workspace key, whose ids are task ids even when it is not of the usual shape. */
+  readonly key: string;
 }
 
 /** What is wrong with a file, before the scanner says where. */
@@ -132,12 +134,12 @@ const readOrder = (value: unknown): string => {
  * (a lone id, ids in a string such as `HM-2, HM-3`, or ids in nested lists from `[[HM-3]]`) are
  * still read. `lossless` says the ids are all it holds, so writing them as a list keeps everything.
  */
-const readLinkField = (value: unknown) => {
+const readLinkField = (value: unknown, key: string) => {
   if (value === undefined || value === null) return { ids: [], malformed: false, lossless: true };
-  const isId = (item: unknown): item is string => typeof item === "string" && isTaskId(item);
+  const isId = (item: unknown): item is string => typeof item === "string" && isTaskId(item, key);
   const found = [value]
     .flat(Infinity)
-    .map((item) => (typeof item === "string" ? taskIdsIn(item) : { ids: [], only: false }));
+    .map((item) => (typeof item === "string" ? taskIdsIn(item, key) : { ids: [], only: false }));
   return {
     ids: [...new Set(found.flatMap((item) => item.ids))],
     malformed: !Array.isArray(value) || !value.every(isId),
@@ -150,10 +152,11 @@ const readLinks = (
   data: Readonly<Record<string, unknown>>,
   field: LinkField,
   id: string,
+  key: string,
   problems: Array<Problem>,
 ): Array<string> => {
   const value = data[field];
-  const { ids, malformed, lossless } = readLinkField(value);
+  const { ids, malformed, lossless } = readLinkField(value, key);
   if (malformed)
     problems.push({
       kind: "malformed-link",
@@ -260,7 +263,7 @@ export const readTaskFile = (text: string, place: TaskPlace): TaskFileRead => {
   const { data, body } = read;
   const rawId = data["id"];
   if (absent(rawId)) return { _tag: "MissingId" };
-  if (typeof rawId !== "string" || !isTaskId(rawId))
+  if (typeof rawId !== "string" || !isTaskId(rawId, place.key))
     return {
       _tag: "Invalid",
       problem: {
@@ -319,7 +322,7 @@ export const readTaskFile = (text: string, place: TaskPlace): TaskFileRead => {
       body,
       path: place.path,
       extra: Object.fromEntries(Object.entries(data).filter(([key]) => !MANAGED.has(key))),
-      blockedBy: readLinks(data, "blocked_by", id, problems),
+      blockedBy: readLinks(data, "blocked_by", id, place.key, problems),
       mentions: [...new Set(findMentions(body).map((mention) => mention.id))],
     },
   };
@@ -353,10 +356,11 @@ export const keepLinks = (
   text: string,
   field: LinkField,
   keep: (id: string) => boolean,
+  key: string,
 ): string | null => {
   const read = readFrontmatter(text);
   if ("error" in read) return null;
-  const { ids, malformed } = readLinkField(read.data[field]);
+  const { ids, malformed } = readLinkField(read.data[field], key);
   const kept = ids.filter(keep);
   if (kept.length === ids.length && !malformed) return null;
   return patchFrontmatter(text, { [field]: kept.length > 0 ? kept : undefined });

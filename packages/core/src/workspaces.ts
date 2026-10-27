@@ -44,7 +44,7 @@ export class Workspaces extends Context.Service<
     readonly add: (
       root: string,
       options?: { readonly name?: string | undefined; readonly key?: string | undefined },
-    ) => Effect.Effect<WorkspaceInfo, StorageError>;
+    ) => Effect.Effect<WorkspaceInfo, InvalidRequest | StorageError>;
     readonly remove: (id: string) => Effect.Effect<void, WorkspaceNotFound | StorageError>;
     readonly get: (id: string) => Effect.Effect<Workspace, WorkspaceNotFound | StorageError>;
     /**

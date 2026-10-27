@@ -43,6 +43,7 @@ const place = {
   folder: "HM-1",
   defaultStatus: "todo",
   updated: null,
+  key: "HM",
 };
 
 describe("mentions in a body", () => {
@@ -163,21 +164,21 @@ describe("link fields in task.md", () => {
   it("keeps the ids a link field holds that pass, and leaves a field it would not change alone", () => {
     const text = taskFile("HM-1", "blocked_by: [HM-3, HM-7]\n", "\nAfter [[HM-3]]\n");
     const without = (ids: ReadonlyArray<string>) =>
-      keepLinks(text, "blocked_by", (id) => !ids.includes(id));
+      keepLinks(text, "blocked_by", (id) => !ids.includes(id), "HM");
     expect(without(["HM-3"])).toBe(
       "---\nid: HM-1\ntitle: Task HM-1\nblocked_by: [HM-7]\n---\n\nAfter [[HM-3]]\n",
     );
     expect(without(["HM-3", "HM-7"])).not.toContain("blocked_by");
     expect(without(["HM-9"])).toBeNull();
-    expect(keepLinks(taskFile("HM-1"), "blocked_by", () => false)).toBeNull();
-    expect(keepLinks("---\ntitle: [unclosed\n---\n", "blocked_by", () => false)).toBeNull();
+    expect(keepLinks(taskFile("HM-1"), "blocked_by", () => false, "HM")).toBeNull();
+    expect(keepLinks("---\ntitle: [unclosed\n---\n", "blocked_by", () => false, "HM")).toBeNull();
   });
 
   it.each([
     ["blocked_by: [[HM-3]]\n", "blocked_by: [HM-3]\n"],
     ["blocked_by: HM-3\n", "blocked_by: [HM-3]\n"],
   ])("rewrites the malformed field %j as a list of the ids in it", (field, written) => {
-    expect(keepLinks(taskFile("HM-1", field), "blocked_by", () => true)).toBe(
+    expect(keepLinks(taskFile("HM-1", field), "blocked_by", () => true, "HM")).toBe(
       taskFile("HM-1", written),
     );
   });

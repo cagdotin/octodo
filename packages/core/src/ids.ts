@@ -125,6 +125,7 @@ export const pendingId = (
 export const giveId = (
   dir: string,
   candidate: string,
+  key: string,
   taken: (id: string) => boolean,
 ): Effect.Effect<
   string | null,
@@ -157,7 +158,7 @@ export const giveId = (
       }
       // A marker gone between the link and the read was a crash's, taken by removeLeftovers.
       if (Option.isNone(id)) continue;
-      if (!isTaskId(id.value) || taken(id.value)) {
+      if (!isTaskId(id.value, key) || taken(id.value)) {
         yield* fs.remove(marker);
         continue;
       }

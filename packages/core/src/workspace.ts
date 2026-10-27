@@ -50,6 +50,7 @@ import {
   defaultStatus,
   deriveKey,
   humanize,
+  isWorkspaceKey,
   listDepth,
   listMoveError,
   movedListId,
@@ -173,6 +174,10 @@ export const initWorkspace = Effect.fnUntraced(function* (
   const tasksDir = path.join(root, TASKS_DIR);
   const configPath = path.join(tasksDir, CONFIG_FILE);
   if (yield* storage("Could not read the workspace")(fs.exists(configPath))) return;
+  if (options.key !== undefined && !isWorkspaceKey(options.key))
+    return yield* new InvalidRequest({
+      message: `The key ${JSON.stringify(options.key)} must be letters and digits, starting with a letter, such as HM`,
+    });
   const name = options.name ?? humanize(path.basename(root));
   const config: WorkspaceConfig = {
     name,
@@ -491,7 +496,8 @@ export const makeWorkspace = Effect.fnUntraced(function* (
             const file = path.join(root, task.path);
             const original = yield* fs.readFileString(file);
             const text = LINK_KINDS.reduce(
-              (text, kind) => keepLinks(text, kind.field, (id) => !isRemoved(id)) ?? text,
+              (text, kind) =>
+                keepLinks(text, kind.field, (id) => !isRemoved(id), snapshot.workspace.key) ?? text,
               original,
             );
             if (text !== original) yield* writeAtomic(file, text);

@@ -7,6 +7,7 @@ import {
   MoveTaskInput,
   ReorderStatusesInput,
   UpdateTaskInput,
+  WorkspaceKey,
   Workspaces,
   type InvalidRequest,
   type StorageError,
@@ -53,7 +54,7 @@ const AddWorkspaceInput = Schema.Struct({
     Schema.check(Schema.isPattern(/^\//, { message: "Use an absolute folder path" })),
   ),
   name: Schema.optionalKey(Schema.String),
-  key: Schema.optionalKey(Schema.String),
+  key: Schema.optionalKey(WorkspaceKey),
 });
 
 const PairInput = Schema.Struct({ token: Schema.String });

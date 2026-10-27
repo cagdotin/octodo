@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { STATUS_CATEGORIES } from "./layout.ts";
+import { STATUS_CATEGORIES, WORKSPACE_KEY } from "./layout.ts";
 
 export const Priority = Schema.Literals(["none", "low", "medium", "high", "urgent"]);
 export type Priority = typeof Priority.Type;
@@ -14,6 +14,15 @@ export const DueDate = Schema.String.pipe(
 );
 
 export const Tags = Schema.Array(Schema.String);
+
+/** The prefix of a workspace's task ids, as `HM` in `HM-42`. */
+export const WorkspaceKey = Schema.String.pipe(
+  Schema.check(
+    Schema.isPattern(WORKSPACE_KEY, {
+      message: "Use letters and digits, starting with a letter, such as HM",
+    }),
+  ),
+);
 
 /**
  * What a status means, independent of its name. Views use it to decide what counts as open,

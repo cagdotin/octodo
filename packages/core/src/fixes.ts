@@ -116,7 +116,7 @@ const keepLinksWhere =
         own: frontmatterId(text),
         known: scan.idsOnDisk,
       };
-      const changed = keepLinks(text, field, (id) => keep(id, task));
+      const changed = keepLinks(text, field, (id) => keep(id, task), scan.snapshot.workspace.key);
       if (changed !== null) yield* writeFileAtomic(target, changed);
     });
 

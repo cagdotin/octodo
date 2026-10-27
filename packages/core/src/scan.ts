@@ -22,6 +22,7 @@ import {
   deriveKey,
   humanize,
   idNumber,
+  isWorkspaceKey,
   listDepth,
   sortStatuses,
   taskFolderName,
@@ -125,11 +126,25 @@ export const scanWorkspace = (
     const config = yield* fs.readFileString(path.join(tasksDir, CONFIG_FILE)).pipe(
       Effect.flatMap(decodeConfig),
       Effect.catch((error) => {
-        report("invalid-config", path.join(tasksDir, CONFIG_FILE), String(error));
+        report(
+          "invalid-config",
+          path.join(tasksDir, CONFIG_FILE),
+          `${String(error)}; until it is fixed the workspace uses its folder name and the default statuses`,
+        );
         const name = humanize(path.basename(root));
         return Effect.succeed<WorkspaceConfig>({ name, key: deriveKey(name) });
       }),
     );
+    if (!isWorkspaceKey(config.key)) {
+      const usable = config.key.replace(/[^A-Za-z0-9]/g, "");
+      const suggested = isWorkspaceKey(usable) ? usable : deriveKey(config.name);
+      report(
+        "invalid-config",
+        path.join(tasksDir, CONFIG_FILE),
+        `The key ${JSON.stringify(config.key)} is not letters and digits starting with a letter, which other tools expect of task ids. Its tasks still load; to fix it, set "key" in config.json to letters and digits such as "${suggested}" and change each id ${config.key}-<n> to ${suggested}-<n>`,
+        { field: "key" },
+      );
+    }
     const statuses: Array<StatusDefinition> = [...(config.statuses ?? DEFAULT_STATUSES)];
     const fallbackStatus = defaultStatus(statuses)?.id ?? "todo";
 
@@ -299,6 +314,7 @@ export const scanWorkspace = (
           folder,
           defaultStatus: fallbackStatus,
           updated: mtime === null ? null : mtime.toISOString(),
+          key: config.key,
         });
         if (read._tag === "Invalid") {
           const { kind, field, detail } = read.problem;
@@ -459,7 +475,7 @@ export const scanWorkspace = (
         );
         const taken = (taskId: string) => taskDirs.has(taskId) || given.has(taskId);
         for (const [index, dir] of missingId.entries()) {
-          const id = yield* giveId(dir, ids[index]!, taken).pipe(
+          const id = yield* giveId(dir, ids[index]!, config.key, taken).pipe(
             Effect.catch((error) =>
               Effect.sync(() => unwritten(dir, error)).pipe(Effect.as(undefined)),
             ),

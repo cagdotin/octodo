@@ -65,6 +65,17 @@ describe("fixing diagnostics over HTTP", () => {
     expect(result.fixed.map((diagnostic) => diagnostic.kind)).toEqual(["loose-markdown"]);
   });
 
+  it("refuses a workspace key that ids cannot use", async () => {
+    const other = join(mkdtempSync(join(tmpdir(), "octodo-server-")), "keyed");
+    mkdirSync(other);
+    const response = await fetch(`${server.url}/api/workspaces`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${server.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ root: other, key: "MY_K" }),
+    });
+    expect(response.status).toBe(400);
+  });
+
   it("refuses a request without the token or with an unknown kind", async () => {
     expect((await post("/diagnostics/fix-all", undefined, null)).status).toBe(401);
     const bad = await post("/diagnostics/fix", { path: ".octodo", kind: "everything" });

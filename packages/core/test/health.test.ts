@@ -191,6 +191,31 @@ describe("file health", () => {
     ]);
   });
 
+  it("refuses a key ids cannot use, and still serves a workspace that has one", async () => {
+    const empty = join(mkdtempSync(join(tmpdir(), "octodo-")), "keyed");
+    mkdirSync(empty);
+    await expect(run(initWorkspace(empty, { key: "MY_K" }))).rejects.toMatchObject({
+      _tag: "InvalidRequest",
+    });
+    expect(existsSync(join(empty, ".octodo")), "nothing is created").toBe(false);
+    const root = await fresh({
+      "MY_K-1-a/task.md": "---\nid: MY_K-1\nblocked_by: [MY_K-2]\n---\n",
+      "MY_K-2-b/task.md": "---\nid: MY_K-2\n---\n",
+    });
+    const config = JSON.parse(read(root, "config.json"));
+    write(root, "config.json", JSON.stringify({ ...config, key: "MY_K" }));
+    const created = await inWorkspace(root, (ws) => ws.createTask({ title: "C" }));
+    expect(created.id).toBe("MY_K-3");
+    expect((await snapshot(root)).tasks.map((task) => [task.id, task.blockedBy])).toEqual([
+      ["MY_K-1", ["MY_K-2"]],
+      ["MY_K-2", []],
+      ["MY_K-3", []],
+    ]);
+    const found = (await snapshot(root)).diagnostics;
+    expect(found.map(summary)).toEqual([one("config.json", "invalid-config", "key", null)]);
+    expect(found[0]?.message).toContain('set "key" in config.json to letters and digits');
+  });
+
   it("adds an unknown status to config.json as unstarted only when asked", async () => {
     const root = await fresh({ "HM-1-a/task.md": "---\nid: HM-1\nstatus: in-review\n---\n" });
     const config = read(root, "config.json");

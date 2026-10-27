@@ -15,6 +15,7 @@ const place = {
   folder: "GA-1-fix-the-gate",
   defaultStatus: "todo",
   updated: "2026-10-26T13:00:00.000Z",
+  key: "GA",
 };
 const now = "2026-10-26T12:00:00.000Z";
 

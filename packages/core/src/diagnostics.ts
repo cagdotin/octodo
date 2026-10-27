@@ -11,8 +11,7 @@ interface Problem {
 /** Every kind of file problem: what a person can do about it and what octodo can fix. */
 export const PROBLEMS = {
   "invalid-config": {
-    remedy:
-      "Fix config.json by hand; until then the workspace uses its folder name and the default statuses",
+    remedy: "Fix config.json by hand",
     fixes: [],
   },
   "invalid-frontmatter": {

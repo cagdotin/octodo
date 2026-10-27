@@ -1,7 +1,7 @@
 import { Effect, FileSystem, Option, Path, PlatformError, Scope } from "effect";
 import { tempName, writeFileAtomic } from "./files.ts";
 import { TASK_FILE } from "./layout.ts";
-import { frontmatterId, patchFrontmatter } from "./markdown.ts";
+import { frontmatterId, needsId, patchFrontmatter } from "./markdown.ts";
 
 const alreadyExists = (error: PlatformError.PlatformError) => error.reason._tag === "AlreadyExists";
 
@@ -79,11 +79,12 @@ export const pendingId = (
  * Writes `candidate` into the task folder's `task.md` unless another process is already giving it
  * an id, in which case it writes that one: the first `.pending-id` marker decides, so concurrent
  * readers of one new file agree on its id, and a marker a crash left behind is finished here.
+ * Returns the id written, or null when the file needs none by now.
  */
 export const giveId = (
   dir: string,
   candidate: string,
-): Effect.Effect<string, PlatformError.PlatformError, FileSystem.FileSystem | Path.Path> =>
+): Effect.Effect<string | null, PlatformError.PlatformError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -99,9 +100,8 @@ export const giveId = (
     const pending = won ? Option.some(candidate) : yield* Effect.option(fs.readFileString(marker));
     const file = path.join(dir, TASK_FILE);
     const text = yield* fs.readFileString(file);
-    const written = frontmatterId(text);
-    const id = written ?? Option.getOrThrow(pending).trim();
-    if (written === null) yield* writeFileAtomic(file, patchFrontmatter(text, { id }));
+    const id = needsId(text) ? Option.getOrThrow(pending).trim() : null;
+    if (id !== null) yield* writeFileAtomic(file, patchFrontmatter(text, { id }));
     yield* Effect.ignore(fs.remove(marker));
     return id;
   });

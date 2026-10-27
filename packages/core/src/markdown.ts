@@ -245,6 +245,12 @@ const editChanges = (input: UpdateTaskInput): Record<string, unknown> => {
 const folderTitle = (folder: string, id: string) =>
   humanize(folder.startsWith(id) ? folder.slice(id.length) : folder) || id;
 
+/** Whether `readTaskFile` would read the file as a task missing its id: it parses, without one. */
+export const needsId = (text: string): boolean => {
+  const read = readFrontmatter(text);
+  return !("error" in read) && absent(read.data["id"]);
+};
+
 export const readTaskFile = (text: string, place: TaskPlace): TaskFileRead => {
   const read = readFrontmatter(text);
   if ("error" in read) return invalidFrontmatter(read.error);

@@ -154,6 +154,15 @@ describe("task ids across processes", () => {
     expect(snapshot.diagnostics).toEqual([]);
   });
 
+  it("gives a file whose id is null or ~ an id in one read", { timeout: 3000 }, async () => {
+    const root = await fresh();
+    write(root, "milk/task.md", "---\nid: null\n---\n\nBuy milk\n");
+    write(root, "bread/task.md", "---\nid: ~\n---\n\nBuy bread\n");
+    const onDisk = await ids(root);
+    expect(onDisk).toEqual({ ids: ["HM-1", "HM-2"], diagnostics: [] });
+    expect(read(root, "bread/task.md")).toMatch(/^---\nid: HM-\d\n---\n\nBuy bread\n$/);
+  });
+
   it("leaves nothing behind in .octodo once creates finish", async () => {
     const root = await fresh();
     await Promise.all(

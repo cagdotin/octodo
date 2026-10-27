@@ -400,11 +400,14 @@ export const scanWorkspace = (
         );
         for (const [index, dir] of missingId.entries()) {
           const given = yield* giveId(dir, ids[index]!).pipe(
-            Effect.catch((error) => Effect.sync(() => unwritten(dir, error)).pipe(Effect.as(null))),
+            Effect.catch((error) =>
+              Effect.sync(() => unwritten(dir, error)).pipe(Effect.as(undefined)),
+            ),
           );
-          if (given === null) continue;
+          if (given === undefined) continue;
           assigned = true;
-          yield* Effect.logInfo(`Assigned ${given} to ${rel(path.join(dir, TASK_FILE))}`);
+          if (given !== null)
+            yield* Effect.logInfo(`Assigned ${given} to ${rel(path.join(dir, TASK_FILE))}`);
         }
         return assigned;
       }).pipe(
@@ -416,7 +419,7 @@ export const scanWorkspace = (
           }),
         ),
       );
-      // Assigning ids rewrites files, so the scan repeats to read them back.
+      // Every file it settled now has an id, written here or by another process: read them back.
       if (assignedAny) return yield* scanWorkspace(id, root);
     }
 

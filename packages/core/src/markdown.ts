@@ -206,6 +206,38 @@ const parseYaml = (yaml: string | null): Document => {
   return doc;
 };
 
+const KEY_VALUE = /^([A-Za-z_][\w-]*): (.+)$/;
+/** A YAML indicator or white space, which a plain scalar does not start with. */
+const INDICATOR = /^[\s\-?:,[\]{}#&*!|>'"%@`]/;
+/** The words and numbers YAML's core schema reads as something other than a string. */
+const NOT_A_STRING =
+  /^(?:~|[Nn]ull|NULL|[Tt]rue|TRUE|[Ff]alse|FALSE|[-+]?[0-9]+|0o[0-7]+|0x[0-9a-fA-F]+|[-+]?\.(?:inf|Inf|INF)|\.nan|\.NaN|\.NAN|[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)[eE][-+]?[0-9]+|[-+]?(?:\.[0-9]+|[0-9]+\.[0-9]*))$/;
+
+const isPlainString = (scalar: string) =>
+  !INDICATOR.test(scalar) &&
+  !NOT_A_STRING.test(scalar) &&
+  !scalar.includes("#") &&
+  !/:\s/.test(scalar) &&
+  !scalar.endsWith(":") &&
+  !/\s$/.test(scalar);
+
+/**
+ * The frontmatter read without the YAML parser when every line is `key: value` and YAML reads each
+ * key and value as the string it spells; null otherwise.
+ */
+const plainFrontmatter = (yaml: string): Record<string, string> | null => {
+  const data: Record<string, string> = {};
+  for (const line of yaml.split("\n")) {
+    const match = KEY_VALUE.exec(line);
+    if (match === null) return null;
+    const [key, value] = [match[1]!, match[2]!];
+    if (!isPlainString(key) || !isPlainString(value)) return null;
+    if (key === "__proto__" || Object.hasOwn(data, key)) return null;
+    data[key] = value;
+  }
+  return data;
+};
+
 /** The frontmatter as plain data, or why it is not a set of keys. */
 export const readFrontmatter = (
   text: string,
@@ -214,7 +246,8 @@ export const readFrontmatter = (
   | { readonly error: string } => {
   try {
     const parts = splitFrontmatter(text);
-    const value: unknown = parseYaml(parts.yaml).toJS();
+    const value: unknown =
+      (parts.yaml === null ? null : plainFrontmatter(parts.yaml)) ?? parseYaml(parts.yaml).toJS();
     if (value !== null && !Predicate.isObject(value))
       return { error: "Invalid frontmatter: it must be a set of key: value pairs" };
     return { data: (value ?? {}) as Record<string, unknown>, body: parts.body };

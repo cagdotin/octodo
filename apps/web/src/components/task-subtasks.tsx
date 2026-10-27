@@ -143,8 +143,10 @@ export function TaskSubtasks({
   const add = () => {
     const trimmed = title.trim();
     if (trimmed === "") return;
-    create.mutate({ title: trimmed, parent: task.id });
-    setTitle("");
+    create.mutate(
+      { title: trimmed, parent: task.id },
+      { onSuccess: () => setTitle((current) => (current === title ? "" : current)) },
+    );
   };
 
   return (

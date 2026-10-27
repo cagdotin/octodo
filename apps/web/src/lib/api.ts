@@ -1,6 +1,8 @@
 import type {
   CreateListInput,
   CreateTaskInput,
+  FixRequest,
+  FixResult,
   MoveListInput,
   MoveTaskInput,
   Task,
@@ -189,6 +191,25 @@ export const useMoveList = (ws: string) =>
     ({ id, move }: { id: string; move: MoveListInput }) =>
       unwrap(api.workspaces[":ws"].lists.move.$post({ param: { ws }, json: { id, ...move } })),
     (snapshot, { id, move }) => applyListMove(snapshot, id, move),
+  );
+
+/** Toasts the fixes that failed; the snapshot refetch shows the rest. */
+const reportFixes = (result: FixResult) => {
+  for (const { diagnostic, error } of result.failed)
+    toast.error(`Could not fix ${diagnostic.path}`, { description: error });
+  return result;
+};
+
+export const useFixDiagnostic = (ws: string) =>
+  useSnapshotMutation(ws, (request: FixRequest) =>
+    unwrap(api.workspaces[":ws"].diagnostics.fix.$post({ param: { ws }, json: request })).then(
+      reportFixes,
+    ),
+  );
+
+export const useFixAllDiagnostics = (ws: string) =>
+  useSnapshotMutation(ws, () =>
+    unwrap(api.workspaces[":ws"].diagnostics["fix-all"].$post({ param: { ws } })).then(reportFixes),
   );
 
 /** Saves the order of every status; the server keeps categories in their fixed order. */

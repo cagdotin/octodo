@@ -476,19 +476,21 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     );
 
   const deleteTask = (taskId: string) =>
-    write(
+    writeFresh(
       Effect.gen(function* () {
         const { snapshot, dirs } = yield* state;
         yield* findTask(snapshot, taskId);
         const removed = taskSubtree(snapshot.tasks, taskId);
         const isRemoved = (id: string) => removed.has(id);
+        const linking = snapshot.tasks.filter(
+          (task) =>
+            !removed.has(task.id) && LINK_KINDS.some((kind) => task[kind.forward].some(isRemoved)),
+        );
         yield* Effect.gen(function* () {
-          for (const task of snapshot.tasks) {
-            const fields = LINK_KINDS.filter((kind) => task[kind.forward].some(isRemoved));
-            if (removed.has(task.id) || fields.length === 0) continue;
+          for (const task of linking) {
             const file = path.join(root, task.path);
             const original = yield* fs.readFileString(file);
-            const text = fields.reduce(
+            const text = LINK_KINDS.reduce(
               (text, kind) => keepLinks(text, kind.field, (id) => !isRemoved(id)) ?? text,
               original,
             );

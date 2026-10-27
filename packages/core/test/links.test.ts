@@ -286,6 +286,26 @@ describe("links in a workspace", () => {
     expect(result.snapshot.diagnostics).toEqual([]);
   });
 
+  it("deletes a blocker after another process moved a task that waits for it", async () => {
+    const root = fresh();
+    const result = await run(
+      Effect.gen(function* () {
+        const app = yield* open(root);
+        const primer = yield* app.createTask({ title: "Buy primer" });
+        const paint = yield* app.createTask({ title: "Paint" });
+        yield* app.updateTask(paint.id, { blocked_by: [primer.id] });
+        yield* app.createList({ name: "Walls" });
+        yield* app.snapshot;
+        const cli = yield* makeWorkspace("cli", root);
+        yield* cli.moveTask(paint.id, { list: "walls" });
+        yield* app.deleteTask(primer.id);
+        return yield* (yield* makeWorkspace("check", root)).getTask(paint.id);
+      }),
+    );
+    expect(result).toMatchObject({ list: "walls", blockedBy: [], blocked: false });
+    expect(read(root, result.path)).not.toContain("blocked_by");
+  });
+
   it("counts a task as ready when it is open and not blocked", () => {
     expect(isReady({ status: "todo", blocked: false }, DEFAULT_STATUSES)).toBe(true);
     expect(isReady({ status: "todo", blocked: true }, DEFAULT_STATUSES)).toBe(false);

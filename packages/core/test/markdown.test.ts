@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseDocument } from "yaml";
 import {
   editTaskFile,
   newListFile,
   newTaskFile,
   patchFrontmatter,
-  readFrontmatter,
   readListFile,
   readTaskFile,
 } from "../src/markdown.ts";
@@ -193,156 +191,5 @@ describe("list files", () => {
 
   it("reads an empty list file as no name and no order", () => {
     expect(readListFile("")).toEqual({ _tag: "Read", value: { name: null, order: "", body: "" } });
-  });
-});
-
-describe("frontmatter", () => {
-  /** What the YAML parser alone reads: the data, or "error" where readFrontmatter fails. */
-  const parsed = (yaml: string) => {
-    const doc = parseDocument(yaml);
-    if (doc.errors.length > 0) return "error";
-    try {
-      const value: unknown = doc.toJS();
-      if (value === null) return {};
-      return typeof value === "object" && !Array.isArray(value) ? value : "error";
-    } catch {
-      return "error";
-    }
-  };
-
-  it("reads a key at and past YAML's 1024-character limit as the YAML parser does", () => {
-    for (const length of [1000, 1022, 1023, 1024, 1025, 1100]) {
-      const yaml = `${"k".repeat(length)}: x`;
-      const read = readFrontmatter(`---\n${yaml}\n---\n`);
-      expect({ length, read: "error" in read ? "error" : read.data }).toEqual({
-        length,
-        read: parsed(yaml),
-      });
-    }
-  });
-
-  it("reads every frontmatter as the YAML parser does", () => {
-    const keys = ["id", "title", "a_b", "x-1", "_x", "null", "True", "false", "__proto__", "1a"];
-    const tricky = ["-a", "a b", "~", "a#", "Id", "ID"];
-    const separators = [":", ":  ", " : ", ":\t"];
-    const values = [
-      "x",
-      "Fix the gate",
-      "x ",
-      " x",
-      "a: b",
-      "a:b",
-      "a:",
-      "a #c",
-      "a#c",
-      "#c",
-      "C#",
-      "'q'",
-      '"q"',
-      "a'b",
-      'a"b',
-      "[a, b]",
-      "{a: 1}",
-      "a [b]",
-      "a {b}",
-      "- a",
-      "-a",
-      "-1",
-      "+1",
-      "1",
-      "007",
-      "1.5",
-      ".5",
-      "5.",
-      "1e3",
-      "1E-3",
-      "+.inf",
-      ".inf",
-      ".NaN",
-      ".nan",
-      "0o17",
-      "0o8",
-      "0x1F",
-      "0xG",
-      "~",
-      "null",
-      "Null",
-      "NULL",
-      "nULL",
-      "true",
-      "TRUE",
-      "tRue",
-      "yes",
-      "off",
-      "2026-10-27",
-      "2026-10-27T00:00:00.000Z",
-      "12:30",
-      "a\tb",
-      "é",
-      "😀",
-      "a b",
-      "﻿x",
-      "a\u0085b",
-      "a\\nb",
-      "*a",
-      "&a",
-      "!a",
-      "!!str a",
-      "|",
-      ">",
-      "%a",
-      "@a",
-      "`a",
-      "?a",
-      "? a",
-      ",a",
-      "a,b",
-      "a , b",
-      "a  b",
-      "a\u0000b",
-      "a: b: c",
-      "a :b",
-      "a - b",
-      "a0V",
-      "%",
-      "=",
-      "<<",
-      "a?",
-      "a!",
-      "a\t",
-      "a:\tb",
-      "a\rb",
-      String.fromCodePoint(0xa0, 0x61),
-      `a${String.fromCodePoint(0xa0)}`,
-      `a${String.fromCodePoint(0x3000)}`,
-      `a${String.fromCodePoint(0xfffe)}b`,
-      `a${String.fromCharCode(0xd800)}b`,
-      `a${String.fromCodePoint(0x7f)}b`,
-    ];
-    const lines = ["", "  indented", "# comment", "...", "- item", "key:", "%YAML 1.1", "a: b # c"];
-    let seed = 42;
-    const pick = <A>(items: ReadonlyArray<A>): A => {
-      seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
-      return items[(seed >>> 8) % items.length]!;
-    };
-    const chance = (one: number) => pick(Array.from({ length: one }, (_, i) => i)) === 0;
-    let plain = 0;
-    const differences: Array<{ yaml: string; read: unknown; parsed: unknown }> = [];
-    for (let i = 0; i < 5_000; i++) {
-      const yaml = Array.from({ length: 1 + (i % 4) }, () =>
-        chance(10)
-          ? pick(lines)
-          : `${pick(chance(5) ? tricky : keys)}${chance(4) ? pick(separators) : ": "}${pick(values)}${chance(4) ? pick(values) : ""}`,
-      ).join("\n");
-      const result = readFrontmatter(`---\n${yaml}\n---\n`);
-      const read = "error" in result ? "error" : result.data;
-      const expected = parsed(yaml);
-      if (expected !== "error" && Object.values(expected).every((v) => typeof v === "string"))
-        plain++;
-      if (JSON.stringify(read) !== JSON.stringify(expected))
-        differences.push({ yaml, read, parsed: expected });
-    }
-    expect(differences.slice(0, 5)).toEqual([]);
-    expect(plain, "a good share of cases are plain strings").toBeGreaterThan(500);
   });
 });

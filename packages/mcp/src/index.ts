@@ -109,20 +109,23 @@ const ListTasks = Tool.make("list_tasks", {
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
 
+/** A task with the tasks it links to as id, title and status, and its direct subtasks. */
+const TaskDetail = Schema.Struct({
+  ...Task.fields,
+  blockedBy: Schema.Array(TaskRef),
+  blocks: Schema.Array(TaskRef),
+  mentions: Schema.Array(TaskRef),
+  mentionedIn: Schema.Array(TaskRef),
+  subtasks: Schema.Array(
+    Schema.Struct({ id: Schema.String, title: Schema.String, status: Schema.String }),
+  ),
+});
+
 const GetTask = Tool.make("get_task", {
   description:
     "Read one task, including its markdown body, any extra frontmatter, its parent, its direct subtasks, the tasks it is blocked by and blocks, and the tasks it mentions and is mentioned in.",
   parameters: Schema.Struct({ workspace: WorkspaceParam, id: Schema.String }),
-  success: Schema.Struct({
-    ...Task.fields,
-    blockedBy: Schema.Array(TaskRef),
-    blocks: Schema.Array(TaskRef),
-    mentions: Schema.Array(TaskRef),
-    mentionedIn: Schema.Array(TaskRef),
-    subtasks: Schema.Array(
-      Schema.Struct({ id: Schema.String, title: Schema.String, status: Schema.String }),
-    ),
-  }),
+  success: TaskDetail,
   failure: ToolFailure,
   failureMode: "return",
 })
@@ -140,13 +143,13 @@ const CreateTask = Tool.make("create_task", {
 
 const UpdateTask = Tool.make("update_task", {
   description:
-    "Change a task's title, priority, tags, due date (YYYY-MM-DD, null clears it), markdown body or blocked_by (the task ids it waits for, replacing the current ones; [] clears them). Use move_task to change status or list.",
+    "Change a task's title, priority, tags, due date (YYYY-MM-DD, null clears it), markdown body or blocked_by (the task ids it waits for, replacing the current ones; [] clears them). Returns the task as get_task does. Use move_task to change status or list.",
   parameters: Schema.Struct({
     workspace: WorkspaceParam,
     id: Schema.String,
     ...UpdateTaskInput.fields,
   }),
-  success: Task,
+  success: TaskDetail,
   failure: ToolFailure,
   failureMode: "return",
 })
@@ -258,6 +261,23 @@ export const toolkitLayer = (options: { readonly defaultDir?: string | undefined
         return Effect.mapError(workspaces.open(target), toFailure);
       };
 
+      const detail = (ws: Workspace, id: string) =>
+        Effect.gen(function* () {
+          const task = yield* ws.getTask(id);
+          const snapshot = yield* ws.snapshot;
+          const subtasks = snapshot.tasks
+            .filter((candidate) => candidate.parent === id)
+            .map(({ id, title, status }) => ({ id, title, status }));
+          return {
+            ...task,
+            subtasks,
+            blockedBy: taskRefs(snapshot, task.blockedBy),
+            blocks: taskRefs(snapshot, task.blocks),
+            mentions: taskRefs(snapshot, task.mentions),
+            mentionedIn: taskRefs(snapshot, task.mentionedIn),
+          };
+        });
+
       return TasksToolkit.of({
         list_workspaces: () => Effect.mapError(workspaces.list, toFailure),
         get_workspace: ({ workspace }) =>
@@ -309,27 +329,12 @@ export const toolkitLayer = (options: { readonly defaultDir?: string | undefined
               }));
           }),
         get_task: ({ workspace, id }) =>
-          Effect.gen(function* () {
-            const ws = yield* open(workspace);
-            const task = yield* Effect.mapError(ws.getTask(id), toFailure);
-            const snapshot = yield* Effect.mapError(ws.snapshot, toFailure);
-            const subtasks = snapshot.tasks
-              .filter((candidate) => candidate.parent === id)
-              .map(({ id, title, status }) => ({ id, title, status }));
-            return {
-              ...task,
-              subtasks,
-              blockedBy: taskRefs(snapshot, task.blockedBy),
-              blocks: taskRefs(snapshot, task.blocks),
-              mentions: taskRefs(snapshot, task.mentions),
-              mentionedIn: taskRefs(snapshot, task.mentionedIn),
-            };
-          }),
+          Effect.flatMap(open(workspace), (ws) => Effect.mapError(detail(ws, id), toFailure)),
         create_task: ({ workspace, ...input }) =>
           Effect.flatMap(open(workspace), (ws) => Effect.mapError(ws.createTask(input), toFailure)),
         update_task: ({ workspace, id, ...input }) =>
           Effect.flatMap(open(workspace), (ws) =>
-            Effect.mapError(ws.updateTask(id, input), toFailure),
+            Effect.mapError(Effect.andThen(ws.updateTask(id, input), detail(ws, id)), toFailure),
           ),
         move_task: ({ workspace, id, ...input }) =>
           Effect.flatMap(open(workspace), (ws) =>

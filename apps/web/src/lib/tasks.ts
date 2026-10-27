@@ -398,6 +398,42 @@ export const withoutSubtree = (tasks: ReadonlyArray<Task>, id: string) => {
   return tasks.filter((task) => !ids.has(task.id));
 };
 
+/** The ids among `ids` whose task is open or missing: the blockers that still hold a task back. */
+export const openBlockers = (
+  { tasks, statuses }: Pick<WorkspaceSnapshot, "tasks" | "statuses">,
+  ids: ReadonlyArray<string>,
+) => {
+  const categories = statusMap(statuses);
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  return ids.filter((id) => {
+    const blocker = byId.get(id);
+    return blocker === undefined || !isClosedCategory(categories.get(blocker.status)?.category);
+  });
+};
+
+/** The snapshot once task `id` waits for `blockedBy`, with what the next read derives from it. */
+export const withBlockedBy = (
+  snapshot: WorkspaceSnapshot,
+  id: string,
+  blockedBy: ReadonlyArray<string>,
+): WorkspaceSnapshot => {
+  const position = new Map(snapshot.tasks.map((task, index) => [task.id, index]));
+  const waits = new Set(blockedBy);
+  const blocks = (task: Task) => {
+    const others = task.blocks.filter((other) => other !== id);
+    if (!waits.has(task.id)) return others;
+    return [...others, id].toSorted((a, b) => position.get(a)! - position.get(b)!);
+  };
+  return {
+    ...snapshot,
+    tasks: snapshot.tasks.map((task) =>
+      task.id === id
+        ? { ...task, blockedBy, blocked: openBlockers(snapshot, blockedBy).length > 0 }
+        : { ...task, blocks: blocks(task) },
+    ),
+  };
+};
+
 export interface Progress {
   readonly done: number;
   readonly total: number;

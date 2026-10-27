@@ -13,7 +13,7 @@ import { sortStatuses } from "@octodo/core/layout";
 import { createClient } from "@octodo/server/client";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { applyListMove, applyMove, withoutSubtree } from "@/lib/tasks";
+import { applyListMove, applyMove, withBlockedBy, withoutSubtree } from "@/lib/tasks";
 
 export const api = createClient(typeof window === "undefined" ? "" : window.location.origin);
 
@@ -162,12 +162,10 @@ export const useUpdateTask = (ws: string) =>
     ws,
     ({ id, patch }: { id: string; patch: UpdateTaskInput }) =>
       unwrap(api.workspaces[":ws"].tasks[":id"].$patch({ param: { ws, id }, json: patch })),
-    (snapshot, { id, patch: { blocked_by, ...fields } }) =>
-      mapTask(snapshot, id, (task) => ({
-        ...task,
-        ...fields,
-        blockedBy: blocked_by ?? task.blockedBy,
-      })),
+    (snapshot, { id, patch: { blocked_by, ...fields } }) => {
+      const edited = mapTask(snapshot, id, (task) => ({ ...task, ...fields }));
+      return blocked_by === undefined ? edited : withBlockedBy(edited, id, blocked_by);
+    },
   );
 
 export const useMoveTask = (ws: string) =>

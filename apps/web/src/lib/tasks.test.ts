@@ -8,6 +8,7 @@ import {
   listCounts,
   SMART,
   subtaskProgress,
+  withBlockedBy,
   withoutSubtree,
 } from "./tasks.ts";
 
@@ -151,5 +152,31 @@ describe("subtasks in views", () => {
     ];
     expect(descendantCount(cycle, "HM-1")).toBe(1);
     expect(withoutSubtree(cycle, "HM-1").map((entry) => entry.id)).toEqual(["HM-3"]);
+  });
+});
+
+describe("changing blockers before the server answers", () => {
+  it("sets the task's blocked state and the blockers' blocks, as the next read will", () => {
+    const before = snapshot([
+      task("HM-1", { status: "done", blocks: ["HM-4"] }),
+      task("HM-2", { blocks: ["HM-3"] }),
+      task("HM-3", { blockedBy: ["HM-2"], blocked: true }),
+      task("HM-4", { blockedBy: ["HM-1"] }),
+    ]);
+    const view = (tasks: ReadonlyArray<Task>) =>
+      tasks.map(({ id, blockedBy, blocked, blocks }) => ({ id, blockedBy, blocked, blocks }));
+    expect(view(withBlockedBy(before, "HM-4", ["HM-1", "HM-2"]).tasks)).toEqual([
+      { id: "HM-1", blockedBy: [], blocked: false, blocks: ["HM-4"] },
+      { id: "HM-2", blockedBy: [], blocked: false, blocks: ["HM-3", "HM-4"] },
+      { id: "HM-3", blockedBy: ["HM-2"], blocked: true, blocks: [] },
+      { id: "HM-4", blockedBy: ["HM-1", "HM-2"], blocked: true, blocks: [] },
+    ]);
+    expect(view(withBlockedBy(before, "HM-4", ["HM-9"]).tasks).at(-1)).toEqual({
+      id: "HM-4",
+      blockedBy: ["HM-9"],
+      blocked: true,
+      blocks: [],
+    });
+    expect(view(withBlockedBy(before, "HM-4", []).tasks)[0]!.blocks).toEqual([]);
   });
 });

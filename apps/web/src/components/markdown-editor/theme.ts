@@ -127,8 +127,9 @@ export const bodyTheme = EditorView.theme({
   ".cm-md-mention[data-missing]": {
     cursor: "default",
     backgroundColor: "transparent",
-    boxShadow: "inset 0 0 0 1px var(--border)",
-    borderStyle: "dashed",
+    boxShadow: "none",
+    outline: "1px dashed var(--muted-foreground)",
+    outlineOffset: "-1px",
     color: "var(--muted-foreground)",
   },
   ".cm-tooltip.cm-tooltip-autocomplete": {

@@ -17,7 +17,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useUpdateTask } from "@/lib/api";
-import { statusMap } from "@/lib/tasks";
+import { openBlockers, statusMap } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 
 const [BLOCKED_BY] = LINK_KINDS;
@@ -31,10 +31,10 @@ const describe = (snapshot: WorkspaceSnapshot, ids: ReadonlyArray<string>) =>
     })
     .join(", ");
 
-/** A lock on a blocked task's row or card, naming its blockers on hover. */
+/** A lock on a blocked task's row or card, naming the blockers still open or missing on hover. */
 export function BlockedChip({ snapshot, task }: { snapshot: WorkspaceSnapshot; task: Task }) {
   if (!task.blocked) return null;
-  const label = `Blocked by ${describe(snapshot, task.blockedBy)}`;
+  const label = `Blocked by ${describe(snapshot, openBlockers(snapshot, task.blockedBy))}`;
   return (
     <span title={label} className="flex shrink-0 items-center text-muted-foreground">
       <LockIcon className="size-3.5" aria-label={label} />

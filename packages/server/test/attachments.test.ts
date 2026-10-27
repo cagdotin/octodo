@@ -1,4 +1,11 @@
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  symlinkSync,
+} from "node:fs";
 import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -92,6 +99,32 @@ describe("task attachments over HTTP", () => {
     expect(await put.json()).toEqual({ path: "images/twice.png" });
     expect(await again.json()).toEqual({ path: "images/twice-2.png" });
     expect(readdirSync(join(taskFolder, "images"))).toContain("twice-2.png");
+  });
+
+  it("serves and saves files at the top of the task folder", async () => {
+    const put = await call(`${files}/notes.txt`, { method: "PUT", body: "one" });
+    const again = await call(`${files}/notes.txt`, { method: "PUT", body: "two" });
+    expect(await put.json()).toEqual({ path: "notes.txt" });
+    expect(await again.json()).toEqual({ path: "notes-2.txt" });
+    const get = await call(`${files}/notes.txt`);
+    expect(get.status).toBe(200);
+    expect(await get.text()).toBe("one");
+  });
+
+  it("refuses a symlinked folder that points out of the task folder", async () => {
+    const outside = mkdtempSync(join(tmpdir(), "octodo-outside-"));
+    symlinkSync(outside, join(taskFolder, "linked"));
+    expect((await call(`${files}/linked/x.png`, { method: "PUT", body: PNG })).status).toBe(400);
+    expect(readdirSync(outside)).toEqual([]);
+    expect((await call(`${files}/linked/x.png`)).status).toBe(400);
+  });
+
+  it("refuses an upload that would make a subtask", async () => {
+    for (const path of ["newsub/task.md", "TASK.MD"]) {
+      const put = await call(`${files}/${path}`, { method: "PUT", body: "---\ntitle: x\n---\n" });
+      expect({ path, status: put.status }).toEqual({ path, status: 400 });
+    }
+    expect(existsSync(join(taskFolder, "newsub"))).toBe(false);
   });
 
   it("needs the token", async () => {

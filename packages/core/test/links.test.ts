@@ -73,6 +73,16 @@ describe("mentions in a body", () => {
     expect(body.slice(first!.from, first!.to)).toBe("[[HM-3]]");
   });
 
+  it("reads a 300 KB body full of mentions and code spans in a few milliseconds", () => {
+    const body =
+      "x `a` [[HM-1]] ".repeat(20_000) + "\n\n" + "- see [[HM-2]] and `code`\n".repeat(3_000);
+    const unmatched = "[[HM-3]] " + " a ``x".repeat(20_000);
+    const started = performance.now();
+    expect(findMentions(body)).toHaveLength(23_000);
+    expect(findMentions(unmatched)).toHaveLength(1);
+    expect(performance.now() - started).toBeLessThan(100);
+  });
+
   it("treats an unmatched backtick as text", () => {
     expect(findMentions("a ` b [[HM-1]]").map((mention) => mention.id)).toEqual(["HM-1"]);
   });

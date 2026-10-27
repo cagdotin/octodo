@@ -259,12 +259,19 @@ const spansIn = (body: string, lines: ReadonlyArray<readonly [number, number]>) 
   const from = lines[0]![0];
   const text = body.slice(from, lines.at(-1)![1]);
   const runs = [...text.matchAll(/`+/g)];
+  /** For each run, the index of the next run of the same length, or -1. */
+  const next = Array.from({ length: runs.length }, () => -1);
+  const seen = new Map<number, number>();
+  for (let i = runs.length - 1; i >= 0; i--) {
+    const length = runs[i]![0].length;
+    next[i] = seen.get(length) ?? -1;
+    seen.set(length, i);
+  }
   const spans: Array<readonly [number, number]> = [];
   for (let i = 0; i < runs.length; i++) {
-    const open = runs[i]!;
-    const close = runs.findIndex((run, j) => j > i && run[0].length === open[0].length);
+    const close = next[i]!;
     if (close === -1) continue;
-    spans.push([from + open.index, from + runs[close]!.index + runs[close]![0].length]);
+    spans.push([from + runs[i]!.index, from + runs[close]!.index + runs[close]![0].length]);
     i = close;
   }
   return spans;
@@ -273,10 +280,16 @@ const spansIn = (body: string, lines: ReadonlyArray<readonly [number, number]>) 
 /** The `[[HM-3]]` mentions in a markdown body, in order, skipping code spans and fenced code. */
 export const findMentions = (body: string): Array<Mention> => {
   if (!body.includes("[[")) return [];
-  const code = codeRanges(body);
-  return [...body.matchAll(MENTION)]
-    .map((match) => ({ id: match[1]!, from: match.index, to: match.index + match[0].length }))
-    .filter((mention) => !code.some(([from, to]) => mention.from >= from && mention.from < to));
+  const code = codeRanges(body).toSorted((a, b) => a[0] - b[0]);
+  const mentions: Array<Mention> = [];
+  let range = 0;
+  for (const match of body.matchAll(MENTION)) {
+    while (range < code.length && code[range]![1] <= match.index) range++;
+    const inCode = range < code.length && code[range]![0] <= match.index;
+    if (!inCode)
+      mentions.push({ id: match[1]!, from: match.index, to: match.index + match[0].length });
+  }
+  return mentions;
 };
 
 /** Work that can start now: not blocked, and not in a closed category. */

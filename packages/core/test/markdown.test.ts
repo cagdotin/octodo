@@ -130,6 +130,14 @@ describe("writing task files", () => {
     );
   });
 
+  it("leaves the lines of keys an edit does not touch byte for byte, flow lists included", () => {
+    const text =
+      "---\nid: GA-1\ntitle: Fix the gate\ntags: [a, b]\nblocked_by: [GA-2, GA-3]\n---\n";
+    expect(editTaskFile(text, { title: "Mend the gate", priority: "high" })).toBe(
+      "---\nid: GA-1\ntitle: Mend the gate\ntags: [a, b]\nblocked_by: [GA-2, GA-3]\npriority: high\n---\n",
+    );
+  });
+
   it("removes a field set back to its default, and replaces the body", () => {
     expect(
       editTaskFile("---\nid: GA-1\npriority: high\ntags: [a]\ndue: 2026-01-01\n---\nold\n", {

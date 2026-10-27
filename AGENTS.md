@@ -22,8 +22,8 @@ and any.do first, then Linear.
 - A link is a frontmatter key holding a list of plain task ids, `blocked_by: [HM-3, HM-7]`;
   `LINK_KINDS` in `layout.ts` lists the keys. Only one end stores an edge: the reverse (`blocks`),
   `mentionedIn` (from `[[HM-3]]` in a body, outside code) and `blocked` are computed when a
-  snapshot is read. A link field that is not a list of ids, a task's link to itself and an unknown
-  id are diagnostics (an unknown blocker still blocks); deleting a task removes its id from other
+  snapshot is read. A link field that is not a list of ids, a task's link to itself and an id no
+  file on disk has are diagnostics (a blocker that is not read still blocks); deleting a task removes its id from other
   tasks' links, and body mentions stay as text.
 - A task folder inside a task folder is a subtask, the same shape all the way down. Every other file
   in a task folder is an attachment of that task (`images/plan.png`).
@@ -31,8 +31,11 @@ and any.do first, then Linear.
   three levels. `.octodo/` is the root list. A list id is its folder names joined by `/`
   (`garden/seeds`), so moving a list to another parent changes its id.
 - Folder names carry no meaning for the scanner; they are for people: `<id>-<slug>` for a task, the
-  slug for a list. Anything else (a loose `.md`, a folder with neither marker or both) is a
-  diagnostic, and so is a workspace in the old folder layout, which `octo migrate` converts.
+  slug for a list. Anything else (a loose `.md`, a folder with neither marker or both, a symlink,
+  which is never followed) is a diagnostic, and so is a workspace in the old folder layout, which
+  `octo migrate` converts. A loose `.md` without frontmatter is a note: reported, never changed.
+- Of several task folders with one id, the task is the one a sync tool did not name as a copy
+  (`HM-3-paint 2`), then the one named after its id and title, then the first read.
 - A task's identity is the `id` in its frontmatter, never its path. Files without an id get one the
   first time they are read. Frontmatter keys the app does not manage are kept untouched, including
   order and comments (edits go through the `yaml` document API).
@@ -45,8 +48,9 @@ and any.do first, then Linear.
   minute old is a crash's leftover, removed when a workspace opens.
 - Every problem a read finds is a diagnostic `{ path, kind, field, message, fix }`, and every kind
   is a row of `PROBLEMS` in `diagnostics.ts` with its remedy and its fixes. A fix runs only when asked
-  (`octo doctor --fix`, the app's dialog, MCP `fix_diagnostic`) and only if a fresh read still finds
-  the problem, so repeating one changes nothing.
+  (`octo doctor`, the app's dialog, MCP `fix_diagnostic`) and only if a fresh read still offers that
+  fix there, so repeating one changes nothing. Fix-all applies only fixes that cannot lose what a
+  person wrote; one that guesses (making a loose file a task) is picked one at a time.
 - Writes go to a temporary sibling and are renamed into place, so sync tools (iCloud, git) never see
   half a file; a new task or list folder is built under a dot name and renamed in. Writes go only
   into folders that exist: never `mkdir -p` a container. Any in-memory index is a cache that a file

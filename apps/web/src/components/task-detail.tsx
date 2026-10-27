@@ -52,6 +52,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { useDeleteTask, useMoveTask, useUpdateTask } from "@/lib/api";
+import { taskAttachments } from "@/lib/attachments";
 import { cn } from "@/lib/utils";
 import { dueInfo, formatTimestamp, listLabel, PRIORITIES } from "@/lib/tasks";
 import { changes, editorMachine } from "@/machines/editor";
@@ -193,6 +194,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
       <MarkdownEditor
         aria-label="Notes"
         placeholder="Add notes in markdown…"
+        attachments={taskAttachments(workspace, task.id)}
         value={draft.body}
         onChange={(value) => editor.send({ type: "EDIT", field: "body", value })}
         onBlur={() => editor.send({ type: "FLUSH" })}

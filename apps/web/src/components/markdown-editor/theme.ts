@@ -89,6 +89,13 @@ export const bodyTheme = EditorView.theme({
     top: "50%",
     borderTop: "1px solid var(--border)",
   },
+  ".cm-md-image": {
+    display: "block",
+    maxWidth: "100%",
+    maxHeight: "24rem",
+    margin: "0.25rem 0",
+    borderRadius: "var(--radius-md)",
+  },
   ".cm-md-table": { padding: "0.25rem 0.5rem" },
   ".cm-md-table table": { borderCollapse: "collapse", fontSize: "0.95em" },
   ".cm-md-table th, .cm-md-table td": {

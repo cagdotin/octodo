@@ -2,6 +2,7 @@ import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import {
   type EditorState,
   type Extension,
+  Facet,
   type Range,
   StateEffect,
   StateField,
@@ -83,6 +84,39 @@ class CheckboxWidget extends WidgetType {
 
   override ignoreEvent() {
     return true;
+  }
+}
+
+/**
+ * Turns an image's `src` into the URL the preview loads, or null to leave it as source. The task
+ * detail resolves paths relative to the task folder through the server.
+ */
+export const imageUrl = Facet.define<
+  (src: string) => string | null,
+  (src: string) => string | null
+>({ combine: (values) => values[0] ?? (() => null) });
+
+class ImageWidget extends WidgetType {
+  readonly url: string;
+  readonly alt: string;
+
+  constructor(url: string, alt: string) {
+    super();
+    this.url = url;
+    this.alt = alt;
+  }
+
+  override eq(other: ImageWidget) {
+    return other.url === this.url && other.alt === this.alt;
+  }
+
+  override toDOM(view: EditorView) {
+    const image = document.createElement("img");
+    image.className = "cm-md-image";
+    image.src = this.url;
+    image.alt = this.alt;
+    image.addEventListener("load", () => view.requestMeasure());
+    return image;
   }
 }
 
@@ -265,6 +299,18 @@ export const previewDecorations = (state: EditorState): DecorationSet => {
           out.push(Decoration.mark({ class: "cm-md-link" }).range(from, to));
         }
         return;
+      case "Image": {
+        const url = node.node.getChild("URL");
+        const close = node.node
+          .getChildren("LinkMark")
+          .find((mark) => state.sliceDoc(mark.from, mark.to) === "]");
+        const resolved =
+          url === null ? null : state.facet(imageUrl)(state.sliceDoc(url.from, url.to));
+        if (revealed || resolved === null || close === undefined) return;
+        const alt = state.sliceDoc(from + 2, close.from);
+        out.push(Decoration.replace({ widget: new ImageWidget(resolved, alt) }).range(from, to));
+        return false;
+      }
       case "Escape":
         if (!revealed) hide(from, from + 1);
         return;

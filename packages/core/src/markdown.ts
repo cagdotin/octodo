@@ -97,6 +97,17 @@ const decodePriority = Schema.decodeUnknownOption(Priority);
 const decodeDue = Schema.decodeUnknownOption(DueDate);
 const decodeTags = Schema.decodeUnknownOption(Tags);
 
+const scalarTag = (tag: unknown): unknown =>
+  typeof tag === "number" || typeof tag === "boolean" ? String(tag) : tag;
+
+/** Tags as words: a lone tag as a list of one, and numbers and booleans as they are written. */
+const tagsAsWritten = (value: unknown): unknown =>
+  Array.isArray(value)
+    ? value.map(scalarTag)
+    : value === undefined || value === null || typeof value === "object"
+      ? value
+      : [scalarTag(value)];
+
 const absent = (value: unknown) => value === undefined || value === null || value === "";
 
 /** A field's value decoded through its schema, or the default with a problem when it does not decode. */
@@ -295,7 +306,7 @@ export const readTaskFile = (text: string, place: TaskPlace): TaskFileRead => {
         problems,
       ),
       tags: decodeField(
-        typeof data["tags"] === "string" ? [data["tags"]] : data["tags"],
+        tagsAsWritten(data["tags"]),
         decodeTags,
         [],
         {

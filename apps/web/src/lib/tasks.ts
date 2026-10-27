@@ -123,6 +123,9 @@ export const allTags = (tasks: ReadonlyArray<Task>) =>
 
 export const todayKey = () => format(new Date(), "yyyy-MM-dd");
 
+/** The day a due date falls on as written, `YYYY-MM-DD`, also for a date-time. */
+const dueDay = (due: string) => due.slice(0, 10);
+
 /**
  * The tasks a view shows. Views of a list show top-level tasks, with subtasks inside their parent;
  * the date views show every task due in their range, and Ready every task open and not blocked,
@@ -132,7 +135,8 @@ export const filterTasks = (
   { tasks: all, statuses }: Pick<WorkspaceSnapshot, "tasks" | "statuses">,
   list: string | undefined,
 ): ReadonlyArray<Task> => {
-  const dueBy = (last: string) => all.filter((task) => task.due !== null && task.due <= last);
+  const dueBy = (last: string) =>
+    all.filter((task) => task.due !== null && dueDay(task.due) <= last);
   const tasks = all.filter((task) => task.parent === null);
   switch (list) {
     case undefined:
@@ -175,7 +179,7 @@ export interface DueInfo {
 
 export const dueInfo = (due: string | null): DueInfo | null => {
   if (due === null) return null;
-  const date = parseISO(due);
+  const date = parseISO(dueDay(due));
   if (Number.isNaN(date.getTime())) return { label: due, overdue: false, today: false };
   const today = isToday(date);
   const overdue = !today && isBefore(date, startOfDay(new Date()));

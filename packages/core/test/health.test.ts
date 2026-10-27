@@ -1,5 +1,5 @@
 import { NodeServices } from "@effect/platform-node";
-import { Effect } from "effect";
+import { Effect, Exit, Schema } from "effect";
 import {
   chmodSync,
   existsSync,
@@ -13,7 +13,13 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { Diagnostic, DiagnosticKind, FixAction, FixRequest } from "../src/domain.ts";
+import {
+  CreateTaskInput,
+  type Diagnostic,
+  type DiagnosticKind,
+  type FixAction,
+  type FixRequest,
+} from "../src/domain.ts";
 import { initWorkspace, makeWorkspace, type Workspace } from "../src/workspace.ts";
 
 const run = <A, E>(effect: Effect.Effect<A, E, any>) =>
@@ -99,6 +105,40 @@ describe("file health", () => {
     const result = await fixTwice(root, { path: ".octodo/HM-1-a/task.md", kind: "invalid-due" });
     expect(result.fixed).toEqual([]);
     expect(read(root, "HM-1-a/task.md")).toBe(before);
+  });
+
+  it("reads numeric tags and a due date-time as written, and reports an impossible date", async () => {
+    const root = await fresh({
+      "HM-1-a/task.md": "---\nid: HM-1\ntags: [2026, q4, true]\ndue: 2026-11-01T10:00\n---\n",
+      "HM-2-b/task.md": "---\nid: HM-2\ndue: 2026-02-31\n---\n",
+    });
+    expect((await snapshot(root)).tasks.map((task) => [task.id, task.tags, task.due])).toEqual([
+      ["HM-1", ["2026", "q4", "true"], "2026-11-01T10:00"],
+      ["HM-2", [], null],
+    ]);
+    expect(await diagnostics(root)).toEqual([one("HM-2-b/task.md", "invalid-due", "due", null)]);
+    const input = Schema.decodeUnknownExit(CreateTaskInput);
+    const accepts = (due: string) => [due, Exit.isSuccess(input({ title: "C", due }))];
+    expect(
+      ["2026-11-01", "2026-11-01T10:00", "2026-11-01T10:00:30+02:00", "2028-02-29"].map(accepts),
+    ).toEqual([
+      ["2026-11-01", true],
+      ["2026-11-01T10:00", true],
+      ["2026-11-01T10:00:30+02:00", true],
+      ["2028-02-29", true],
+    ]);
+    expect(
+      ["2026-02-31", "2027-02-29", "2026-11-01T24:00", "2026-11-01 10:00"].map(accepts),
+    ).toEqual([
+      ["2026-02-31", false],
+      ["2027-02-29", false],
+      ["2026-11-01T24:00", false],
+      ["2026-11-01 10:00", false],
+    ]);
+    const created = await inWorkspace(root, (ws) =>
+      ws.createTask({ title: "C", due: "2026-11-01T10:00Z" }),
+    );
+    expect(created.due).toBe("2026-11-01T10:00Z");
   });
 
   it("skips a task whose frontmatter does not parse or whose id is malformed, and says so", async () => {

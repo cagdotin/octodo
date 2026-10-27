@@ -4,12 +4,24 @@ import { STATUS_CATEGORIES, WORKSPACE_KEY } from "./layout.ts";
 export const Priority = Schema.Literals(["none", "low", "medium", "high", "urgent"]);
 export type Priority = typeof Priority.Type;
 
-/** A calendar day, `YYYY-MM-DD`. */
+const DUE =
+  /^(\d{4})-(\d{2})-(\d{2})(?:T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)?)?$/;
+
+const isCalendarDay = (year: number, month: number, day: number) =>
+  month >= 1 && month <= 12 && day >= 1 && day <= new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+/** A calendar day, `YYYY-MM-DD`, or a time on one, `YYYY-MM-DDTHH:mm[:ss][Z|±hh:mm]`. */
 export const DueDate = Schema.String.pipe(
   Schema.check(
-    Schema.isPattern(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, {
-      message: "Use a date such as 2026-11-01",
-    }),
+    Schema.makeFilter(
+      (value: string) => {
+        const match = DUE.exec(value);
+        return (
+          match !== null && isCalendarDay(Number(match[1]), Number(match[2]), Number(match[3]))
+        );
+      },
+      { message: "Use a date such as 2026-11-01, or a date and time such as 2026-11-01T10:00" },
+    ),
   ),
 );
 

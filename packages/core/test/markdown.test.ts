@@ -75,7 +75,9 @@ describe("readTaskFile", () => {
     expect(problems("---\nid: GA-1\ndue: 2026-11-01\ntags: [a, b]\n---\n")).toEqual([]);
     expect(problems("---\nid: GA-1\ndue: 2026-13-01\n---\n")).toEqual(["invalid-due"]);
     expect(problems("---\nid: GA-1\ndue: tomorrow\n---\n")).toEqual(["invalid-due"]);
-    expect(problems("---\nid: GA-1\ntags: [a, 2]\n---\n")).toEqual(["invalid-tags"]);
+    expect(problems("---\nid: GA-1\ndue: 2026-02-31\n---\n")).toEqual(["invalid-due"]);
+    expect(problems("---\nid: GA-1\ntags: [a, 2]\n---\n")).toEqual([]);
+    expect(problems("---\nid: GA-1\ntags: [a, {b: 1}]\n---\n")).toEqual(["invalid-tags"]);
     expect(problems("---\nid: GA-1\ndue:\ntags:\n---\n")).toEqual([]);
   });
 

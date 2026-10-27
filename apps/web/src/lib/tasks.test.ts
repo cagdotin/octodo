@@ -4,10 +4,12 @@ import { describe, expect, it } from "vitest";
 import {
   applyMove,
   descendantCount,
+  dueInfo,
   filterTasks,
   listCounts,
   SMART,
   subtaskProgress,
+  todayKey,
   withBlockedBy,
   withoutSubtree,
 } from "./tasks.ts";
@@ -178,5 +180,18 @@ describe("changing blockers before the server answers", () => {
       blocks: [],
     });
     expect(view(withBlockedBy(before, "HM-4", []).tasks)[0]!.blocks).toEqual([]);
+  });
+});
+
+describe("due dates", () => {
+  it("groups a due date-time by its date", () => {
+    const today = todayKey();
+    const tasks = [task("HM-1", { due: `${today}T23:00` }), task("HM-2", { due: today })];
+    expect(filterTasks(snapshot(tasks), SMART.today).map((found) => found.id)).toEqual([
+      "HM-1",
+      "HM-2",
+    ]);
+    expect(dueInfo(`${today}T23:00`)).toMatchObject({ label: "Today", today: true });
+    expect(dueInfo(`${today}T00:30+14:00`)).toMatchObject({ label: "Today", overdue: false });
   });
 });

@@ -19,6 +19,11 @@ and any.do first, then Linear.
   `status`, `order` (fractional, among siblings), `priority`, `due`, `tags`, `created`. `updated`
   comes from the file's mtime; `list` and `parent` are never stored. Changing status is one write of
   `task.md`.
+- A link is a frontmatter key holding a list of plain task ids, `blocked_by: [HM-3, HM-7]`;
+  `LINK_KINDS` in `layout.ts` lists the keys. Only one end stores an edge: the reverse (`blocks`),
+  `mentionedIn` (from `[[HM-3]]` in a body, outside code) and `blocked` are computed when a
+  snapshot is read. An unknown id is a diagnostic and still blocks; deleting a task removes its id
+  from other tasks' links, and body mentions stay as text.
 - A task folder inside a task folder is a subtask, the same shape all the way down. Every other file
   in a task folder is an attachment of that task (`images/plan.png`).
 - A folder with `list.md` (`name`, `order`; the body describes the list) is a list, nested up to

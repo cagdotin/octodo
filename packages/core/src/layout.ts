@@ -215,12 +215,38 @@ export interface Mention {
 }
 
 const MENTION = new RegExp(`\\[\\[(${TASK_ID})\\]\\]`, "g");
-const FENCE = /^(?:[ \t]*>)*[ \t]*(`{3,}|~{3,})/;
+const FENCE = /^(?:[ \t]*>)*[ \t]*(`{3,}|~{3,})(.*)$/;
+const LIST_ITEM = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]/;
+const COMMENT = /<!--[\s\S]*?(?:-->|$)/g;
 
-/** Offset ranges of fenced code blocks and code spans, which hold text rather than mentions. */
+/** Columns of leading whitespace, a tab reaching the next multiple of four. */
+const indentOf = (line: string) => {
+  let columns = 0;
+  for (const char of line) {
+    if (char === " ") columns++;
+    else if (char === "\t") columns += 4 - (columns % 4);
+    else break;
+  }
+  return columns;
+};
+
+/** Whether the character before `index` is escaped, by an odd run of backslashes. */
+const escapedAt = (text: string, index: number) => {
+  let backslashes = 0;
+  while (text[index - 1 - backslashes] === "\\") backslashes++;
+  return backslashes % 2 === 1;
+};
+
+/**
+ * Offset ranges of fenced and indented code blocks, code spans and HTML comments, which hold text
+ * rather than mentions, sorted by start.
+ */
 const codeRanges = (body: string): Array<readonly [number, number]> => {
   const ranges: Array<readonly [number, number]> = [];
   let fence: { readonly marker: string; readonly from: number } | null = null;
+  let indented: { readonly from: number; to: number } | null = null;
+  /** Whether the last block began as or inside a list item, where indented lines are no code. */
+  let inList = false;
   let paragraph: Array<readonly [number, number]> = [];
   const closeParagraph = () => {
     ranges.push(...spansIn(body, paragraph));
@@ -230,63 +256,97 @@ const codeRanges = (body: string): Array<readonly [number, number]> => {
   for (const line of body.split("\n")) {
     const start = offset;
     offset += line.length + 1;
-    const marker = FENCE.exec(line)?.[1];
+    const blank = line.trim() === "";
+    const fenceLine = FENCE.exec(line);
     if (fence !== null) {
+      const marker = fenceLine?.[1];
       if (
         marker !== undefined &&
         marker[0] === fence.marker[0] &&
-        marker.length >= fence.marker.length
+        marker.length >= fence.marker.length &&
+        fenceLine![2]!.trim() === ""
       ) {
         ranges.push([fence.from, start + line.length]);
         fence = null;
       }
       continue;
     }
-    if (marker !== undefined) {
+    if (indented !== null) {
+      if (blank || indentOf(line) >= 4) {
+        if (!blank) indented.to = start + line.length;
+        continue;
+      }
+      ranges.push([indented.from, indented.to]);
+      indented = null;
+    }
+    if (fenceLine !== null) {
       closeParagraph();
-      fence = { marker, from: start };
-    } else if (line.trim() === "") closeParagraph();
-    else paragraph.push([start, start + line.length]);
+      fence = { marker: fenceLine[1]!, from: start };
+    } else if (blank) closeParagraph();
+    else if (paragraph.length > 0) paragraph.push([start, start + line.length]);
+    else if (indentOf(line) >= 4 && !inList) indented = { from: start, to: start + line.length };
+    else {
+      inList = LIST_ITEM.test(line) || (inList && indentOf(line) >= 2);
+      paragraph.push([start, start + line.length]);
+    }
   }
   if (fence !== null) ranges.push([fence.from, body.length]);
+  if (indented !== null) ranges.push([indented.from, indented.to]);
   closeParagraph();
-  return ranges;
+  const inCode = (index: number) => ranges.some(([from, to]) => index >= from && index < to);
+  const comments = [...body.matchAll(COMMENT)].filter((match) => !inCode(match.index));
+  for (const match of comments) ranges.push([match.index, match.index + match[0].length]);
+  return ranges.toSorted((a, b) => a[0] - b[0]);
 };
 
-/** Code spans in a paragraph: a run of backticks up to the next run of the same length. */
+/**
+ * Code spans in a paragraph: a run of backticks up to the next run of the same length. A
+ * backslash before a run escapes its first backtick, outside a span only.
+ */
 const spansIn = (body: string, lines: ReadonlyArray<readonly [number, number]>) => {
   if (lines.length === 0) return [];
   const from = lines[0]![0];
   const text = body.slice(from, lines.at(-1)![1]);
-  const runs = [...text.matchAll(/`+/g)];
-  /** For each run, the index of the next run of the same length, or -1. */
-  const next = Array.from({ length: runs.length }, () => -1);
-  const seen = new Map<number, number>();
-  for (let i = runs.length - 1; i >= 0; i--) {
-    const length = runs[i]![0].length;
-    next[i] = seen.get(length) ?? -1;
-    seen.set(length, i);
+  const runs = [...text.matchAll(/`+/g)].map((run) => ({ at: run.index, length: run[0].length }));
+  /** The indices of the runs of each length, ascending. */
+  const byLength = new Map<number, Array<number>>();
+  for (const [index, run] of runs.entries()) {
+    const same = byLength.get(run.length);
+    if (same === undefined) byLength.set(run.length, [index]);
+    else same.push(index);
   }
+  const nextOfLength = (length: number, after: number) => {
+    const same = byLength.get(length) ?? [];
+    let [low, high] = [0, same.length];
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (same[middle]! <= after) low = middle + 1;
+      else high = middle;
+    }
+    return same[low];
+  };
   const spans: Array<readonly [number, number]> = [];
   for (let i = 0; i < runs.length; i++) {
-    const close = next[i]!;
-    if (close === -1) continue;
-    spans.push([from + runs[i]!.index, from + runs[close]!.index + runs[close]![0].length]);
+    const escaped = escapedAt(text, runs[i]!.at) ? 1 : 0;
+    const open = { at: runs[i]!.at + escaped, length: runs[i]!.length - escaped };
+    const close = open.length === 0 ? undefined : nextOfLength(open.length, i);
+    if (close === undefined) continue;
+    spans.push([from + open.at, from + runs[close]!.at + runs[close]!.length]);
     i = close;
   }
   return spans;
 };
 
-/** The `[[HM-3]]` mentions in a markdown body, in order, skipping code spans and fenced code. */
+/** The `[[HM-3]]` mentions in a markdown body, in order, skipping escaped ones and code. */
 export const findMentions = (body: string): Array<Mention> => {
   if (!body.includes("[[")) return [];
-  const code = codeRanges(body).toSorted((a, b) => a[0] - b[0]);
+  const code = codeRanges(body);
   const mentions: Array<Mention> = [];
   let range = 0;
   for (const match of body.matchAll(MENTION)) {
     while (range < code.length && code[range]![1] <= match.index) range++;
     const inCode = range < code.length && code[range]![0] <= match.index;
-    if (!inCode)
+    if (!inCode && !escapedAt(body, match.index))
       mentions.push({ id: match[1]!, from: match.index, to: match.index + match[0].length });
   }
   return mentions;

@@ -83,6 +83,25 @@ describe("mentions in a body", () => {
     expect(performance.now() - started).toBeLessThan(100);
   });
 
+  it("skips escaped mentions, indented code and HTML comments, as markdown renders them", () => {
+    const ids = (body: string) => findMentions(body).map((mention) => mention.id);
+    expect(ids("\\[[HM-1]] \\\\[[HM-2]] \\\\\\[[HM-3]]"), "odd backslashes escape").toEqual([
+      "HM-2",
+    ]);
+    expect(ids("para\n\n    [[HM-1]]\n\tstill code [[HM-2]]\n\nback [[HM-3]]")).toEqual(["HM-3"]);
+    expect(ids("para\n    [[HM-1]] continues it"), "no code inside a paragraph").toEqual(["HM-1"]);
+    expect(ids("- item\n\n    more [[HM-1]] in the item"), "a list item's paragraph").toEqual([
+      "HM-1",
+    ]);
+    expect(ids("<!-- [[HM-1]] -->[[HM-2]]<!--\n[[HM-3]]\n-->\n<!-- [[HM-4]]")).toEqual(["HM-2"]);
+    expect(ids("```\n```js\n[[HM-1]]\n```\n[[HM-2]]"), "a fence closes without info").toEqual([
+      "HM-2",
+    ]);
+    expect(ids("\\`[[HM-1]]` and ``[[HM-2]]`` \\``[[HM-3]]`"), "an escaped backtick").toEqual([
+      "HM-1",
+    ]);
+  });
+
   it("treats an unmatched backtick as text", () => {
     expect(findMentions("a ` b [[HM-1]]").map((mention) => mention.id)).toEqual(["HM-1"]);
   });

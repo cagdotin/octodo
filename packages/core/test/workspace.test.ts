@@ -11,6 +11,7 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -257,19 +258,23 @@ describe("workspace", () => {
     await run(initWorkspace(root));
     write(root, "HM-1-a/task.md", "---\nid: HM-1\n---\n");
     write(root, "HM-2-b/task.md", "---\nid: HM-2\n---\n");
-    let renamed = false;
+    let armed = false;
     const racing = patchedFileSystem((fs) => ({
       readDirectory: (dir, options) =>
         Effect.tap(fs.readDirectory(dir, options), () =>
           Effect.sync(() => {
-            if (renamed || dir !== join(root, ".octodo")) return;
-            renamed = true;
+            if (!armed || dir !== join(root, ".octodo")) return;
+            armed = false;
             renameSync(join(root, ".octodo/HM-2-b"), join(root, ".octodo/HM-2-c"));
           }),
         ),
     }));
     const snapshot = await run(
-      Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot),
+      Effect.gen(function* () {
+        const ws = yield* makeWorkspace("test", root);
+        armed = true;
+        return yield* ws.snapshot;
+      }),
       racing,
     );
     expect(snapshot.tasks.map((task) => task.id)).toEqual(["HM-1"]);
@@ -366,6 +371,38 @@ describe("workspace", () => {
       ".octodo/s-tier",
       ".octodo/s01-notes",
     ]);
+  });
+
+  it("removes temporary files a crashed write left behind, once they are a minute old", async () => {
+    const root = fresh();
+    await run(initWorkspace(root));
+    const uuid = () => crypto.randomUUID();
+    write(root, "HM-1-a/task.md", "---\nid: HM-1\n---\n");
+    const stale = [
+      `HM-1-a/.task.md.${uuid()}.tmp`,
+      `.new-${uuid()}/task.md`,
+      `home/.migrate-${uuid()}-HM-2-b/task.md`,
+    ];
+    const kept = [
+      `.DS_Store`,
+      `HM-1-a/.notes.tmp`,
+      `.new-folder/task.md`,
+      `HM-1-a/.${uuid()}.tmp.keep`,
+    ];
+    const live = [`.new-${uuid()}/task.md`, `HM-1-a/.task.md.${uuid()}.tmp`];
+    write(root, "home/list.md", "");
+    for (const file of [...stale, ...kept, ...live]) write(root, file, "x");
+    const twoMinutesAgo = new Date(Date.now() - 120_000);
+    for (const file of [...stale, ...kept]) {
+      const top = file.split("/").find((part) => part.startsWith("."))!;
+      const leftover = join(root, ".octodo", file.slice(0, file.indexOf(top) + top.length));
+      utimesSync(leftover, twoMinutesAgo, twoMinutesAgo);
+    }
+    await run(Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot));
+    const exists = (file: string) => existsSync(join(root, ".octodo", file));
+    expect(stale.filter(exists)).toEqual([]);
+    expect(kept.filter(exists)).toEqual(kept);
+    expect(live.filter(exists)).toEqual(live);
   });
 
   it("updates task.md in place, keeps unknown keys and renames the folder after the title", async () => {

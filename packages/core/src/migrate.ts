@@ -1,7 +1,7 @@
 import { Effect, FileSystem, Path, PlatformError } from "effect";
 import { generateNKeysBetween } from "fractional-indexing";
 import { StorageError } from "./domain.ts";
-import { writeFileAtomic } from "./files.ts";
+import { tempName, writeFileAtomic } from "./files.ts";
 import { LIST_FILE, TASK_FILE, TASKS_DIR, humanize, legacyFolder } from "./layout.ts";
 import { migratedTaskFile, patchFrontmatter } from "./markdown.ts";
 
@@ -60,9 +60,10 @@ const orderAt = (position: number) => generateNKeysBetween(null, null, position 
 
 /**
  * Converts the old layout in place: `s<NN>-x/ID-slug.md` becomes `ID-slug/task.md` with
- * `status: x`, and `l<NN>-slug/` becomes `slug/` with a `list.md`. Every step is derived from what
- * is on disk, so running it again finishes a run that stopped part-way and otherwise does nothing.
- * Folders of the new layout are left alone, whatever their names (see `oldLayoutFolder`).
+ * `status: x`, and `l<NN>-slug/` becomes `slug/` with a `list.md`. Only folders that hold the old
+ * layout are touched (`oldLayoutFolder`), so a new-layout workspace is left as it is. Every step is
+ * derived from what is on disk, so running it again finishes a run that stopped part-way; the
+ * temporary folder such a run may leave is removed when the workspace next opens.
  */
 export const migrateWorkspace = (
   root: string,
@@ -70,6 +71,7 @@ export const migrateWorkspace = (
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+    const run = crypto.randomUUID();
     const counts = { tasks: 0, lists: 0, statusFolders: 0 };
     const skipped: Array<{ path: string; reason: string }> = [];
     const skip = (absolute: string, reason: string) =>
@@ -101,8 +103,7 @@ export const migrateWorkspace = (
           }
           target = path.join(container, `${name}-${n}`);
         }
-        const temp = path.join(container, `.migrate-${name}`);
-        if (yield* fs.exists(temp)) yield* fs.remove(temp, { recursive: true });
+        const temp = path.join(container, tempName.migration(run, name));
         yield* fs.makeDirectory(temp);
         yield* fs.writeFileString(path.join(temp, TASK_FILE), migrated.value);
         yield* fs.rename(temp, target);

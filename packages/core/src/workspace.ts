@@ -28,7 +28,7 @@ import {
   type WorkspaceConfig,
   type WorkspaceSnapshot,
 } from "./domain.ts";
-import { isNotFound, writeFileAtomic } from "./files.ts";
+import { isNotFound, removeLeftovers, tempName, writeFileAtomic } from "./files.ts";
 import {
   CONFIG_FILE,
   LIST_FILE,
@@ -176,6 +176,8 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       Effect.provideService(Path.Path, path),
     );
 
+  yield* withPlatform(removeLeftovers(tasksDir));
+
   const writeAtomic = (file: string, content: string | Uint8Array) =>
     withPlatform(writeFileAtomic(file, content));
 
@@ -297,7 +299,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
    */
   const createFolder = (container: string, name: string, marker: string, content: string) =>
     Effect.gen(function* () {
-      const temp = path.join(container, `.new-${crypto.randomUUID()}`);
+      const temp = path.join(container, tempName.folder());
       yield* fs.makeDirectory(temp);
       yield* Effect.gen(function* () {
         yield* fs.writeFileString(path.join(temp, marker), content);

@@ -129,18 +129,22 @@ describe("migrateWorkspace", () => {
     const reference = await oldWorkspace();
     await run(migrateWorkspace(reference));
     const expected = tree(reference);
-    let crashes = 0;
+    const finishedByRerun = new Set<string>();
     for (let limit = 0; ; limit++) {
       const root = await oldWorkspace();
       const exit = await Effect.runPromiseExit(
         migrateWorkspace(root).pipe(Effect.provide(crashingAt(limit))),
       );
       if (Exit.isSuccess(exit)) break;
-      crashes++;
-      await run(migrateWorkspace(root));
+      const { skipped, ...rerun } = await run(migrateWorkspace(root));
+      expect(skipped).toEqual([]);
+      for (const [step, count] of Object.entries(rerun)) if (count > 0) finishedByRerun.add(step);
       expect(tree(root), `crash at step ${limit}`).toEqual(expected);
     }
-    expect(crashes).toBeGreaterThan(20);
+    expect(
+      [...finishedByRerun].toSorted(),
+      "crashes cut short task moves, list renames and status folder removals",
+    ).toEqual(["lists", "statusFolders", "tasks"]);
   });
 
   it("leaves folders of the new layout alone, whatever their names", async () => {

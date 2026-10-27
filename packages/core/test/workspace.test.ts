@@ -313,6 +313,44 @@ describe("workspace", () => {
     expect(snapshot.diagnostics[0]!.message).toContain("octo migrate");
   });
 
+  it("gives new tasks ids past every id on disk, including tasks it does not read", async () => {
+    const root = fresh();
+    await run(initWorkspace(root));
+    write(root, "HM-1-parent/task.md", "---\nid: HM-1\ntitle: [broken\n---\n");
+    write(root, "HM-1-parent/HM-2-child/task.md", "---\nid: HM-2\n---\n");
+    write(root, "HM-3-a/task.md", "---\nid: HM-3\n---\n");
+    write(root, "HM-3-copy/task.md", "---\nid: HM-3\n---\n");
+    write(root, "HM-3-copy/HM-4-sub/task.md", "---\nid: HM-4\n---\n");
+    write(root, "archive/HM-9-old/task.md", "---\nid: HM-9\n---\n");
+    for (const list of ["a", "a/b", "a/b/c", "a/b/c/d"]) write(root, `${list}/list.md`, "");
+    write(root, "a/b/c/d/HM-11-deep/task.md", "---\nid: HM-11\n---\n");
+    write(root, "stray.md", "---\nid: HM-12\n---\n");
+    write(root, "milk/task.md", "Buy milk\n");
+    const created = await run(
+      Effect.gen(function* () {
+        const ws = yield* makeWorkspace("test", root);
+        return yield* ws.createTask({ title: "New" });
+      }),
+    );
+    expect(read(root, "milk/task.md")).toContain("id: HM-13\n");
+    expect(created.id).toBe("HM-14");
+  });
+
+  it("refuses new tasks until the old layout is migrated, and numbers hand-written ones past it", async () => {
+    const root = fresh();
+    await run(initWorkspace(root));
+    write(root, "s01-todo/HM-4-old.md", "---\nid: HM-4\n---\n");
+    write(root, "milk/task.md", "Buy milk\n");
+    const error = await run(
+      Effect.flatMap(makeWorkspace("test", root), (ws) =>
+        Effect.flip(ws.createTask({ title: "x" })),
+      ),
+    );
+    expect(error).toMatchObject({ _tag: "InvalidRequest" });
+    expect(error.message).toContain("octo migrate");
+    expect(read(root, "milk/task.md")).toContain("id: HM-5\n");
+  });
+
   it("takes old-layout names for old layout only when the folder holds the old layout", async () => {
     const root = fresh();
     await run(initWorkspace(root));

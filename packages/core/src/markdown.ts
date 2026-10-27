@@ -62,6 +62,12 @@ const splitFrontmatter = (
   return { yaml: match[1] ?? "", body: text.slice(match[0].length).replace(/^\r?\n/, "") };
 };
 
+/** The `id` in a file's frontmatter, found even when the rest of the frontmatter does not parse. */
+export const frontmatterId = (text: string): string | null => {
+  const { yaml } = splitFrontmatter(text);
+  return yaml === null ? null : (/^id:[ \t]*["']?([^\s"'#]+)/m.exec(yaml)?.[1] ?? null);
+};
+
 const parseYaml = (yaml: string | null): Document => {
   const doc = parseDocument(yaml ?? "");
   if (doc.errors.length > 0) {

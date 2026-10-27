@@ -23,7 +23,7 @@ import {
   sortStatuses,
 } from "./layout.ts";
 import { oldLayoutFolder } from "./migrate.ts";
-import { patchFrontmatter, readListFile, readTaskFile } from "./markdown.ts";
+import { frontmatterId, patchFrontmatter, readListFile, readTaskFile } from "./markdown.ts";
 
 /** A snapshot plus where its lists and tasks are on disk, which is nobody else's business. */
 export interface Scan {
@@ -34,6 +34,10 @@ export interface Scan {
     /** Each task's absolute folder. */
     readonly tasks: ReadonlyMap<string, string>;
   };
+  /** The number of the next new task id: past every id on disk, in tasks read or not. */
+  readonly nextIdNumber: number;
+  /** Whether folders of the old layout are left, which `octo migrate` converts. */
+  readonly oldLayout: boolean;
 }
 
 const decodeConfig = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceConfig));
@@ -106,6 +110,23 @@ export const scanWorkspace = (
     const taskDirs = new Map<string, string>();
     const missingId: Array<{ file: string; text: string }> = [];
     let legacy = false;
+    let highestId = 0;
+    const takeId = (taskId: string | null) => {
+      if (taskId !== null) highestId = Math.max(highestId, idNumber(taskId, config.key) ?? 0);
+    };
+    /** Takes the ids of every markdown file under `target`, which the scan does not read. */
+    const takeIdsUnder = (target: string): Effect.Effect<void> =>
+      Effect.gen(function* () {
+        const info = yield* fs.stat(target);
+        if (info.type === "File") {
+          if (target.endsWith(".md")) takeId(frontmatterId(yield* fs.readFileString(target)));
+          return;
+        }
+        if (info.type !== "Directory") return;
+        for (const name of yield* fs.readDirectory(target)) {
+          if (!name.startsWith(".")) yield* takeIdsUnder(path.join(target, name));
+        }
+      }).pipe(Effect.ignore);
 
     const entries = (dir: string) =>
       Effect.gen(function* () {
@@ -158,6 +179,7 @@ export const scanWorkspace = (
         });
         if (read._tag === "Invalid") {
           report(file, `${read.message}; this task and its subtasks are not read`);
+          yield* takeIdsUnder(dir);
           return;
         }
         let id: string | null = null;
@@ -168,18 +190,23 @@ export const scanWorkspace = (
             file,
             `Duplicate task id ${read.value.id}; this copy and its subtasks are ignored`,
           );
+          yield* takeIdsUnder(dir);
           return;
         } else {
           id = read.value.id;
+          takeId(id);
           taskDirs.set(id, dir);
           tasks.push(read.value);
         }
         for (const entry of yield* entries(dir)) {
           if (entry.type === "task") yield* readTask(entry.path, list, id);
-          else if (entry.type === "list")
+          else if (entry.type === "list") {
             report(entry.path, "A list cannot sit inside a task; it is not read");
-          else if (entry.type === "both")
+            yield* takeIdsUnder(entry.path);
+          } else if (entry.type === "both") {
             report(entry.path, "Folder has both task.md and list.md; it is not read");
+            yield* takeIdsUnder(entry.path);
+          }
         }
       });
 
@@ -191,20 +218,25 @@ export const scanWorkspace = (
         const children: Array<{ name: string; path: string; order: string; list: List }> = [];
         for (const entry of yield* entries(dir)) {
           if (entry.type === "file") {
-            if (entry.name.endsWith(".md") && (list === null || entry.name !== LIST_FILE))
+            if (entry.name.endsWith(".md") && (list === null || entry.name !== LIST_FILE)) {
               report(entry.path, "Markdown file is not a task; a task is a folder with task.md");
+              yield* takeIdsUnder(entry.path);
+            }
           } else if (entry.type === "task") {
             yield* readTask(entry.path, list, null);
           } else if (entry.type === "both") {
             report(entry.path, "Folder has both task.md and list.md; it is not read");
+            yield* takeIdsUnder(entry.path);
           } else if (entry.type === "folder") {
             if ((yield* attempt(entry.path, oldLayoutFolder(entry.path))) !== null) legacy = true;
             else report(entry.path, "Folder has neither task.md nor list.md; it is not read");
+            yield* takeIdsUnder(entry.path);
           } else if (listDepth(list) >= MAX_LIST_DEPTH) {
             report(
               entry.path,
               `Lists nest at most ${MAX_LIST_DEPTH} levels deep; this one is not read`,
             );
+            yield* takeIdsUnder(entry.path);
           } else {
             const file = path.join(entry.path, LIST_FILE);
             const text = yield* attempt(file, fs.readFileString(file));
@@ -235,7 +267,7 @@ export const scanWorkspace = (
     yield* readList(tasksDir, null);
 
     // Files made by hand or by another tool get an id the first time the app sees them.
-    let next = Math.max(0, ...tasks.map((task) => idNumber(task.id, config.key) ?? 0)) + 1;
+    let next = highestId + 1;
     let assignedAny = false;
     for (const { file, text } of missingId) {
       const assigned = `${config.key}-${next++}`;
@@ -277,5 +309,7 @@ export const scanWorkspace = (
         diagnostics,
       },
       dirs: { lists: listDirs, tasks: taskDirs },
+      nextIdNumber: highestId + 1,
+      oldLayout: legacy,
     };
   });

@@ -38,7 +38,6 @@ import {
   defaultStatus,
   deriveKey,
   humanize,
-  idNumber,
   inTaskSubtree,
   listDepth,
   listMoveError,
@@ -333,12 +332,16 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       Effect.gen(function* () {
         const scan = yield* state;
         const { snapshot } = scan;
+        if (scan.oldLayout)
+          return yield* invalid(
+            "This workspace still has folders from the old layout. Run `octo migrate` before adding tasks.",
+          );
         const status = input.status ?? defaultStatus(snapshot.statuses)?.id;
         if (status === undefined) return yield* invalid("The workspace has no statuses");
         yield* checkStatus(snapshot, status);
         const container = yield* destination(snapshot, input, TOP);
         const { key } = snapshot.workspace;
-        const taskId = `${key}-${Math.max(0, ...snapshot.tasks.map((task) => idNumber(task.id, key) ?? 0)) + 1}`;
+        const taskId = `${key}-${scan.nextIdNumber}`;
         yield* Effect.gen(function* () {
           const siblings = yield* orderedColumn(snapshot, status, container);
           const content = newTaskFile(input, {

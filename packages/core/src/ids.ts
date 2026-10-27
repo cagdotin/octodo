@@ -1,6 +1,6 @@
 import { Effect, FileSystem, Option, Path, PlatformError, Scope } from "effect";
 import { claimOwner, tempName, writeFileAtomic } from "./files.ts";
-import { TASK_FILE, isTaskId } from "./layout.ts";
+import { TASK_FILE, idNumber, isTaskId } from "./layout.ts";
 import { frontmatterId, needsId, patchFrontmatter } from "./markdown.ts";
 
 const alreadyExists = (error: PlatformError.PlatformError) => error.reason._tag === "AlreadyExists";
@@ -59,6 +59,45 @@ export const claimIds = <R>(
     });
     const numbers = yield* Effect.acquireRelease(acquire, release);
     return numbers.map((number) => `${key}-${number}`);
+  });
+
+/**
+ * The number past every id with workspace key `key` in a markdown file or `.pending-id` marker
+ * under `tasksDir`, as a scan's `nextIdNumber`, but from each file's id line alone. A task moved
+ * between folders while this walks can be missed; a create checks its id after the write.
+ */
+export const nextIdOnDisk = (
+  tasksDir: string,
+  key: string,
+): Effect.Effect<number, never, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    let highest = 0;
+    const take = (file: string) =>
+      Effect.map(fs.readFileString(file), (text) => {
+        const id = file.endsWith(".md") ? frontmatterId(text) : text.trim();
+        highest = Math.max(highest, (id === null ? null : idNumber(id, key)) ?? 0);
+      });
+    const walk = (dir: string): Effect.Effect<void> =>
+      Effect.gen(function* () {
+        const names = yield* fs.readDirectory(dir);
+        yield* Effect.forEach(
+          names,
+          (name) => {
+            const child = path.join(dir, name);
+            if (name === tempName.pendingId) return take(child);
+            if (name.startsWith(".")) return Effect.void;
+            if (name.endsWith(".md")) return take(child);
+            return Effect.flatMap(fs.stat(child), (info) =>
+              info.type === "Directory" ? walk(child) : Effect.void,
+            );
+          },
+          { concurrency: 16, discard: true },
+        );
+      }).pipe(Effect.ignore);
+    yield* walk(tasksDir);
+    return highest + 1;
   });
 
 /**

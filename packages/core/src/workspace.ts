@@ -58,7 +58,7 @@ import {
   taskFolderName,
 } from "./layout.ts";
 import { editTaskFile, newListFile, newTaskFile, patchFrontmatter, keepLinks } from "./markdown.ts";
-import { claimIds } from "./ids.ts";
+import { claimIds, nextIdOnDisk } from "./ids.ts";
 import { applyFix } from "./fixes.ts";
 import { scanWorkspace, type Scan } from "./scan.ts";
 
@@ -350,18 +350,12 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   const reread = (taskId: string) =>
     Effect.flatMap(current, (snapshot) => findTask(snapshot, taskId));
 
-  /**
-   * A new task id that no other process on this machine hands out until the scope closes, which
-   * leaves the cache holding a scan read after the claim.
-   */
+  /** A new task id that no other process on this machine hands out until the scope closes. */
   const claimId = Effect.gen(function* () {
     const cached = yield* state;
-    const freshNext = Effect.andThen(
-      invalidate,
-      Effect.map(state, (scan) => scan.nextIdNumber),
-    );
+    const { key } = cached.snapshot.workspace;
     const [claimed] = yield* withPlatform(
-      claimIds(tasksDir, cached.snapshot.workspace.key, cached.nextIdNumber, 1, freshNext),
+      claimIds(tasksDir, key, cached.nextIdNumber, 1, nextIdOnDisk(tasksDir, key)),
     );
     return claimed!;
   });

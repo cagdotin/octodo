@@ -35,7 +35,7 @@ import {
   readTaskFile,
   type TaskFile,
 } from "./markdown.ts";
-import { claimIds, giveId, pendingId } from "./ids.ts";
+import { claimIds, giveId, nextIdOnDisk, pendingId } from "./ids.ts";
 
 /** A snapshot plus where its lists and tasks are on disk, which is nobody else's business. */
 export interface Scan {
@@ -91,7 +91,6 @@ const compareTasks =
 export const scanWorkspace = (
   id: string,
   root: string,
-  options: { readonly assignIds: boolean } = { assignIds: true },
 ): Effect.Effect<Scan, never, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -325,7 +324,7 @@ export const scanWorkspace = (
           }
         }
         // A marker outlives its write when a crash cut giveId short or the folder was copied.
-        if (id !== null && markerDirs.has(dir) && options.assignIds)
+        if (id !== null && markerDirs.has(dir))
           yield* Effect.ignore(fs.remove(path.join(dir, tempName.pendingId)));
       });
 
@@ -395,11 +394,7 @@ export const scanWorkspace = (
     yield* readList(tasksDir, null);
 
     // Files made by hand or by another tool get an id the first time the app sees them.
-    if (options.assignIds && missingId.length > 0) {
-      const nextOnDisk = Effect.map(
-        scanWorkspace(id, root, { assignIds: false }),
-        (scan) => scan.nextIdNumber,
-      );
+    if (missingId.length > 0) {
       const unwritten = (dir: string, error: unknown) => {
         if (!isNotFound(error))
           report(
@@ -418,7 +413,7 @@ export const scanWorkspace = (
           config.key,
           highestId + 1,
           missingId.length,
-          nextOnDisk,
+          nextIdOnDisk(tasksDir, config.key),
         );
         const taken = (taskId: string) => taskDirs.has(taskId) || given.has(taskId);
         for (const [index, dir] of missingId.entries()) {

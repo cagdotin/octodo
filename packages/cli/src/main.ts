@@ -1,5 +1,13 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Priority, Workspaces, defaultHome, isClosedCategory, type Task } from "@octodo/core";
+import {
+  Priority,
+  Workspaces,
+  defaultHome,
+  inTaskSubtree,
+  isClosedCategory,
+  migrateWorkspace,
+  type Task,
+} from "@octodo/core";
 import { stdioLayer } from "@octodo/mcp";
 import { DEFAULT_PORT, startServer } from "@octodo/server";
 import { Console, Effect, FileSystem, Layer, Option, Path } from "effect";
@@ -43,13 +51,24 @@ const list = Flag.String("list").pipe(
   Flag.withDescription("List id, e.g. groceries or garden/seeds"),
   Flag.optional,
 );
+const parent = Flag.String("parent").pipe(
+  Flag.withDescription("Parent task id, making this a subtask"),
+  Flag.optional,
+);
 const taskId = Argument.String("id").pipe(Argument.withDescription("Task id, e.g. HM-42"));
 
-/** The workspace named by `--workspace`, or the one containing the current directory. */
+/** The folder `--workspace` names, or the current directory. */
+const target = Effect.map(octo, (root) => Option.getOrElse(root.workspace, () => process.cwd()));
+
+/**
+ * The workspace named by `--workspace`, or the one containing the current directory. Prints what
+ * its files have wrong on stderr, such as an old layout that needs `octo migrate`.
+ */
 const workspace = Effect.gen(function* () {
-  const root = yield* octo;
-  const workspaces = yield* Workspaces;
-  return yield* workspaces.open(Option.getOrElse(root.workspace, () => process.cwd()));
+  const ws = yield* (yield* Workspaces).open(yield* target);
+  for (const diagnostic of (yield* ws.snapshot).diagnostics)
+    yield* Console.error(`warning: ${diagnostic.path}: ${diagnostic.message}`);
+  return ws;
 });
 
 const optional = <A>(option: Option.Option<A>) => Option.getOrUndefined(option);
@@ -77,6 +96,26 @@ const line = (task: Task) =>
 
 const print = (task: Task, asJson: boolean) =>
   asJson ? Console.log(JSON.stringify(task, null, 2)) : Console.log(line(task));
+
+/**
+ * `tasks` in their order with each subtask right after its parent, one level deeper. A subtask
+ * whose parent is not in `tasks` stays at depth 0.
+ */
+const tree = (tasks: ReadonlyArray<Task>) => {
+  const shown = new Set(tasks.map((task) => task.id));
+  const roots = tasks.filter((task) => task.parent === null || !shown.has(task.parent));
+  const children = Map.groupBy(
+    tasks.filter((task) => !roots.includes(task)),
+    (task) => task.parent,
+  );
+  const rows: Array<{ readonly task: Task; readonly depth: number }> = [];
+  const walk = (task: Task, depth: number) => {
+    rows.push({ task, depth });
+    for (const child of children.get(task.id) ?? []) walk(child, depth + 1);
+  };
+  for (const task of roots) walk(task, 0);
+  return rows;
+};
 
 const listCommand = Command.make(
   "list",
@@ -111,9 +150,10 @@ const listCommand = Command.make(
       .toSorted((a, b) => (order.get(a.status) ?? 0) - (order.get(b.status) ?? 0));
     if (options.json) return yield* Console.log(JSON.stringify(tasks, null, 2));
     if (tasks.length === 0) return yield* Console.log("No tasks");
-    for (const task of tasks) yield* Console.log(line(task));
-    for (const diagnostic of snapshot.diagnostics)
-      yield* Console.error(`warning: ${diagnostic.path}: ${diagnostic.message}`);
+    for (const { task, depth } of tree(tasks)) {
+      const under = depth === 0 && task.parent !== null ? `  (under ${task.parent})` : "";
+      yield* Console.log(`${"  ".repeat(depth)}${line(task)}${under}`);
+    }
   }),
 ).pipe(Command.withDescription("List open tasks in board order"), Command.withAlias("ls"));
 
@@ -121,13 +161,27 @@ const showCommand = Command.make(
   "show",
   { id: taskId, json },
   Effect.fn(function* ({ id, json: asJson }) {
-    const task = yield* (yield* workspace).getTask(id);
-    if (asJson) return yield* print(task, true);
+    const ws = yield* workspace;
+    const task = yield* ws.getTask(id);
+    const { tasks } = yield* ws.snapshot;
+    const subtasks = tree(
+      tasks.filter((other) => other.id !== id && inTaskSubtree(tasks, other.id, id)),
+    );
+    if (asJson) {
+      const summaries = subtasks
+        .filter(({ task: sub }) => sub.parent === id)
+        .map(({ task: { id, title, status } }) => ({ id, title, status }));
+      return yield* Console.log(JSON.stringify({ ...task, subtasks: summaries }, null, 2));
+    }
     yield* Console.log(line(task));
+    if (task.parent !== null) yield* Console.log(`parent: ${task.parent}`);
     yield* Console.log(`path: ${task.path}`);
+    if (subtasks.length > 0) yield* Console.log("subtasks:");
+    for (const { task: sub, depth } of subtasks)
+      yield* Console.log(`${"  ".repeat(depth + 1)}${line(sub)}`);
     if (task.body.length > 0) yield* Console.log(`\n${task.body.trimEnd()}`);
   }),
-).pipe(Command.withDescription("Show one task with its body"));
+).pipe(Command.withDescription("Show one task with its subtasks and body"));
 
 const createCommand = Command.make(
   "create",
@@ -135,6 +189,7 @@ const createCommand = Command.make(
     title: Argument.String("title"),
     status: Flag.String("status").pipe(Flag.withAlias("s"), Flag.optional),
     list,
+    parent,
     priority,
     tags,
     due,
@@ -147,6 +202,7 @@ const createCommand = Command.make(
       title: options.title,
       ...(Option.isSome(options.status) ? { status: options.status.value } : {}),
       ...(Option.isSome(options.list) ? { list: options.list.value } : {}),
+      ...(Option.isSome(options.parent) ? { parent: options.parent.value } : {}),
       ...(Option.isSome(options.priority) ? { priority: options.priority.value } : {}),
       ...(options.tags.length > 0 ? { tags: options.tags } : {}),
       ...(Option.isSome(options.due) ? { due: options.due.value || null } : {}),
@@ -162,6 +218,7 @@ const createCommand = Command.make(
       command: 'octo create "Book the movers" -p high -t quotes',
       description: "A high-priority task",
     },
+    { command: 'octo create "Buy primer" --parent HM-12', description: "A subtask of HM-12" },
   ]),
 );
 
@@ -196,6 +253,11 @@ const moveCommand = Command.make(
       Flag.withDescription("Move out of any list"),
       Flag.withDefault(false),
     ),
+    parent,
+    noParent: Flag.Boolean("no-parent").pipe(
+      Flag.withDescription("Lift a subtask out to its parent's list"),
+      Flag.withDefault(false),
+    ),
     before: Flag.String("before").pipe(Flag.optional),
     after: Flag.String("after").pipe(Flag.optional),
     json,
@@ -209,12 +271,17 @@ const moveCommand = Command.make(
         : Option.isSome(options.list)
           ? { list: options.list.value }
           : {}),
+      ...(options.noParent
+        ? { parent: null }
+        : Option.isSome(options.parent)
+          ? { parent: options.parent.value }
+          : {}),
       ...(Option.isSome(options.before) ? { before: options.before.value } : {}),
       ...(Option.isSome(options.after) ? { after: options.after.value } : {}),
     });
     yield* print(task, options.json);
   }),
-).pipe(Command.withDescription("Move a task to another status or list"));
+).pipe(Command.withDescription("Move a task to another status, list or parent task"));
 
 const deleteCommand = Command.make(
   "delete",
@@ -223,7 +290,35 @@ const deleteCommand = Command.make(
     yield* (yield* workspace).deleteTask(id);
     yield* Console.log(`Deleted ${id}`);
   }),
-).pipe(Command.withDescription("Delete a task's file"));
+).pipe(Command.withDescription("Delete a task's folder with its subtasks and attachments"));
+
+const migrateCommand = Command.make(
+  "migrate",
+  {
+    dir: Argument.String("dir").pipe(
+      Argument.withDescription("Workspace folder; defaults to the current workspace"),
+      Argument.optional,
+    ),
+  },
+  Effect.fn(function* ({ dir }) {
+    const path = yield* Path.Path;
+    const folder = Option.isSome(dir) ? path.resolve(dir.value) : yield* target;
+    const ws = yield* (yield* Workspaces).open(folder);
+    const summary = yield* migrateWorkspace(ws.root);
+    const changed = summary.tasks + summary.lists + summary.statusFolders;
+    if (changed === 0 && summary.skipped.length === 0)
+      return yield* Console.log(`Nothing to migrate in ${ws.root}`);
+    yield* Console.log(
+      `Migrated ${ws.root}: ${summary.tasks} tasks, ${summary.lists} lists, ${summary.statusFolders} status folders removed`,
+    );
+    for (const { path: skipped, reason } of summary.skipped)
+      yield* Console.error(`skipped: ${skipped}: ${reason}`);
+  }),
+).pipe(
+  Command.withDescription(
+    "Convert a workspace from the old s<NN>/l<NN> folders to task and list folders; safe to rerun",
+  ),
+);
 
 const initCommand = Command.make(
   "init",
@@ -407,6 +502,7 @@ octo.pipe(
     updateCommand,
     moveCommand,
     deleteCommand,
+    migrateCommand,
     initCommand,
     workspaceCommand,
     listsCommand,

@@ -4,6 +4,17 @@ import { STATUS_CATEGORIES } from "./layout.ts";
 export const Priority = Schema.Literals(["none", "low", "medium", "high", "urgent"]);
 export type Priority = typeof Priority.Type;
 
+/** A calendar day, `YYYY-MM-DD`. */
+export const DueDate = Schema.String.pipe(
+  Schema.check(
+    Schema.isPattern(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, {
+      message: "Use a date such as 2026-11-01",
+    }),
+  ),
+);
+
+export const Tags = Schema.Array(Schema.String);
+
 /**
  * What a status means, independent of its name. Views use it to decide what counts as open,
  * finished or hidden; `STATUS_CATEGORIES` gives the order.
@@ -61,8 +72,8 @@ export const Task = Schema.Struct({
   /** The task whose folder holds this one, or null for a task directly in a list or `.octodo/`. */
   parent: Schema.NullOr(Schema.String),
   priority: Priority,
-  tags: Schema.Array(Schema.String),
-  due: Schema.NullOr(Schema.String),
+  tags: Tags,
+  due: Schema.NullOr(DueDate),
   created: Schema.NullOr(Schema.String),
   /** When `task.md` last changed on disk. */
   updated: Schema.NullOr(Schema.String),
@@ -75,11 +86,69 @@ export const Task = Schema.Struct({
 });
 export type Task = typeof Task.Type;
 
+/** Every problem a file under `.octodo/` can have; `diagnostics.ts` says what each means. */
+export const DiagnosticKind = Schema.Literals([
+  "invalid-config",
+  "invalid-frontmatter",
+  "missing-id",
+  "malformed-id",
+  "duplicate-id",
+  "foreign-id",
+  "unknown-status",
+  "unknown-priority",
+  "invalid-due",
+  "invalid-tags",
+  "broken-link",
+  "loose-markdown",
+  "conflict-copy",
+  "unmarked-folder",
+  "both-markers",
+  "list-in-task",
+  "list-too-deep",
+  "unreadable",
+  "old-layout",
+]);
+export type DiagnosticKind = typeof DiagnosticKind.Type;
+
+/** A mechanical repair octodo can make for a diagnostic, never on its own: only when asked. */
+export const FixAction = Schema.Literals([
+  "fresh-id",
+  "wrap-as-task",
+  "keep-copy",
+  "remove-copy",
+  "drop-unknown-links",
+  "migrate",
+  "add-status",
+]);
+export type FixAction = typeof FixAction.Type;
+
+export const Fix = Schema.Struct({ action: FixAction, label: Schema.String });
+export type Fix = typeof Fix.Type;
+
+/** A problem with one file or folder. `field` names the frontmatter key at fault, if any. */
 export const Diagnostic = Schema.Struct({
   path: Schema.String,
+  kind: DiagnosticKind,
+  field: Schema.NullOr(Schema.String),
   message: Schema.String,
+  fix: Schema.NullOr(Fix),
 });
 export type Diagnostic = typeof Diagnostic.Type;
+
+/**
+ * Asks for the fix of the problem `kind` at `path`. The workspace reads the files again and fixes
+ * the problem only if it is still there, so a stale or repeated request changes nothing.
+ */
+export const FixRequest = Schema.Struct({ path: Schema.String, kind: DiagnosticKind });
+export type FixRequest = typeof FixRequest.Type;
+
+export const FixResult = Schema.Struct({
+  fixed: Schema.Array(Diagnostic),
+  failed: Schema.Array(Schema.Struct({ diagnostic: Diagnostic, error: Schema.String })),
+  /** What is left after fixing, as a fresh read finds it. */
+  diagnostics: Schema.Array(Diagnostic),
+});
+export type FixResult = typeof FixResult.Type;
 
 export const WorkspaceInfo = Schema.Struct({
   id: Schema.String,
@@ -105,8 +174,8 @@ export const CreateTaskInput = Schema.Struct({
   list: Schema.optionalKey(Schema.NullOr(Schema.String)),
   parent: Schema.optionalKey(Schema.NullOr(Schema.String)),
   priority: Schema.optionalKey(Priority),
-  tags: Schema.optionalKey(Schema.Array(Schema.String)),
-  due: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  tags: Schema.optionalKey(Tags),
+  due: Schema.optionalKey(Schema.NullOr(DueDate)),
   body: Schema.optionalKey(Schema.String),
 });
 export type CreateTaskInput = typeof CreateTaskInput.Type;
@@ -114,8 +183,8 @@ export type CreateTaskInput = typeof CreateTaskInput.Type;
 export const UpdateTaskInput = Schema.Struct({
   title: Schema.optionalKey(Schema.NonEmptyString),
   priority: Schema.optionalKey(Priority),
-  tags: Schema.optionalKey(Schema.Array(Schema.String)),
-  due: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  tags: Schema.optionalKey(Tags),
+  due: Schema.optionalKey(Schema.NullOr(DueDate)),
   body: Schema.optionalKey(Schema.String),
 });
 export type UpdateTaskInput = typeof UpdateTaskInput.Type;

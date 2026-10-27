@@ -1,4 +1,5 @@
 import {
+  Cause,
   DateTime,
   Effect,
   FileSystem,
@@ -18,6 +19,9 @@ import {
   TaskNotFound,
   type CreateListInput,
   type CreateTaskInput,
+  type Diagnostic,
+  type FixRequest,
+  type FixResult,
   type List,
   type MoveListInput,
   type MoveTaskInput,
@@ -28,7 +32,13 @@ import {
   type WorkspaceConfig,
   type WorkspaceSnapshot,
 } from "./domain.ts";
-import { isNotFound, removeLeftovers, tempName, writeFileAtomic } from "./files.ts";
+import {
+  createFolder as createFolderIn,
+  freeName as freeNameIn,
+  isNotFound,
+  removeLeftovers,
+  writeFileAtomic,
+} from "./files.ts";
 import {
   CONFIG_FILE,
   LIST_FILE,
@@ -47,6 +57,7 @@ import {
   taskFolderName,
 } from "./layout.ts";
 import { editTaskFile, newListFile, newTaskFile, patchFrontmatter } from "./markdown.ts";
+import { applyFix } from "./fixes.ts";
 import { scanWorkspace, type Scan } from "./scan.ts";
 
 /** One workspace on disk: a folder with a `.octodo/` directory. The files are the source of truth. */
@@ -96,6 +107,13 @@ export interface Workspace {
     relativePath: string,
     bytes: Uint8Array,
   ) => Effect.Effect<string, TaskNotFound | InvalidRequest | StorageError>;
+  /**
+   * Fixes the problem `kind` at `path` if a fresh read still finds it and it has a fix. Repeating a
+   * request, or sending one for a problem that is gone, changes nothing.
+   */
+  readonly fixDiagnostic: (request: FixRequest) => Effect.Effect<FixResult, StorageError>;
+  /** Applies every fix there is, reading the files again after each, until none is left to try. */
+  readonly fixAll: Effect.Effect<FixResult, StorageError>;
   /** Emits after files under `.octodo/` change, whoever changed them. Empty unless watching. */
   readonly changes: Stream.Stream<void>;
 }
@@ -282,30 +300,11 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       (list) => path.join(list.dir, LIST_FILE),
     );
 
-  /** `name`, or `name-2`, `name-3`, ... before the extension, whichever `dir` does not have yet. */
-  const freeName = (dir: string, name: string, extension = "") =>
-    Effect.gen(function* () {
-      const stem = name.slice(0, name.length - extension.length);
-      let candidate = name;
-      for (let n = 2; yield* fs.exists(path.join(dir, candidate)); n++) {
-        candidate = `${stem}-${n}${extension}`;
-      }
-      return candidate;
-    });
+  const freeName = (dir: string, name: string, extension?: string) =>
+    withPlatform(freeNameIn(dir, name, extension));
 
-  /**
-   * Builds a folder with its marker file under a hidden name, then renames it into place, so no
-   * reader sees a folder without its `task.md` or `list.md`. Fails if `container` is gone.
-   */
   const createFolder = (container: string, name: string, marker: string, content: string) =>
-    Effect.gen(function* () {
-      const temp = path.join(container, tempName.folder());
-      yield* fs.makeDirectory(temp);
-      yield* Effect.gen(function* () {
-        yield* fs.writeFileString(path.join(temp, marker), content);
-        yield* fs.rename(temp, path.join(container, name));
-      }).pipe(Effect.onError(() => Effect.ignore(fs.remove(temp, { recursive: true }))));
-    });
+    withPlatform(createFolderIn(container, name, marker, content));
 
   /** Moves a folder into another existing container, keeping its name when it is free. */
   const moveFolder = (dir: string, container: string) =>
@@ -604,6 +603,37 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       }),
     );
 
+  /**
+   * Fixes, one at a time and each against a fresh scan, the problems `wanted` picks, trying each
+   * problem once so a fix that does not take cannot loop.
+   */
+  const fixWhere = (wanted: (diagnostic: Diagnostic) => boolean) =>
+    write(
+      Effect.gen(function* () {
+        const fixed: Array<Diagnostic> = [];
+        const failed: Array<{ diagnostic: Diagnostic; error: string }> = [];
+        const tried = new Set<string>();
+        const key = (diagnostic: Diagnostic) =>
+          JSON.stringify([diagnostic.kind, diagnostic.path, diagnostic.field]);
+        while (true) {
+          yield* invalidate;
+          const scan = yield* state;
+          const next = scan.snapshot.diagnostics.find(
+            (diagnostic) =>
+              diagnostic.fix !== null && wanted(diagnostic) && !tried.has(key(diagnostic)),
+          );
+          if (next === undefined) return { fixed, failed, diagnostics: scan.snapshot.diagnostics };
+          tried.add(key(next));
+          const exit = yield* Effect.exit(withPlatform(applyFix(root, scan, next)));
+          if (exit._tag === "Success") fixed.push(next);
+          else failed.push({ diagnostic: next, error: String(Cause.squash(exit.cause)) });
+        }
+      }),
+    );
+
+  const fixDiagnostic = (request: FixRequest) =>
+    fixWhere((diagnostic) => diagnostic.path === request.path && diagnostic.kind === request.kind);
+
   if (options.watch === true) {
     yield* fs.watch(tasksDir, { recursive: true }).pipe(
       Stream.filter((event) => !event.path.endsWith(".tmp")),
@@ -629,6 +659,8 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     reorderStatuses,
     attachmentPath,
     writeAttachment,
+    fixDiagnostic,
+    fixAll: fixWhere(() => true),
     changes: Stream.fromPubSub(changes),
   } satisfies Workspace;
 });

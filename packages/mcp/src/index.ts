@@ -17,12 +17,12 @@ import { McpProtocol, McpServer, Tool, Toolkit } from "effect/ai";
 
 export const SERVER_NAME = "octodo";
 
-export const INSTRUCTIONS = `octodo manages tasks stored as markdown files with YAML frontmatter under a project's .octodo/ folder.
-- A folder named s<NN>-<status> (s01-todo) holds the tasks in that status; moving a task between statuses moves its file.
-- Folders named l<NN>-<name> (l00-groceries) are lists, nested up to 3 levels; their status folders hold their tasks. The number only orders siblings.
-- List ids are the folder names without numbers, joined by slashes: garden/seeds.
+export const INSTRUCTIONS = `octodo manages tasks stored as markdown files under a project's .octodo/ folder. Use these tools to change them rather than editing files.
+- Every task is a folder holding task.md, whose frontmatter has its id, title, status, priority, tags, due date and order. Other files in the folder are its attachments.
+- A task folder inside another task is a subtask: create_task and move_task take a parent task id, and get_task lists a task's subtasks.
+- Folders with list.md are lists, nested up to 3 levels. List ids are folder names joined by slashes: garden/seeds.
 - Every task has a stable id like HM-42 (the workspace key plus a number). Refer to tasks by id, never by path.
-- Call get_workspace first to learn the statuses and lists before creating or moving tasks.
+- Call get_workspace first to learn the statuses and lists before creating or moving tasks. If it reports the old layout, tell the user to run octo migrate.
 - The workspace parameter takes a registered workspace id or an absolute folder path; omit it to use the workspace containing the server's working directory.`;
 
 const ToolFailure = Schema.Struct({ error: Schema.String });
@@ -36,6 +36,7 @@ const TaskSummary = Schema.Struct({
   title: Schema.String,
   status: Schema.String,
   list: Schema.NullOr(Schema.String),
+  parent: Schema.NullOr(Schema.String),
   priority: Priority,
   tags: Schema.Array(Schema.String),
   due: Schema.NullOr(Schema.String),
@@ -75,6 +76,9 @@ const ListTasks = Tool.make("list_tasks", {
     list: Schema.optionalKey(Schema.NullOr(Schema.String)).annotate({
       description: "List id such as groceries or garden/seeds; null for tasks outside any list.",
     }),
+    parent: Schema.optionalKey(Schema.NullOr(Schema.String)).annotate({
+      description: "Task id to list its subtasks; null for top-level tasks only.",
+    }),
     tag: Schema.optionalKey(Schema.String),
     query: Schema.optionalKey(Schema.String).annotate({
       description: "Case-insensitive text to find in title or body.",
@@ -88,9 +92,15 @@ const ListTasks = Tool.make("list_tasks", {
   .annotate(Tool.Destructive, false);
 
 const GetTask = Tool.make("get_task", {
-  description: "Read one task, including its markdown body and any extra frontmatter.",
+  description:
+    "Read one task, including its markdown body, any extra frontmatter, its parent and its direct subtasks.",
   parameters: Schema.Struct({ workspace: WorkspaceParam, id: Schema.String }),
-  success: Task,
+  success: Schema.Struct({
+    ...Task.fields,
+    subtasks: Schema.Array(
+      Schema.Struct({ id: Schema.String, title: Schema.String, status: Schema.String }),
+    ),
+  }),
   failure: ToolFailure,
   failureMode: "return",
 })
@@ -99,7 +109,7 @@ const GetTask = Tool.make("get_task", {
 
 const CreateTask = Tool.make("create_task", {
   description:
-    "Create a task. Without a status it goes to the first unstarted status (usually todo).",
+    "Create a task. Without a status it goes to the first unstarted status (usually todo). parent makes it a subtask of that task id; give a list or a parent, not both.",
   parameters: Schema.Struct({ workspace: WorkspaceParam, ...CreateTaskInput.fields }),
   success: Task,
   failure: ToolFailure,
@@ -123,7 +133,7 @@ const UpdateTask = Tool.make("update_task", {
 
 const MoveTask = Tool.make("move_task", {
   description:
-    "Move a task to another status and/or list. before/after place it next to another task id; otherwise it goes last.",
+    "Move a task to another status, list or parent task (a list or a parent, not both; parent null lifts a subtask into its list). before/after place it next to another task id; otherwise it goes last.",
   parameters: Schema.Struct({
     workspace: WorkspaceParam,
     id: Schema.String,
@@ -217,7 +227,7 @@ export const toolkitLayer = (options: { readonly defaultDir?: string | undefined
               diagnostics: snapshot.diagnostics,
             };
           }),
-        list_tasks: ({ workspace, status, list, tag, query }) =>
+        list_tasks: ({ workspace, status, list, parent, tag, query }) =>
           Effect.gen(function* () {
             const ws = yield* open(workspace);
             const snapshot = yield* Effect.mapError(ws.snapshot, toFailure);
@@ -227,23 +237,33 @@ export const toolkitLayer = (options: { readonly defaultDir?: string | undefined
                 (task) =>
                   (status === undefined || task.status === status) &&
                   (list === undefined || task.list === list) &&
+                  (parent === undefined || task.parent === parent) &&
                   (tag === undefined || task.tags.includes(tag)) &&
                   (needle === undefined ||
                     task.title.toLowerCase().includes(needle) ||
                     task.body.toLowerCase().includes(needle)),
               )
-              .map(({ id, title, status, list, priority, tags, due }) => ({
+              .map(({ id, title, status, list, parent, priority, tags, due }) => ({
                 id,
                 title,
                 status,
                 list,
+                parent,
                 priority,
                 tags,
                 due,
               }));
           }),
         get_task: ({ workspace, id }) =>
-          Effect.flatMap(open(workspace), (ws) => Effect.mapError(ws.getTask(id), toFailure)),
+          Effect.gen(function* () {
+            const ws = yield* open(workspace);
+            const task = yield* Effect.mapError(ws.getTask(id), toFailure);
+            const snapshot = yield* Effect.mapError(ws.snapshot, toFailure);
+            const subtasks = snapshot.tasks
+              .filter((candidate) => candidate.parent === id)
+              .map(({ id, title, status }) => ({ id, title, status }));
+            return { ...task, subtasks };
+          }),
         create_task: ({ workspace, ...input }) =>
           Effect.flatMap(open(workspace), (ws) => Effect.mapError(ws.createTask(input), toFailure)),
         update_task: ({ workspace, id, ...input }) =>

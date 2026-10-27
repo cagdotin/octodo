@@ -8,7 +8,7 @@ import type {
   Task,
   WorkspaceSnapshot,
 } from "@octodo/core";
-import { inSubtree, inTaskSubtree, isClosedCategory, movedListId } from "@octodo/core/layout";
+import { inSubtree, isClosedCategory, movedListId } from "@octodo/core/layout";
 import {
   addDays,
   format,
@@ -361,13 +361,34 @@ export const neighbours = (
 export const subtasksOf = (tasks: ReadonlyArray<Task>, parent: string) =>
   tasks.filter((task) => task.parent === parent);
 
+/** The ids of `id` and its subtasks at any depth. */
+const subtreeIds = (tasks: ReadonlyArray<Task>, id: string): ReadonlySet<string> => {
+  const children = new Map<string, Array<string>>();
+  for (const task of tasks) {
+    if (task.parent === null) continue;
+    const siblings = children.get(task.parent);
+    if (siblings) siblings.push(task.id);
+    else children.set(task.parent, [task.id]);
+  }
+  const ids = new Set<string>();
+  const pending = [id];
+  for (let current = pending.pop(); current !== undefined; current = pending.pop()) {
+    if (ids.has(current)) continue;
+    ids.add(current);
+    pending.push(...(children.get(current) ?? []));
+  }
+  return ids;
+};
+
 /** How many tasks go with `id` when it is deleted: its subtasks at any depth. */
 export const descendantCount = (tasks: ReadonlyArray<Task>, id: string) =>
-  tasks.filter((task) => task.id !== id && inTaskSubtree(tasks, task.id, id)).length;
+  subtreeIds(tasks, id).size - 1;
 
 /** Removes a task and its subtasks at any depth, as deleting its folder does. */
-export const withoutSubtree = (tasks: ReadonlyArray<Task>, id: string) =>
-  tasks.filter((task) => !inTaskSubtree(tasks, task.id, id));
+export const withoutSubtree = (tasks: ReadonlyArray<Task>, id: string) => {
+  const ids = subtreeIds(tasks, id);
+  return tasks.filter((task) => !ids.has(task.id));
+};
 
 export interface Progress {
   readonly done: number;

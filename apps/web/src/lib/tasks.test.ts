@@ -93,4 +93,24 @@ describe("subtasks in views", () => {
     );
     expect(ids(applyMove(snapshot(TASKS), "HM-2", { before: "HM-1" }))[0]).toBe("HM-2");
   });
+
+  it("removes a deep subtree from 5,000 tasks within a frame budget", () => {
+    const chain = Array.from({ length: 5000 }, (_, index) =>
+      task(`HM-${index + 1}`, { parent: index === 0 ? null : `HM-${index}` }),
+    );
+    const start = performance.now();
+    expect(descendantCount(chain, "HM-2")).toBe(4998);
+    expect(withoutSubtree(chain, "HM-2").map((entry) => entry.id)).toEqual(["HM-1"]);
+    expect(performance.now() - start).toBeLessThan(100);
+  });
+
+  it("stops at a parent cycle", () => {
+    const cycle = [
+      task("HM-1", { parent: "HM-2" }),
+      task("HM-2", { parent: "HM-1" }),
+      task("HM-3"),
+    ];
+    expect(descendantCount(cycle, "HM-1")).toBe(1);
+    expect(withoutSubtree(cycle, "HM-1").map((entry) => entry.id)).toEqual(["HM-3"]);
+  });
 });

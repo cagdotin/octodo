@@ -222,7 +222,11 @@ export const scanWorkspace = (
         const identical = twin !== null && (yield* readText(twin)) === text;
         const parses = !("error" in readFrontmatter(text));
         const adoptable = parses && copyOf?.endsWith(LIST_FILE) !== true;
-        const same = identical ? `, the same as ${rel(twin)}` : "";
+        const same = !identical
+          ? ""
+          : twin === copyOf
+            ? " and identical to it"
+            : `, the same as ${rel(twin)}`;
         const broken = parses ? "" : ", and its frontmatter does not parse";
         if (kind === "loose-markdown")
           report(kind, file, `This markdown file is not in a task folder${same}${broken}`, {

@@ -126,7 +126,8 @@ export const frontmatterId = (text: string): string | null => {
 const parseYaml = (yaml: string | null): Document => {
   const doc = parseDocument(yaml ?? "");
   if (doc.errors.length > 0) {
-    throw new Error(`Invalid frontmatter: ${doc.errors[0]?.message ?? "unknown error"}`);
+    const first = doc.errors[0]?.message.split("\n")[0]?.replace(/:$/, "") ?? "unknown error";
+    throw new Error(`Invalid frontmatter: ${first}`);
   }
   return doc;
 };

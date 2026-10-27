@@ -2,6 +2,7 @@ import { sValidator } from "@hono/standard-validator";
 import {
   CreateListInput,
   CreateTaskInput,
+  FixRequest,
   MoveListInput,
   MoveTaskInput,
   ReorderStatusesInput,
@@ -201,6 +202,11 @@ export const createApi = ({ runtime, token, serverUrl }: AppOptions) => {
           return ws.moveList(id, input);
         }),
       )
+      // Fixes run only when asked, each against a fresh read: a stale request changes nothing.
+      .post("/workspaces/:ws/diagnostics/fix", body(FixRequest), (c) =>
+        runInWorkspace(c, (ws) => ws.fixDiagnostic(c.req.valid("json"))),
+      )
+      .post("/workspaces/:ws/diagnostics/fix-all", (c) => runInWorkspace(c, (ws) => ws.fixAll))
       .put("/workspaces/:ws/statuses/order", body(ReorderStatusesInput), (c) =>
         runInWorkspace(c, (ws) => ws.reorderStatuses(c.req.valid("json"))),
       )

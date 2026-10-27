@@ -101,6 +101,18 @@ export const deriveKey = (name: string): string => {
     .toUpperCase();
 };
 
+/** Whether `id` has the shape of a task id: a key, a dash and a number, as in `HM-42`. */
+export const isTaskId = (id: string): boolean => /^[A-Za-z][A-Za-z0-9]*-\d+$/.test(id);
+
+/**
+ * The name a sync tool's conflict copy was made from: iCloud names a second copy of `task.md`
+ * `task 2.md` and of a folder `HM-3-paint 2`. Null for a name that is not such a copy.
+ */
+export const conflictCopyOf = (name: string): string | null => {
+  const match = /^(.+?) \d+(\.md)?$/.exec(name);
+  return match === null ? null : `${match[1]}${match[2] ?? ""}`;
+};
+
 /** The number in a task id such as `HM-42`, or null when the id is not in the workspace's format. */
 export const idNumber = (id: string, key: string): number | null => {
   const match = new RegExp(`^${key}-(\\d+)$`).exec(id);

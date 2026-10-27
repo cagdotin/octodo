@@ -360,7 +360,12 @@ function DiagnosticsButton({ snapshot }: { snapshot: WorkspaceSnapshot }) {
         </TooltipTrigger>
         <TooltipContent>{count === 1 ? "1 file problem" : `${count} file problems`}</TooltipContent>
       </Tooltip>
-      <DiagnosticsDialog diagnostics={snapshot.diagnostics} open={open} onOpenChange={setOpen} />
+      <DiagnosticsDialog
+        workspace={snapshot.workspace.id}
+        diagnostics={snapshot.diagnostics}
+        open={open}
+        onOpenChange={setOpen}
+      />
     </>
   );
 }

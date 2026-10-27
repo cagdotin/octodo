@@ -1,8 +1,23 @@
 import { Option, Predicate, Schema } from "effect";
 import { generateKeyBetween } from "fractional-indexing";
 import { isMap, parseDocument, type Document } from "yaml";
-import { Priority, type CreateTaskInput, type Task, type UpdateTaskInput } from "./domain.ts";
-import { LINK_KINDS, findMentions, humanize, isLinkField, type LinkField } from "./layout.ts";
+import {
+  DueDate,
+  Priority,
+  Tags,
+  type CreateTaskInput,
+  type DiagnosticKind,
+  type Task,
+  type UpdateTaskInput,
+} from "./domain.ts";
+import {
+  LINK_KINDS,
+  findMentions,
+  humanize,
+  isLinkField,
+  isTaskId,
+  type LinkField,
+} from "./layout.ts";
 
 /** What the folder tree says about a task, which `task.md` itself does not. */
 export interface TaskPlace {
@@ -18,21 +33,33 @@ export interface TaskPlace {
   readonly updated: string | null;
 }
 
+/** What is wrong with a file, before the scanner says where. */
+export interface Problem {
+  readonly kind: DiagnosticKind;
+  readonly field: string | null;
+  readonly detail: string;
+}
+
 export type FrontmatterRead<A> =
   | { readonly _tag: "Read"; readonly value: A }
-  | { readonly _tag: "Invalid"; readonly message: string };
+  | { readonly _tag: "Invalid"; readonly problem: Problem };
 
 /** A task as its own file has it, before a snapshot adds what other tasks say about it. */
 export type TaskFile = Omit<Task, "blocks" | "blocked" | "mentionedIn">;
 
+/**
+ * A task file read strictly. A bad optional field is a problem and reads as its default; a file
+ * without a usable id or with frontmatter that does not parse is not a task at all.
+ */
 export type TaskFileRead =
   | {
       readonly _tag: "Read";
       readonly value: TaskFile;
+      readonly problems: ReadonlyArray<Problem>;
       /** Link fields that are not a list of task ids; `value` holds the ids found in them. */
       readonly malformedLinks: ReadonlyArray<LinkField>;
     }
-  | { readonly _tag: "Invalid"; readonly message: string }
+  | { readonly _tag: "Invalid"; readonly problem: Problem }
   | { readonly _tag: "MissingId" };
 
 /** Keys the app reads into a task's fields; `updated` is no longer written but older files have it. */
@@ -63,6 +90,25 @@ const EDITABLE = {
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n?---[ \t]*(?:\r?\n|$)/;
 
 const decodePriority = Schema.decodeUnknownOption(Priority);
+const decodeDue = Schema.decodeUnknownOption(DueDate);
+const decodeTags = Schema.decodeUnknownOption(Tags);
+
+const absent = (value: unknown) => value === undefined || value === null || value === "";
+
+/** A field's value decoded through its schema, or the default with a problem when it does not decode. */
+const decodeField = <A>(
+  value: unknown,
+  decode: (value: unknown) => Option.Option<A>,
+  fallback: A,
+  problem: Omit<Problem, "detail"> & { readonly detail: (value: string) => string },
+  problems: Array<Problem>,
+): A => {
+  if (absent(value)) return fallback;
+  const decoded = decode(value);
+  if (Option.isSome(decoded)) return decoded.value;
+  problems.push({ ...problem, detail: problem.detail(JSON.stringify(value)) });
+  return fallback;
+};
 
 const stringOrNull = (value: unknown): string | null =>
   typeof value === "string" && value.length > 0 ? value : null;
@@ -78,9 +124,6 @@ const readOrder = (value: unknown): string => {
     return "";
   }
 };
-
-const readTags = (value: unknown): Array<string> =>
-  Array.isArray(value) ? value.map(String) : typeof value === "string" ? [value] : [];
 
 /**
  * The task ids in a link field. Anything but a list of ids is malformed; the ids found in it
@@ -114,12 +157,14 @@ export const frontmatterId = (text: string): string | null => {
 const parseYaml = (yaml: string | null): Document => {
   const doc = parseDocument(yaml ?? "");
   if (doc.errors.length > 0) {
-    throw new Error(`Invalid frontmatter: ${doc.errors[0]?.message ?? "unknown error"}`);
+    const first = doc.errors[0]?.message.split("\n")[0]?.replace(/:$/, "") ?? "unknown error";
+    throw new Error(`Invalid frontmatter: ${first}`);
   }
   return doc;
 };
 
-const readFrontmatter = (
+/** The frontmatter as plain data, or why it is not a set of keys. */
+export const readFrontmatter = (
   text: string,
 ):
   | { readonly data: Readonly<Record<string, unknown>>; readonly body: string }
@@ -131,9 +176,14 @@ const readFrontmatter = (
       return { error: "Invalid frontmatter: it must be a set of key: value pairs" };
     return { data: (value ?? {}) as Record<string, unknown>, body: parts.body };
   } catch (error) {
-    return { error: String(error) };
+    return { error: error instanceof Error ? error.message : String(error) };
   }
 };
+
+const invalidFrontmatter = (error: string) => ({
+  _tag: "Invalid" as const,
+  problem: { kind: "invalid-frontmatter" as const, field: null, detail: error },
+});
 
 /**
  * Edits the frontmatter through the YAML document rather than re-serialising plain data, so keys
@@ -174,16 +224,25 @@ const folderTitle = (folder: string, id: string) =>
 
 export const readTaskFile = (text: string, place: TaskPlace): TaskFileRead => {
   const read = readFrontmatter(text);
-  if ("error" in read) return { _tag: "Invalid", message: read.error };
+  if ("error" in read) return invalidFrontmatter(read.error);
   const { data, body } = read;
-  const rawId = data["id"] ?? null;
-  if (rawId !== null && typeof rawId !== "string")
-    return { _tag: "Invalid", message: "Invalid frontmatter: id must be text, such as HM-1" };
-  const id = stringOrNull(rawId);
-  if (id === null) return { _tag: "MissingId" };
+  const rawId = data["id"];
+  if (absent(rawId)) return { _tag: "MissingId" };
+  if (typeof rawId !== "string" || !isTaskId(rawId))
+    return {
+      _tag: "Invalid",
+      problem: {
+        kind: "malformed-id",
+        field: "id",
+        detail: `The id ${JSON.stringify(rawId)} is not a task id such as HM-1`,
+      },
+    };
+  const id = rawId;
+  const problems: Array<Problem> = [];
   const link = (field: LinkField) => readLinkField(data[field]);
   return {
     _tag: "Read",
+    problems,
     malformedLinks: LINK_KINDS.map((kind) => kind.field).filter((field) => link(field).malformed),
     value: {
       id,
@@ -191,9 +250,39 @@ export const readTaskFile = (text: string, place: TaskPlace): TaskFileRead => {
       status: stringOrNull(data["status"]) ?? place.defaultStatus,
       list: place.list,
       parent: place.parent,
-      priority: Option.getOrElse(decodePriority(data["priority"]), () => "none" as const),
-      tags: readTags(data["tags"]),
-      due: stringOrNull(data["due"]),
+      priority: decodeField(
+        data["priority"],
+        decodePriority,
+        "none",
+        {
+          kind: "unknown-priority",
+          field: "priority",
+          detail: (value) => `The priority ${value} is not one of ${Priority.literals.join(", ")}`,
+        },
+        problems,
+      ),
+      tags: decodeField(
+        typeof data["tags"] === "string" ? [data["tags"]] : data["tags"],
+        decodeTags,
+        [],
+        {
+          kind: "invalid-tags",
+          field: "tags",
+          detail: (value) => `The tags ${value} are not a list of words`,
+        },
+        problems,
+      ),
+      due: decodeField(
+        data["due"],
+        decodeDue,
+        null,
+        {
+          kind: "invalid-due",
+          field: "due",
+          detail: (value) => `The due date ${value} is not a date such as 2026-11-01`,
+        },
+        problems,
+      ),
       created: stringOrNull(data["created"]),
       updated: place.updated,
       order: readOrder(data["order"]),
@@ -249,7 +338,7 @@ export interface ListFile {
 
 export const readListFile = (text: string): FrontmatterRead<ListFile> => {
   const read = readFrontmatter(text);
-  if ("error" in read) return { _tag: "Invalid", message: read.error };
+  if ("error" in read) return invalidFrontmatter(read.error);
   return {
     _tag: "Read",
     value: {
@@ -277,5 +366,26 @@ export const migratedTaskFile = (text: string, status: string): string => {
     status,
     updated: undefined,
     ...Object.fromEntries(defaults.map((key) => [key, undefined])),
+  });
+};
+
+/**
+ * The file without the ids in frontmatter key `field` that `known` does not hold, removing the
+ * key once nothing is left; null when there is nothing to remove. Works for any key that holds a
+ * task id or a list of them.
+ */
+export const withoutUnknownIds = (
+  text: string,
+  field: string,
+  known: ReadonlySet<string>,
+): string | null => {
+  const read = readFrontmatter(text);
+  if ("error" in read) return null;
+  const value = read.data[field];
+  const ids = Array.isArray(value) ? value : [value];
+  const kept = ids.filter((id) => typeof id !== "string" || known.has(id));
+  if (value === undefined || kept.length === ids.length) return null;
+  return patchFrontmatter(text, {
+    [field]: kept.length === 0 ? undefined : Array.isArray(value) ? kept : kept[0],
   });
 };

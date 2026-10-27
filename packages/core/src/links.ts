@@ -1,3 +1,4 @@
+import { diagnostic } from "./diagnostics.ts";
 import type { Diagnostic, StatusDefinition, Task } from "./domain.ts";
 import { isClosedCategory, type LinkField } from "./layout.ts";
 import type { TaskFile } from "./markdown.ts";
@@ -44,7 +45,7 @@ export const linkTasks = (
 ): { readonly tasks: Array<Task>; readonly diagnostics: Array<Diagnostic> } => {
   const diagnostics: Array<Diagnostic> = [];
   const report = (task: TaskFile, message: string) =>
-    diagnostics.push({ path: task.path, message });
+    diagnostics.push(diagnostic("broken-link", task.path, message, { fix: null }));
   const known = new Set(read.map(({ task }) => task.id));
 
   const files = read.map(({ task, malformedLinks }): TaskFile => {

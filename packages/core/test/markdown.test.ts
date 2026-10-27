@@ -6,6 +6,7 @@ import {
   patchFrontmatter,
   readListFile,
   readTaskFile,
+  withoutUnknownIds,
 } from "../src/markdown.ts";
 
 const place = {
@@ -57,8 +58,33 @@ describe("readTaskFile", () => {
     expect(readTask("---\nid: GA-1\ntags: solo\n---\n").tags).toEqual(["solo"]);
   });
 
-  it("reads an unknown priority as none", () => {
-    expect(readTask("---\nid: GA-1\npriority: bogus\n---\n").priority).toBe("none");
+  it("reads an unknown priority as none and reports it", () => {
+    const read = readTaskFile("---\nid: GA-1\npriority: bogus\n---\n", place);
+    expect(read).toMatchObject({
+      _tag: "Read",
+      value: { priority: "none" },
+      problems: [{ kind: "unknown-priority", field: "priority" }],
+    });
+  });
+
+  it("decodes due dates and tags strictly, reporting each bad one", () => {
+    const problems = (text: string) => {
+      const read = readTaskFile(text, place);
+      return read._tag === "Read" ? read.problems.map((problem) => problem.kind) : read._tag;
+    };
+    expect(problems("---\nid: GA-1\ndue: 2026-11-01\ntags: [a, b]\n---\n")).toEqual([]);
+    expect(problems("---\nid: GA-1\ndue: 2026-13-01\n---\n")).toEqual(["invalid-due"]);
+    expect(problems("---\nid: GA-1\ndue: tomorrow\n---\n")).toEqual(["invalid-due"]);
+    expect(problems("---\nid: GA-1\ntags: [a, 2]\n---\n")).toEqual(["invalid-tags"]);
+    expect(problems("---\nid: GA-1\ndue:\ntags:\n---\n")).toEqual([]);
+  });
+
+  it("refuses an id that is not a task id", () => {
+    for (const id of ["42", "groceries", "GA-", "[a]"])
+      expect(readTaskFile(`---\nid: ${id}\n---\n`, place)).toMatchObject({
+        _tag: "Invalid",
+        problem: { kind: "malformed-id", field: "id" },
+      });
   });
 
   it("titles a task without a title after its folder name", () => {
@@ -73,7 +99,29 @@ describe("readTaskFile", () => {
   it("reports invalid YAML", () => {
     const read = readTaskFile("---\ntitle: [unclosed\n---\n", place);
     expect(read._tag).toBe("Invalid");
-    expect(read._tag === "Invalid" && read.message).toContain("Invalid frontmatter");
+    expect(read).toMatchObject({ _tag: "Invalid", problem: { kind: "invalid-frontmatter" } });
+  });
+});
+
+describe("withoutUnknownIds", () => {
+  const known = new Set(["GA-1", "GA-2"]);
+
+  it("drops unknown ids from a list, keeping the rest of the file", () => {
+    expect(
+      withoutUnknownIds(
+        "---\nid: GA-3\nblocked_by: [GA-1, GA-9]\n# note\n---\nBody\n",
+        "blocked_by",
+        known,
+      ),
+    ).toBe("---\nid: GA-3\nblocked_by: [GA-1]\n\n# note\n---\n\nBody\n");
+  });
+
+  it("removes the key once no id is left, and changes nothing when all are known", () => {
+    expect(withoutUnknownIds("---\nid: GA-3\nblocks: GA-9\n---\n", "blocks", known)).toBe(
+      "---\nid: GA-3\n---\n",
+    );
+    expect(withoutUnknownIds("---\nblocks: [GA-1]\n---\n", "blocks", known)).toBeNull();
+    expect(withoutUnknownIds("---\nid: GA-3\n---\n", "blocks", known)).toBeNull();
   });
 });
 

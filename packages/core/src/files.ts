@@ -62,3 +62,62 @@ export const writeFileAtomic = Effect.fnUntraced(function* (
 /** Whether a file system call failed because its path is gone, as when another process moved it. */
 export const isNotFound = (error: unknown): boolean =>
   PlatformError.isPlatformError(error) && error.reason._tag === "NotFound";
+
+/** Whether two folders hold the same names and bytes all the way down, hidden entries aside. */
+export const sameTree = (
+  a: string,
+  b: string,
+): Effect.Effect<boolean, PlatformError.PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const [infoA, infoB] = [yield* fs.stat(a), yield* fs.stat(b)];
+    if (infoA.type !== infoB.type) return false;
+    if (infoA.type === "File") {
+      const [bytesA, bytesB] = [yield* fs.readFile(a), yield* fs.readFile(b)];
+      return bytesA.length === bytesB.length && bytesA.every((byte, i) => byte === bytesB[i]);
+    }
+    const visible = (names: ReadonlyArray<string>) =>
+      names.filter((name) => !name.startsWith(".")).toSorted();
+    const [namesA, namesB] = [
+      visible(yield* fs.readDirectory(a)),
+      visible(yield* fs.readDirectory(b)),
+    ];
+    if (namesA.join("/") !== namesB.join("/")) return false;
+    for (const name of namesA) {
+      if (!(yield* sameTree(path.join(a, name), path.join(b, name)))) return false;
+    }
+    return true;
+  });
+
+/** `name`, or `name-2`, `name-3`, ... before the extension, whichever `dir` does not have yet. */
+export const freeName = Effect.fnUntraced(function* (dir: string, name: string, extension = "") {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const stem = name.slice(0, name.length - extension.length);
+  let candidate = name;
+  for (let n = 2; yield* fs.exists(path.join(dir, candidate)); n++) {
+    candidate = `${stem}-${n}${extension}`;
+  }
+  return candidate;
+});
+
+/**
+ * Builds a folder with its marker file under a hidden name, then renames it into place, so no
+ * reader sees a folder without its `task.md` or `list.md`. Fails if `container` is gone.
+ */
+export const createFolder = Effect.fnUntraced(function* (
+  container: string,
+  name: string,
+  marker: string,
+  content: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const temp = path.join(container, tempName.folder());
+  yield* fs.makeDirectory(temp);
+  yield* Effect.gen(function* () {
+    yield* fs.writeFileString(path.join(temp, marker), content);
+    yield* fs.rename(temp, path.join(container, name));
+  }).pipe(Effect.onError(() => Effect.ignore(fs.remove(temp, { recursive: true }))));
+});

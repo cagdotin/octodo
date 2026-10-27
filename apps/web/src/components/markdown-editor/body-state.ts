@@ -10,6 +10,7 @@ import {
 } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { livePreview, toggleTaskOnLine } from "./live-preview.ts";
+import { mentions } from "./mentions.ts";
 
 /** Marks a transaction that mirrors the file rather than the user's typing. */
 export const fromFile = Annotation.define<true>();
@@ -24,6 +25,7 @@ export const bodyExtensions: Extension = [
   Prec.high(keymap.of([...markdownKeymap, { key: "Mod-Enter", run: toggleTaskOnLine }])),
   keymap.of([...defaultKeymap, ...historyKeymap]),
   livePreview,
+  mentions,
 ];
 
 /** The smallest change that turns the editor's text into `next`, so the cursor stays put. */

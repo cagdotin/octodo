@@ -105,4 +105,52 @@ export const bodyTheme = EditorView.theme({
     overflowWrap: "anywhere",
   },
   ".cm-md-table th": { fontWeight: "600", backgroundColor: "var(--muted)" },
+  ".cm-md-mention": {
+    display: "inline",
+    padding: "0.05em 0.35em",
+    borderRadius: "4px",
+    backgroundColor: "var(--muted)",
+    boxShadow: "inset 0 0 0 1px var(--border)",
+    cursor: "pointer",
+    whiteSpace: "normal",
+  },
+  ".cm-md-mention:hover": { backgroundColor: "var(--accent)" },
+  ".cm-md-mention-id": {
+    fontFamily: "var(--font-mono)",
+    fontSize: "0.85em",
+    color: "var(--muted-foreground)",
+  },
+  ".cm-md-mention[data-closed]": {
+    color: "var(--muted-foreground)",
+    textDecoration: "line-through",
+  },
+  ".cm-md-mention[data-missing]": {
+    cursor: "default",
+    backgroundColor: "transparent",
+    boxShadow: "inset 0 0 0 1px var(--border)",
+    borderStyle: "dashed",
+    color: "var(--muted-foreground)",
+  },
+  ".cm-tooltip.cm-tooltip-autocomplete": {
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-md)",
+    backgroundColor: "var(--popover)",
+    color: "var(--popover-foreground)",
+    boxShadow: "0 4px 12px rgb(0 0 0 / 0.08)",
+    padding: "0.25rem",
+  },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul": {
+    fontFamily: "var(--font-sans)",
+    maxHeight: "16rem",
+  },
+  ".cm-tooltip-autocomplete > ul > li": {
+    padding: "0.25rem 0.5rem !important",
+    borderRadius: "calc(var(--radius-md) - 2px)",
+    fontSize: "0.875rem",
+  },
+  ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
+    backgroundColor: "var(--accent)",
+    color: "var(--accent-foreground)",
+  },
+  ".cm-completionMatchedText": { textDecoration: "none", fontWeight: "600" },
 });

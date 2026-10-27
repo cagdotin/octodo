@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { imageMarkdown, type Attachments } from "@/lib/attachments";
 import { bodyExtensions, fromFile, syncToFile } from "./body-state.ts";
 import { imageUrl } from "./live-preview.ts";
+import { openMention, setMentionTargets, type MentionTarget } from "./mentions.ts";
 import { bodyTheme } from "./theme.ts";
 
 const imagesIn = (data: DataTransfer | null) =>
@@ -31,6 +32,10 @@ interface Props {
   className?: string;
   /** Lets images be pasted or dropped in, and shows the ones the body links to. */
   attachments?: Attachments;
+  /** The tasks `[[HM-3]]` resolves to, for its chip and for completing `[[`. */
+  mentionTargets?: ReadonlyMap<string, MentionTarget>;
+  /** Opens the task a mention chip names. */
+  onOpenMention?: (id: string) => void;
 }
 
 /**
@@ -44,13 +49,15 @@ export function MarkdownEditor({
   placeholder,
   className,
   attachments,
+  mentionTargets,
+  onOpenMention,
   ...aria
 }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
-  const handlers = useRef({ onChange, onBlur });
+  const handlers = useRef({ onChange, onBlur, onOpenMention });
   useLayoutEffect(() => {
-    handlers.current = { onChange, onBlur };
+    handlers.current = { onChange, onBlur, onOpenMention };
   });
 
   // The view is created once; `value` changes reach it through the sync effect below.
@@ -98,6 +105,7 @@ export function MarkdownEditor({
           hint === undefined ? [] : placeholderText(hint),
           label === undefined ? [] : EditorView.contentAttributes.of({ "aria-label": label }),
           files === undefined ? [] : imageUrl.of(files.url),
+          openMention.of((id) => handlers.current.onOpenMention?.(id)),
           keymap.of([
             {
               key: "Escape",
@@ -141,6 +149,11 @@ export function MarkdownEditor({
       editor.destroy();
     };
   }, []);
+
+  useEffect(() => {
+    if (mentionTargets !== undefined)
+      view.current?.dispatch({ effects: setMentionTargets.of(mentionTargets) });
+  }, [mentionTargets]);
 
   useEffect(() => {
     const editor = view.current;

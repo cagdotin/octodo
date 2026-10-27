@@ -119,8 +119,8 @@ export interface Workspace {
     bytes: Uint8Array,
   ) => Effect.Effect<string, TaskNotFound | InvalidRequest | StorageError>;
   /**
-   * Fixes the problem `kind` at `path` if a fresh read still finds it and it has a fix. Repeating a
-   * request, or sending one for a problem that is gone, changes nothing.
+   * Applies fix `action` to the problem `kind` at `path` if a fresh read still offers that fix
+   * there. Repeating a request, or sending one the files no longer match, changes nothing.
    */
   readonly fixDiagnostic: (request: FixRequest) => Effect.Effect<FixResult, StorageError>;
   /** Applies every fix there is, reading the files again after each, until none is left to try. */
@@ -700,7 +700,12 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     );
 
   const fixDiagnostic = (request: FixRequest) =>
-    fixWhere((diagnostic) => diagnostic.path === request.path && diagnostic.kind === request.kind);
+    fixWhere(
+      (diagnostic) =>
+        diagnostic.path === request.path &&
+        diagnostic.kind === request.kind &&
+        diagnostic.fix?.action === request.action,
+    );
 
   if (options.watch === true) {
     yield* fs.watch(tasksDir, { recursive: true }).pipe(

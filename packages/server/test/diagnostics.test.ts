@@ -40,10 +40,14 @@ beforeAll(async () => {
 afterAll(() => server.close());
 
 describe("fixing diagnostics over HTTP", () => {
-  it("fixes one problem by path and kind, and a repeat finds nothing to fix", async () => {
+  it("fixes one problem by path, kind and action, and a repeat finds nothing to fix", async () => {
     seed("HOU-1-a/task.md", "---\nid: HOU-1\n---\n");
     seed("HOU-1-b/task.md", "---\nid: HOU-1\n---\n");
-    const request = { path: ".octodo/HOU-1-b/task.md", kind: "duplicate-id" };
+    const request = {
+      path: ".octodo/HOU-1-b/task.md",
+      kind: "duplicate-id",
+      action: "fresh-id",
+    };
     const first = (await (await post("/diagnostics/fix", request)).json()) as {
       fixed: Array<{ kind: string }>;
       diagnostics: Array<unknown>;
@@ -78,7 +82,13 @@ describe("fixing diagnostics over HTTP", () => {
 
   it("refuses a request without the token or with an unknown kind", async () => {
     expect((await post("/diagnostics/fix-all", undefined, null)).status).toBe(401);
-    const bad = await post("/diagnostics/fix", { path: ".octodo", kind: "everything" });
+    const bad = await post("/diagnostics/fix", {
+      path: ".octodo",
+      kind: "everything",
+      action: "migrate",
+    });
     expect(bad.status).toBe(400);
+    const actionless = await post("/diagnostics/fix", { path: ".octodo", kind: "old-layout" });
+    expect(actionless.status).toBe(400);
   });
 });

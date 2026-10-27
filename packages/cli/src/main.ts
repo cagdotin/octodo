@@ -1,5 +1,7 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import {
+  FixAction,
+  InvalidRequest,
   Priority,
   Workspaces,
   defaultHome,
@@ -375,12 +377,24 @@ const describeDiagnostic = (diagnostic: Diagnostic) =>
   [
     `${diagnostic.path}  [${diagnostic.kind}${diagnostic.field === null ? "" : ` ${diagnostic.field}`}]`,
     `  ${diagnostic.message}`,
-    ...(diagnostic.fix === null ? [] : [`  fix: ${diagnostic.fix.label}`]),
+    ...(diagnostic.fix === null
+      ? []
+      : [
+          `  fix: ${diagnostic.fix.label} (octo doctor ${JSON.stringify(diagnostic.path)} --apply ${diagnostic.fix.action})`,
+        ]),
   ].join("\n");
 
 const doctorCommand = Command.make(
   "doctor",
   {
+    path: Argument.String("path").pipe(
+      Argument.withDescription("The path of one problem, for --apply"),
+      Argument.optional,
+    ),
+    apply: Flag.Literals("apply", FixAction.literals).pipe(
+      Flag.withDescription("Apply this fix to the problem at <path>, if octodo still offers it"),
+      Flag.optional,
+    ),
     fix: Flag.Boolean("fix").pipe(
       Flag.withDescription("Apply every fix octodo offers, then list what is left"),
       Flag.withDefault(false),
@@ -389,9 +403,23 @@ const doctorCommand = Command.make(
   },
   Effect.fn(function* (options) {
     const ws = yield* (yield* Workspaces).open(yield* target);
-    const result = options.fix
-      ? yield* ws.fixAll
-      : { fixed: [], failed: [], diagnostics: (yield* ws.snapshot).diagnostics };
+    const applyOne = (action: FixAction) =>
+      Effect.gen(function* () {
+        if (Option.isNone(options.path))
+          return yield* new InvalidRequest({ message: "--apply needs the problem's path" });
+        const path = options.path.value;
+        const offered = (yield* ws.snapshot).diagnostics.find(
+          (diagnostic) => diagnostic.path === path && diagnostic.fix?.action === action,
+        );
+        if (offered === undefined)
+          return yield* new InvalidRequest({ message: `No problem at ${path} offers ${action}` });
+        return yield* ws.fixDiagnostic({ path, kind: offered.kind, action });
+      });
+    const result = Option.isSome(options.apply)
+      ? yield* applyOne(options.apply.value)
+      : options.fix
+        ? yield* ws.fixAll
+        : { fixed: [], failed: [], diagnostics: (yield* ws.snapshot).diagnostics };
     if (result.diagnostics.length > 0) process.exitCode = 1;
     if (options.json) return yield* Console.log(JSON.stringify(result, null, 2));
     for (const fixed of result.fixed)
@@ -408,7 +436,7 @@ const doctorCommand = Command.make(
   }),
 ).pipe(
   Command.withDescription(
-    "List problems with the workspace's files, with what to do about each; --fix applies the safe fixes",
+    "List problems with the workspace's files, with what to do about each; --fix applies the safe fixes, <path> --apply <fix> one fix",
   ),
 );
 

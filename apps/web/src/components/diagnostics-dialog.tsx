@@ -74,7 +74,11 @@ export function DiagnosticsDialog({
                       size="sm"
                       disabled={busy}
                       onClick={() =>
-                        fixOne.mutate({ path: diagnostic.path, kind: diagnostic.kind })
+                        fixOne.mutate({
+                          path: diagnostic.path,
+                          kind: diagnostic.kind,
+                          action: diagnostic.fix!.action,
+                        })
                       }
                     >
                       {fixing(diagnostic) && <Spinner data-icon="inline-start" />}

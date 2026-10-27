@@ -212,7 +212,7 @@ const ListDiagnostics = Tool.make("list_diagnostics", {
 
 const FixDiagnostic = Tool.make("fix_diagnostic", {
   description:
-    "Apply the fix of one diagnostic, given its path and kind from list_diagnostics. octodo reads the files again and fixes the problem only if it is still there, so repeating a call is harmless. Returns what it fixed and the diagnostics left. A remove-copy fix deletes a redundant copy.",
+    "Apply the fix of one diagnostic, given its path, kind and fix action from list_diagnostics. octodo reads the files again and applies it only if a fresh read still offers that fix there, so repeating a call is harmless and a stale one does nothing. Returns what it fixed and the diagnostics left. A remove-copy fix deletes a copy that is the same as the original.",
   parameters: Schema.Struct({ workspace: WorkspaceParam, ...FixRequest.fields }),
   success: FixResult,
   failure: ToolFailure,

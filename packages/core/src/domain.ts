@@ -171,10 +171,15 @@ export const Diagnostic = Schema.Struct({
 export type Diagnostic = typeof Diagnostic.Type;
 
 /**
- * Asks for the fix of the problem `kind` at `path`. The workspace reads the files again and fixes
- * the problem only if it is still there, so a stale or repeated request changes nothing.
+ * Asks for fix `action` of the problem `kind` at `path`. The workspace reads the files again and
+ * applies it only if a fresh read still offers that fix there, so a request made before the files
+ * changed cannot run another fix than the one asked for.
  */
-export const FixRequest = Schema.Struct({ path: Schema.String, kind: DiagnosticKind });
+export const FixRequest = Schema.Struct({
+  path: Schema.String,
+  kind: DiagnosticKind,
+  action: FixAction,
+});
 export type FixRequest = typeof FixRequest.Type;
 
 export const FixResult = Schema.Struct({

@@ -11,6 +11,10 @@ import { bodyTheme } from "./theme.ts";
 const imagesIn = (data: DataTransfer | null) =>
   [...(data?.files ?? [])].filter((file) => file.type.startsWith("image/"));
 
+/** Spreadsheets put a picture of the cells next to the text; the text is what was meant. */
+const pastedImages = (data: DataTransfer | null) =>
+  data?.getData("text/plain") ? [] : imagesIn(data);
+
 /** A spot in the document that follows the edits made while an upload is on its way. */
 interface Anchor {
   pos: number;
@@ -113,7 +117,7 @@ export function MarkdownEditor({
           EditorView.domEventHandlers({
             blur: () => handlers.current.onBlur?.(),
             paste: (event, target) => {
-              const images = imagesIn(event.clipboardData);
+              const images = pastedImages(event.clipboardData);
               if (files === undefined || images.length === 0) return false;
               event.preventDefault();
               void attach(target, images, target.state.selection.main.head);

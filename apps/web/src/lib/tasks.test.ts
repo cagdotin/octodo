@@ -67,16 +67,18 @@ describe("subtasks in views", () => {
     expect(listCounts(snapshot(tasks)).counts.get("home")).toBe(1);
   });
 
-  it("shows open top-level tasks that are not blocked in the Ready view", () => {
+  it("shows open tasks that are not blocked in the Ready view, subtasks too, as the CLI and MCP do", () => {
     const tasks = [
       task("HM-1"),
       task("HM-2", { blocked: true, blockedBy: ["HM-1"] }),
       task("HM-3", { status: "done" }),
       task("HM-4", { parent: "HM-1" }),
       task("HM-5", { status: "in-progress" }),
+      task("HM-6", { parent: "HM-1", blocked: true, blockedBy: ["HM-5"] }),
     ];
     expect(filterTasks(snapshot(tasks), SMART.ready).map((entry) => entry.id)).toEqual([
       "HM-1",
+      "HM-4",
       "HM-5",
     ]);
   });

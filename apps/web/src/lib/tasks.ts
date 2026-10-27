@@ -125,8 +125,8 @@ export const todayKey = () => format(new Date(), "yyyy-MM-dd");
 
 /**
  * The tasks a view shows. Views of a list show top-level tasks, with subtasks inside their parent;
- * the date views show every task due in their range, subtasks too; Ready shows the top-level tasks
- * that are open and not blocked.
+ * the date views show every task due in their range, and Ready every task open and not blocked,
+ * subtasks too.
  */
 export const filterTasks = (
   { tasks: all, statuses }: Pick<WorkspaceSnapshot, "tasks" | "statuses">,
@@ -142,7 +142,7 @@ export const filterTasks = (
     case SMART.upcoming:
       return dueBy(format(addDays(new Date(), 7), "yyyy-MM-dd"));
     case SMART.ready:
-      return tasks.filter((task) => isReady(task, statuses));
+      return all.filter((task) => isReady(task, statuses));
     case SMART.none:
       return tasks.filter((task) => task.list === null);
     default:

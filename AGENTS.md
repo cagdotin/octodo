@@ -1,32 +1,39 @@
 # Agent instructions
 
-octodo is a local-first task manager. Every task is a markdown file with YAML frontmatter inside a
-project's `.octodo/` folder, and the files are the source of truth. The app, the CLI and the MCP
-server are the editors, for people and agents alike: every status change, move, rename and link
-goes through them. The files are a portable format (plain markdown with custom properties) that
-reads well and copies anywhere; matching another tool's behavior on them is not a goal. Sync tools
-(iCloud, git) and stray hand edits still touch the files, so the app reads them strictly and
-reports what is wrong instead of breaking. Long-term it competes with TickTick, Todoist and any.do
-first, then Linear.
+octodo is a local-first task manager. Every task is a folder holding a markdown file with YAML
+frontmatter inside a project's `.octodo/` folder, and the files are the source of truth. The app,
+the CLI and the MCP server are the editors, for people and agents alike: every status change, move,
+rename and link goes through them. The files are a portable format (plain markdown with custom
+properties) that reads well and copies anywhere; matching another tool's behavior on them is not a
+goal. Sync tools (iCloud, git) and stray hand edits still touch the files, so the app reads them
+strictly and reports what is wrong instead of breaking. Long-term it competes with TickTick, Todoist
+and any.do first, then Linear.
 
 ## The on-disk model
 
 - `.octodo/config.json`: workspace `name`, id `key` (`HM` → ids `HM-1`, `HM-2`, ...) and `statuses`
   (id, display name, category). Categories have a fixed order (backlog, unstarted, started,
-  completed, canceled, archived); the array only orders statuses within a category.
-- `s<NN>-<id>/` folders are statuses, numbered in that workflow order. Changing a task's status
-  moves its file; reordering statuses (workspace settings) renumbers every status folder.
-- `l<NN>-<slug>/` folders are lists, nested up to three levels; each holds its own status folders.
-  The number orders a list among its siblings (dense, renumbered on every move); folders without
-  one sort last. Status folders directly in `.octodo/` hold tasks that are in no list.
-- Numbers are never part of an id: a status is `todo`, a list is its slugs joined by `/`
-  (`garden/seeds`). Reordering renames folders without changing ids; moving a list to another
-  parent changes its id.
+  completed, canceled, archived); the array only orders statuses within a category. Reordering
+  statuses changes only this file.
+- A folder with `task.md` is a task. Its frontmatter holds every attribute: `id`, `title`,
+  `status`, `order` (fractional, among siblings), `priority`, `due`, `tags`, `created`. `updated`
+  comes from the file's mtime; `list` and `parent` are never stored. Changing status is one write of
+  `task.md`.
+- A task folder inside a task folder is a subtask, the same shape all the way down. Every other file
+  in a task folder is an attachment of that task (`images/plan.png`).
+- A folder with `list.md` (`name`, `order`; the body describes the list) is a list, nested up to
+  three levels. `.octodo/` is the root list. A list id is its folder names joined by `/`
+  (`garden/seeds`), so moving a list to another parent changes its id.
+- Folder names carry no meaning for the scanner; they are for people: `<id>-<slug>` for a task, the
+  slug for a list. Anything else (a loose `.md`, a folder with neither marker or both) is a
+  diagnostic, and so is a workspace in the old folder layout, which `octo migrate` converts.
 - A task's identity is the `id` in its frontmatter, never its path. Files without an id get one the
   first time they are read. Frontmatter keys the app does not manage are kept untouched, including
   order and comments (edits go through the `yaml` document API).
 - Writes go to a temporary sibling and are renamed into place, so sync tools (iCloud, git) never see
-  half a file. Any in-memory index is a cache that a file watcher invalidates.
+  half a file; a new task or list folder is built under a dot name and renamed in. Writes go only
+  into folders that exist: never `mkdir -p` a container. Any in-memory index is a cache that a file
+  watcher invalidates.
 
 ## Layout
 

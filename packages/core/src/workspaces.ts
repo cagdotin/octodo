@@ -13,12 +13,12 @@ import {
 import {
   InvalidRequest,
   StorageError,
-  WorkspaceConfig,
   WorkspaceNotFound,
   type FolderListing,
   type WorkspaceInfo,
 } from "./domain.ts";
 import { CONFIG_FILE, TASKS_DIR, slugify } from "./layout.ts";
+import { readConfig } from "./storage/config.ts";
 import { initWorkspace, makeWorkspace, type Workspace } from "./workspace.ts";
 
 const RegistryEntry = Schema.Struct({ id: Schema.String, root: Schema.String });
@@ -26,7 +26,6 @@ const Registry = Schema.Struct({ workspaces: Schema.Array(RegistryEntry) });
 type Registry = typeof Registry.Type;
 
 const decodeRegistry = Schema.decodeUnknownEffect(Schema.fromJsonString(Registry));
-const decodeConfig = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceConfig));
 
 export interface WorkspaceChange {
   readonly workspace: string;
@@ -92,16 +91,12 @@ export class Workspaces extends Context.Service<
           }).pipe(Effect.mapError(fail(`Could not write ${registryFile}`)));
 
         const info = (entry: { id: string; root: string }) =>
-          Effect.gen(function* () {
-            const text = yield* fs.readFileString(path.join(entry.root, TASKS_DIR, CONFIG_FILE));
-            const config = yield* decodeConfig(text);
-            return {
-              id: entry.id,
-              root: entry.root,
-              name: config.name,
-              key: config.key,
-            } satisfies WorkspaceInfo;
-          }).pipe(Effect.mapError(fail(`Could not read the workspace at ${entry.root}`)));
+          Effect.map(withPlatform(readConfig(entry.root)), ({ config }): WorkspaceInfo => ({
+            id: entry.id,
+            root: entry.root,
+            name: config.name,
+            key: config.key,
+          }));
 
         const openHandle = (id: string, root: string) =>
           Effect.gen(function* () {

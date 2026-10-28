@@ -1,8 +1,7 @@
-import { Effect, FileSystem, Option, Path, PlatformError, Result, Schema, Semaphore } from "effect";
+import { Effect, FileSystem, Option, Path, PlatformError, Result, Semaphore } from "effect";
 import { diagnostic, type DiagnosticOptions } from "./diagnostics.ts";
 import {
   DEFAULT_STATUSES,
-  WorkspaceConfig,
   type Diagnostic,
   type DiagnosticKind,
   type List,
@@ -41,6 +40,7 @@ import {
 } from "./markdown.ts";
 import { claimIds, giveId, nextIdOnDisk, pendingId } from "./ids.ts";
 import type { ScanCache } from "./scan-cache.ts";
+import { readConfig } from "./storage/config.ts";
 
 /** A snapshot plus where its lists and tasks are on disk, which is nobody else's business. */
 export interface Scan {
@@ -58,8 +58,6 @@ export interface Scan {
   /** The number of the next new task id: past every id on disk, in tasks read or not. */
   readonly nextIdNumber: number;
 }
-
-const decodeConfig = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceConfig));
 
 /** Orders by fractional key, keys before no key, then by folder name. */
 const compareOrder = (
@@ -334,18 +332,13 @@ export const scanWorkspace = (
       return null;
     };
 
-    const config = yield* fs.readFileString(path.join(tasksDir, CONFIG_FILE)).pipe(
-      Effect.flatMap(decodeConfig),
-      Effect.catch((error) => {
-        report(
-          "invalid-config",
-          path.join(tasksDir, CONFIG_FILE),
-          `${String(error)}; until it is fixed the workspace uses its folder name and the default statuses`,
-        );
-        const name = humanize(path.basename(root));
-        return Effect.succeed<WorkspaceConfig>({ name, key: deriveKey(name) });
-      }),
-    );
+    const { config, problem } = yield* readConfig(root);
+    if (problem !== null)
+      report(
+        "invalid-config",
+        path.join(tasksDir, CONFIG_FILE),
+        `${problem}; until it is fixed the workspace uses its folder name and the default statuses`,
+      );
     if (!isWorkspaceKey(config.key)) {
       const usable = config.key.replace(/[^A-Za-z0-9]/g, "");
       const suggested = isWorkspaceKey(usable) ? usable : deriveKey(config.name);

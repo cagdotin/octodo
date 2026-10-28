@@ -86,4 +86,33 @@ describe("workspaces", () => {
       process.chdir(cwd);
     }
   });
+
+  it("lists every workspace when one config.json is unreadable, naming that one after its folder", async () => {
+    const base = mkdtempSync(join(tmpdir(), "octodo-list-"));
+    const home = join(base, ".home");
+    const [broken, garden] = [join(base, "broken-one"), join(base, "garden")];
+    const result = await run(
+      Workspaces.use((w) =>
+        Effect.gen(function* () {
+          yield* w.add(broken, { key: "BR" });
+          yield* w.add(garden, { name: "Garden", key: "GA" });
+          writeFileSync(join(broken, ".octodo/config.json"), "{ not json");
+          const listed = yield* w.list;
+          const snapshot = yield* (yield* w.get("broken-one")).snapshot;
+          return { listed, snapshot };
+        }),
+      ),
+      home,
+    );
+    expect(result.listed).toEqual([
+      { id: "broken-one", root: broken, name: "Broken One", key: "BO" },
+      { id: "garden", root: garden, name: "Garden", key: "GA" },
+    ]);
+    expect(result.snapshot.workspace, "the list agrees with the snapshot").toEqual(
+      result.listed[0],
+    );
+    expect(result.snapshot.diagnostics.map((diagnostic) => diagnostic.kind)).toEqual([
+      "invalid-config",
+    ]);
+  });
 });

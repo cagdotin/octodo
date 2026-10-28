@@ -1,15 +1,4 @@
-import {
-  Context,
-  Effect,
-  FileSystem,
-  Layer,
-  Path,
-  PubSub,
-  Schema,
-  Scope,
-  Semaphore,
-  Stream,
-} from "effect";
+import { Context, Effect, Layer, Path, PubSub, Scope, Semaphore, Stream } from "effect";
 import {
   InvalidRequest,
   StorageError,
@@ -19,13 +8,9 @@ import {
 } from "./domain.ts";
 import { slugify } from "./layout.ts";
 import { hasConfig, readConfig } from "./storage/config.ts";
+import { browseFolders, readRegistry as readRegistryIn, writeRegistry } from "./storage/home.ts";
+import type { Platform } from "./storage/storage.ts";
 import { initWorkspace, makeWorkspace, type Workspace } from "./workspace.ts";
-
-const RegistryEntry = Schema.Struct({ id: Schema.String, root: Schema.String });
-const Registry = Schema.Struct({ workspaces: Schema.Array(RegistryEntry) });
-type Registry = typeof Registry.Type;
-
-const decodeRegistry = Schema.decodeUnknownEffect(Schema.fromJsonString(Registry));
 
 export interface WorkspaceChange {
   readonly workspace: string;
@@ -63,32 +48,19 @@ export class Workspaces extends Context.Service<
     Layer.effect(
       Workspaces,
       Effect.gen(function* () {
-        const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const scope = yield* Scope.Scope;
-        const registryFile = path.join(options.home, "workspaces.json");
+        const platform = yield* Effect.context<Platform>();
         const lock = yield* Semaphore.make(1);
         const handles = new Map<string, Workspace>();
         const changes = yield* PubSub.sliding<WorkspaceChange>(64);
 
-        const withPlatform = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-          effect.pipe(
-            Effect.provideService(FileSystem.FileSystem, fs),
-            Effect.provideService(Path.Path, path),
-          );
+        const withPlatform = <A, E>(effect: Effect.Effect<A, E, Platform>) =>
+          Effect.provideContext(effect, platform);
 
         const fail = (message: string) => (cause: unknown) => new StorageError({ message, cause });
 
-        const readRegistry = Effect.gen(function* () {
-          if (!(yield* fs.exists(registryFile))) return { workspaces: [] } satisfies Registry;
-          return yield* decodeRegistry(yield* fs.readFileString(registryFile));
-        }).pipe(Effect.mapError(fail(`Could not read ${registryFile}`)));
-
-        const writeRegistry = (registry: Registry) =>
-          Effect.gen(function* () {
-            yield* fs.makeDirectory(options.home, { recursive: true });
-            yield* fs.writeFileString(registryFile, `${JSON.stringify(registry, null, 2)}\n`);
-          }).pipe(Effect.mapError(fail(`Could not write ${registryFile}`)));
+        const readRegistry = withPlatform(readRegistryIn(options.home));
 
         const info = (entry: { id: string; root: string }) =>
           Effect.map(withPlatform(readConfig(entry.root)), ({ config }): WorkspaceInfo => ({
@@ -134,9 +106,11 @@ export class Workspaces extends Context.Service<
               let id = base;
               for (let n = 2; registry.workspaces.some((entry) => entry.id === id); n++)
                 id = `${base}-${n}`;
-              yield* writeRegistry({
-                workspaces: [...registry.workspaces, { id, root: absolute }],
-              });
+              yield* withPlatform(
+                writeRegistry(options.home, {
+                  workspaces: [...registry.workspaces, { id, root: absolute }],
+                }),
+              );
               return yield* info({ id, root: absolute });
             }),
           );
@@ -148,9 +122,11 @@ export class Workspaces extends Context.Service<
               const registry = yield* readRegistry;
               if (!registry.workspaces.some((entry) => entry.id === id))
                 return yield* new WorkspaceNotFound({ workspace: id });
-              yield* writeRegistry({
-                workspaces: registry.workspaces.filter((entry) => entry.id !== id),
-              });
+              yield* withPlatform(
+                writeRegistry(options.home, {
+                  workspaces: registry.workspaces.filter((entry) => entry.id !== id),
+                }),
+              );
             }),
           );
 
@@ -186,41 +162,7 @@ export class Workspaces extends Context.Service<
         const open = (target: string) =>
           target.startsWith("/") || target.startsWith(".") ? containing(target) : get(target);
 
-        const hasWorkspace = (dir: string) =>
-          withPlatform(hasConfig(dir)).pipe(Effect.orElseSucceed(() => false));
-
-        const browse = (dir: string) =>
-          Effect.gen(function* () {
-            if (!path.isAbsolute(dir))
-              return yield* new InvalidRequest({ message: "Use an absolute folder path" });
-            const current = path.resolve(dir);
-            const info = yield* fs
-              .stat(current)
-              .pipe(
-                Effect.mapError(() => new InvalidRequest({ message: `No folder at ${current}` })),
-              );
-            if (info.type !== "Directory")
-              return yield* new InvalidRequest({ message: `${current} is not a folder` });
-            const names = yield* fs
-              .readDirectory(current)
-              .pipe(Effect.mapError(fail(`Could not read ${current}`)));
-            const folders: Array<FolderListing["folders"][number]> = [];
-            for (const name of names.toSorted((a, b) => a.localeCompare(b))) {
-              if (name.startsWith(".")) continue;
-              const child = path.join(current, name);
-              // Unreadable entries and broken links are simply left out.
-              const entry = yield* fs.stat(child).pipe(Effect.option);
-              if (entry._tag === "None" || entry.value.type !== "Directory") continue;
-              folders.push({ name, path: child, workspace: yield* hasWorkspace(child) });
-            }
-            const parent = path.dirname(current);
-            return {
-              path: current,
-              parent: parent === current ? null : parent,
-              workspace: yield* hasWorkspace(current),
-              folders,
-            } satisfies FolderListing;
-          });
+        const browse = (dir: string) => withPlatform(browseFolders(dir));
 
         return Workspaces.of({
           home: options.home,

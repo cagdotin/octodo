@@ -66,10 +66,10 @@ instead of keeping the code because it exists.
   into folders that exist: never `mkdir -p` a container (only `octo init` creates the folder it is asked to
   make a workspace). Any in-memory index is a cache that a file
   watcher invalidates.
-- Only `packages/core/src/storage/` touches a workspace's files. Other code takes a `Storage`
-  (`makeStorage(root)`) and changes files only in `storage.write((files, ids) => ...)`, which holds
-  the owner lock and reports each touched path to the cache. A new id written into frontmatter is
-  an `AssignedId` from `ids.next`
+- Only `packages/core/src/storage/` touches the disk; lint fails a `FileSystem` or `node:fs`
+  import anywhere else in core. Other code takes a `Storage` (`makeStorage(root)`) and changes
+  files only in `storage.write((files, ids) => ...)`, which holds the owner lock and reports each
+  touched path to the cache. A new id written into frontmatter is an `AssignedId` from `ids.next`
   ([0012](docs/decisions/0012-only-storage-touches-the-disk.md)).
 
 ## Layout

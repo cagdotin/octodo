@@ -14,7 +14,9 @@ of a write only because the workspace wrapped `FileSystem` in a reporting copy.
 
 ## Decision
 
-- Only `packages/core/src/storage/` touches a workspace's files.
+- Only `packages/core/src/storage/` imports `FileSystem` or `node:fs`. A lint rule
+  (`no-restricted-imports` in `.oxlintrc.json`) fails any other module in `packages/core/src` that
+  does.
 - `makeStorage(root)` returns a `Storage`, passed as a plain argument rather than an Effect
   service. Reads (`read`, `readText`, `exists`, `staysInside`) need no lock. `read` returns
   `{ config, tree }` through the cache, and an unchanged file keeps its text object, which the
@@ -30,6 +32,8 @@ of a write only because the workspace wrapped `FileSystem` in a reporting copy.
   typecheck as one (`patchFrontmatter`, `newTaskFile`).
 - `initWorkspace` creates the folder it is asked to make a workspace (the one `mkdir -p`) and then
   writes `config.json` through a write, so the owner lock covers it too.
+- `<home>/workspaces.json` and the folder picker's listing are not in a workspace; they live in
+  `storage/home.ts` so that `workspaces.ts` holds no `FileSystem` either.
 
 ## Consequences
 

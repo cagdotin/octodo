@@ -36,6 +36,41 @@
         "jsx-a11y/no-noninteractive-element-interactions": "off",
         "jsx-a11y/anchor-has-content": "off"
       }
+    },
+    {
+      "files": ["packages/core/src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "effect",
+                "importNames": ["FileSystem"],
+                "message": "Only packages/core/src/storage/ touches the disk; take a Storage instead (docs/architecture.md)."
+              },
+              {
+                "name": "effect/FileSystem",
+                "message": "Only packages/core/src/storage/ touches the disk; take a Storage instead (docs/architecture.md)."
+              },
+              {
+                "name": "node:fs",
+                "message": "Only packages/core/src/storage/ touches the disk; take a Storage instead (docs/architecture.md)."
+              },
+              {
+                "name": "node:fs/promises",
+                "message": "Only packages/core/src/storage/ touches the disk; take a Storage instead (docs/architecture.md)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/core/src/storage/**"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
     }
   ]
 }

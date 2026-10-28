@@ -1,7 +1,7 @@
 ---
 id: OCT-44
 title: Capture a performance baseline before the overhaul
-status: todo
+status: done
 priority: medium
 tags:
   - perf

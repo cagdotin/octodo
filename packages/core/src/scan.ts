@@ -9,7 +9,7 @@ import {
   type Task,
   type WorkspaceSnapshot,
 } from "./domain.ts";
-import { isNotFound, sameTree, tempName, writeFileAtomic } from "./files.ts";
+import { isNotFound, sameTree } from "./files.ts";
 import {
   CONFIG_FILE,
   LIST_FILE,
@@ -30,7 +30,6 @@ import { linkTasks } from "./links.ts";
 import {
   frontmatterId,
   hasFrontmatter,
-  patchFrontmatter,
   readFrontmatter,
   readListFile,
   readTaskFile,
@@ -38,7 +37,6 @@ import {
   type TaskFileRead,
   type TaskPlace,
 } from "./markdown.ts";
-import { claimIds, giveId, nextIdOnDisk, pendingId } from "./ids.ts";
 import type { ScanCache } from "./scan-cache.ts";
 import { readConfig } from "./storage/config.ts";
 
@@ -51,12 +49,12 @@ export interface Scan {
     /** Each task's absolute folder. */
     readonly tasks: ReadonlyMap<string, string>;
   };
-  /** Ids that more than one task folder has. */
-  readonly idClashes: ReadonlySet<string>;
   /** Every id a markdown file on disk has, in tasks read or not: links to them are not broken. */
   readonly idsOnDisk: ReadonlySet<string>;
   /** The number of the next new task id: past every id on disk, in tasks read or not. */
   readonly nextIdNumber: number;
+  /** Task folders whose `task.md` has no id yet, each reported as `missing-id`. */
+  readonly missingId: ReadonlyArray<string>;
 }
 
 /** Orders by fractional key, keys before no key, then by folder name. */
@@ -94,7 +92,6 @@ const compareTasks =
 interface Listing {
   /** The folder's entries in name order, dot entries and entries gone since aside. */
   readonly entries: Result.Result<ReadonlyArray<Entry>, PlatformError.PlatformError>;
-  readonly pendingId: boolean;
 }
 
 type Entry = { readonly name: string; readonly path: string } & (
@@ -278,7 +275,7 @@ const readListing = (
       names: Result.Result<ReadonlyArray<string>, PlatformError.PlatformError>,
     ): Effect.Effect<Listing, never, FileSystem.FileSystem | Path.Path> =>
       Result.isFailure(names)
-        ? Effect.succeed({ entries: Result.fail(names.failure), pendingId: false })
+        ? Effect.succeed({ entries: Result.fail(names.failure) })
         : Effect.forEach(
             names.success.filter((name) => !name.startsWith(".")).toSorted(),
             (name) => entry(dir, name),
@@ -286,7 +283,6 @@ const readListing = (
           ).pipe(
             Effect.map((found) => ({
               entries: Result.succeed(found.filter((entry) => entry !== null)),
-              pendingId: names.success.includes(tempName.pendingId),
             })),
           );
 
@@ -356,10 +352,7 @@ export const scanWorkspace = (
     const taskFiles: Array<TaskFile> = [];
     const listDirs = new Map<string, { dir: string; order: string }>();
     const taskDirs = new Map<string, string>();
-    const idClashes = new Set<string>();
     const missingId: Array<string> = [];
-    /** Folders holding a `.pending-id` marker. */
-    const markerDirs = new Set<string>();
     /** Markdown files that are not tasks: loose in a list, or a sync tool's copy of a marker file. */
     const strays: Array<{
       file: string;
@@ -393,7 +386,6 @@ export const scanWorkspace = (
       dir: string,
       listing: Listing,
     ): Array<Exclude<Entry, { type: "symlink" | "unreadable" }>> => {
-      if (listing.pendingId) markerDirs.add(dir);
       const judged = [];
       for (const entry of readAhead(dir, listing.entries) ?? []) {
         if (entry.type === "symlink")
@@ -403,15 +395,6 @@ export const scanWorkspace = (
       }
       return judged;
     };
-
-    /** Removes the id `taskId` from the task in `dir` if it still has it. */
-    const takeBackId = (dir: string, taskId: string) =>
-      Effect.gen(function* () {
-        const file = path.join(dir, TASK_FILE);
-        const text = yield* fs.readFileString(file);
-        if (frontmatterId(text) === taskId)
-          yield* writeFileAtomic(file, patchFrontmatter(text, { id: undefined }));
-      }).pipe(Effect.ignore);
 
     const readText = (file: string) =>
       fs.readFileString(file).pipe(Effect.orElseSucceed(() => null));
@@ -548,9 +531,8 @@ export const scanWorkspace = (
         let id: string | null = null;
         if (read._tag === "MissingId") {
           missingId.push(dir);
-          takeId(yield* pendingId(dir));
+          report("missing-id", file, "This task has no id yet", { field: "id" });
         } else if (taskDirs.has(read.value.id)) {
-          idClashes.add(read.value.id);
           yield* reportDuplicate(dir, read.value.id);
           yield* takeIdsUnder(dir);
           return;
@@ -587,9 +569,6 @@ export const scanWorkspace = (
             strays.push({ file: entry.path, kind: "conflict-copy", copyOf: file });
           }
         }
-        // A marker outlives its write when a crash cut giveId short or the folder was copied.
-        if (id !== null && markerDirs.has(dir))
-          yield* Effect.ignore(fs.remove(path.join(dir, tempName.pendingId)));
       });
 
     const readList = (
@@ -664,62 +643,6 @@ export const scanWorkspace = (
     const nextWaiting = () => waiting.find((queue) => queue.length > 0)?.shift();
     for (let next = nextWaiting(); next !== undefined; next = nextWaiting()) yield* serveTask(next);
 
-    // Files made by hand or by another tool get an id the first time the app sees them.
-    if (missingId.length > 0) {
-      const unwritten = (dir: string, error: unknown) => {
-        if (!isNotFound(error))
-          report(
-            "missing-id",
-            path.join(dir, TASK_FILE),
-            `This task has no id and writing one failed: ${String(error)}`,
-            { field: "id" },
-          );
-      };
-      /** The folders this scan wrote an id into, by that id. */
-      const given = new Map<string, string>();
-      const assignedAny = yield* Effect.gen(function* () {
-        let assigned = false;
-        const ids = yield* claimIds(
-          tasksDir,
-          config.key,
-          highestId + 1,
-          missingId.length,
-          nextIdOnDisk(tasksDir, config.key),
-        );
-        const taken = (taskId: string) => taskDirs.has(taskId) || given.has(taskId);
-        for (const [index, dir] of missingId.entries()) {
-          const id = yield* giveId(dir, ids[index]!, config.key, taken).pipe(
-            Effect.catch((error) =>
-              Effect.sync(() => unwritten(dir, error)).pipe(Effect.as(undefined)),
-            ),
-          );
-          if (id === undefined) continue;
-          assigned = true;
-          if (id === null) continue;
-          given.set(id, dir);
-          yield* Effect.logInfo(`Assigned ${id} to ${rel(path.join(dir, TASK_FILE))}`);
-        }
-        return assigned;
-      }).pipe(
-        Effect.scoped,
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            for (const dir of missingId) unwritten(dir, error);
-            return false;
-          }),
-        ),
-      );
-      // Every file it settled now has an id, written here or by another process: read them back.
-      if (assignedAny) {
-        const reread = yield* scanWorkspace(id, root);
-        const clashing = [...given].filter(([taskId]) => reread.idClashes.has(taskId));
-        if (clashing.length === 0) return reread;
-        // A task with the same id appeared while it was written: take ours back for a new one.
-        for (const [taskId, dir] of clashing) yield* takeBackId(dir, taskId);
-        return yield* scanWorkspace(id, root);
-      }
-    }
-
     for (const stray of strays) yield* reportStray(stray);
     for (const task of taskFiles) {
       if (statuses.some((known) => known.id === task.status)) continue;
@@ -748,8 +671,8 @@ export const scanWorkspace = (
         diagnostics,
       },
       dirs: { lists: listDirs, tasks: taskDirs },
-      idClashes,
       idsOnDisk,
       nextIdNumber: highestId + 1,
+      missingId,
     };
   });

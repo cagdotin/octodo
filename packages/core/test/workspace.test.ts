@@ -11,7 +11,6 @@ import {
   rmSync,
   statSync,
   symlinkSync,
-  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -53,8 +52,7 @@ const files = (root: string) =>
     .filter(
       (entry) =>
         statSync(join(root, ".octodo", entry)).isFile() &&
-        entry !== "config.json" &&
-        entry !== ".gitignore",
+        !["config.json", ".gitignore", ".owner-lock"].includes(entry),
     )
     .toSorted();
 
@@ -110,6 +108,7 @@ describe("workspace", () => {
     expect(read(root, "HM-2-second/task.md")).toContain("priority: high\n");
     expect(readdirSync(join(root, ".octodo")).filter((name) => name.startsWith("."))).toEqual([
       ".gitignore",
+      ".owner-lock",
     ]);
   });
 
@@ -337,18 +336,16 @@ describe("workspace", () => {
     expect(created.id).toBe("HM-14");
   });
 
-  it("removes temporary files a crashed write left behind, once they are a minute old", async () => {
+  it("removes temporary files a crashed write left behind once it holds the owner lock, however fresh", async () => {
     const root = fresh();
     await run(initWorkspace(root));
     const uuid = () => crypto.randomUUID();
     write(root, "HM-1-a/task.md", "---\nid: HM-1\n---\n");
-    const stale = [
+    const leftover = [
       `HM-1-a/.task.md.${uuid()}.tmp`,
       `.new-${uuid()}/task.md`,
       `.new-${uuid()} 2/task.md`,
       `HM-1-a/.task.md.${uuid()} 2.tmp`,
-      `HM-1-a/.pending-id 2`,
-      `.claim-HM-5 2`,
     ];
     const kept = [
       `.DS_Store`,
@@ -357,29 +354,26 @@ describe("workspace", () => {
       `.new-folder/task.md`,
       `HM-1-a/.${uuid()}.tmp.keep`,
     ];
-    const live = [`.new-${uuid()}/task.md`, `HM-1-a/.task.md.${uuid()}.tmp`];
     write(root, "home/list.md", "");
-    for (const file of [...stale, ...kept, ...live]) write(root, file, "x");
-    const twoMinutesAgo = new Date(Date.now() - 120_000);
-    for (const file of [...stale, ...kept]) {
-      const top = file.split("/").find((part) => part.startsWith("."))!;
-      const leftover = join(root, ".octodo", file.slice(0, file.indexOf(top) + top.length));
-      utimesSync(leftover, twoMinutesAgo, twoMinutesAgo);
-    }
+    for (const file of [...leftover, ...kept]) write(root, file, "x");
     const outside = join(root, "outside");
     const foreign = join(outside, `.new-${uuid()}`);
     mkdirSync(foreign, { recursive: true });
-    utimesSync(foreign, twoMinutesAgo, twoMinutesAgo);
     symlinkSync(outside, join(root, ".octodo/linked"));
-    await run(Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot));
-    expect(existsSync(foreign), "a symlink out of .octodo is not followed").toBe(true);
     const exists = (file: string) => existsSync(join(root, ".octodo", file));
-    expect(stale.filter(exists)).toEqual([]);
+    await run(Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot));
+    expect(leftover.filter(exists), "a read does not take the lock").toEqual(leftover);
+    await run(
+      Effect.flatMap(makeWorkspace("test", root), (ws) =>
+        ws.updateTask("HM-1", { priority: "high" }),
+      ),
+    );
+    expect(existsSync(foreign), "a symlink out of .octodo is not followed").toBe(true);
+    expect(leftover.filter(exists)).toEqual([]);
     expect(kept.filter(exists)).toEqual(kept);
-    expect(live.filter(exists)).toEqual(live);
   });
 
-  it("keeps octodo's bookkeeping files out of git, in new workspaces and ones opened again", async () => {
+  it("keeps octodo's bookkeeping files out of git, in new workspaces and ones written again", async () => {
     const git = (cwd: string, ...args: Array<string>) =>
       execFileSync("git", args, { cwd, encoding: "utf8" });
     const visibleToGit = [
@@ -394,10 +388,8 @@ describe("workspace", () => {
     const bookkeeping = (root: string) => {
       write(root, "HM-1-a/task.md", "---\nid: HM-1\n---\n");
       for (const file of [
-        ".claim-HM-2",
-        ".claim-HM-2 2",
-        "HM-1-a/.pending-id",
-        "HM-1-a/.pending-id 2",
+        ".owner-lock",
+        ".owner-lock-journal",
         `HM-1-a/.task.md.${crypto.randomUUID()}.tmp`,
         `.new-${crypto.randomUUID()}/task.md`,
       ])
@@ -413,12 +405,17 @@ describe("workspace", () => {
     git(older, "init", "-q");
     write(older, "config.json", '{ "name": "Older", "key": "HM" }');
     write(older, ".gitignore", "notes.txt\n");
-    bookkeeping(older);
+    write(older, "HM-1-a/task.md", "---\nid: HM-1\n---\n");
     for (let open = 0; open < 2; open++)
-      await run(Effect.flatMap(makeWorkspace("test", older), (ws) => ws.snapshot));
+      await run(
+        Effect.flatMap(makeWorkspace("test", older), (ws) =>
+          ws.updateTask("HM-1", { priority: "high" }),
+        ),
+      );
+    bookkeeping(older);
     const ignore = readFileSync(join(older, ".octodo/.gitignore"), "utf8");
     expect(ignore.startsWith("notes.txt\n"), "keeps the lines it had").toBe(true);
-    expect(ignore.split("\n").filter((line) => line === ".claim-*")).toHaveLength(1);
+    expect(ignore.split("\n").filter((line) => line === ".owner-lock*")).toHaveLength(1);
     expect(untracked(older)).toEqual(visibleToGit);
   });
 
@@ -728,7 +725,7 @@ describe("workspace", () => {
       }),
     );
     expect(result.reordered).toEqual(["c", "a", "b"]);
-    expect(result.folders).toEqual([".gitignore", "a", "b", "c", "config.json"]);
+    expect(result.folders).toEqual([".gitignore", ".owner-lock", "a", "b", "c", "config.json"]);
     expect(result.moved).toEqual({ id: "b/c", name: "C", parent: "b", folder: "b/c" });
     expect(result.task).toMatchObject({
       list: "b/c",
@@ -967,6 +964,10 @@ describe("attachments", () => {
       }),
     );
     expect(error._tag).toBe("StorageError");
-    expect(readdirSync(join(root, ".octodo")).toSorted()).toEqual([".gitignore", "config.json"]);
+    expect(readdirSync(join(root, ".octodo")).toSorted()).toEqual([
+      ".gitignore",
+      ".owner-lock",
+      "config.json",
+    ]);
   });
 });

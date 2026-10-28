@@ -1,6 +1,7 @@
 import {
   Cause,
   DateTime,
+  Duration,
   Effect,
   FileSystem,
   Option,
@@ -57,11 +58,23 @@ import {
   taskFolderName,
   taskSubtree,
 } from "./layout.ts";
-import { editTaskFile, newListFile, newTaskFile, patchFrontmatter, keepLinks } from "./markdown.ts";
-import { claimIds, idElsewhereOnDisk, nextIdOnDisk } from "./ids.ts";
+import {
+  editTaskFile,
+  keepLinks,
+  needsId,
+  newListFile,
+  newTaskFile,
+  patchFrontmatter,
+} from "./markdown.ts";
 import { applyFix } from "./fixes.ts";
 import { scanWorkspace, type Scan } from "./scan.ts";
 import { createConfig, editConfig, hasConfig } from "./storage/config.ts";
+import {
+  OWNER_LOCK_FILE,
+  OwnerLockBusy,
+  OwnerLockFailed,
+  makeOwnerLock,
+} from "./storage/owner-lock.ts";
 import { invisibleToScans, makeScanCache, reportingChanges } from "./scan-cache.ts";
 
 /** One workspace on disk: a folder with a `.octodo/` directory. The files are the source of truth. */
@@ -196,7 +209,11 @@ export const initWorkspace = Effect.fnUntraced(function* (
 export const makeWorkspace = Effect.fnUntraced(function* (
   id: string,
   root: string,
-  options: { readonly watch?: boolean } = {},
+  options: {
+    readonly watch?: boolean;
+    /** How long a write waits for another process to release the owner lock. */
+    readonly lockWait?: Duration.Input;
+  } = {},
 ) {
   const reads = makeScanCache();
   const fs = reportingChanges(yield* FileSystem.FileSystem, reads);
@@ -212,25 +229,91 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       Effect.provideService(Path.Path, path),
     );
 
-  yield* withPlatform(removeLeftovers(tasksDir));
-  yield* withPlatform(Effect.ignore(ignoreBookkeeping(tasksDir)));
-
   const writeAtomic = (file: string, content: string | Uint8Array) =>
     withPlatform(writeFileAtomic(file, content));
 
-  /** The last scan, until a file changes. */
+  /** Forgets every read, for when the files may have changed in ways nobody reported. */
+  const forgetAll = Effect.sync(() => reads.clear());
+
+  /** Whether this workspace removed a crashed write's leftovers yet, which it does once. */
+  let cleaned = false;
+  const cleanUp = Effect.suspend(() => {
+    if (cleaned) return Effect.void;
+    cleaned = true;
+    return withPlatform(
+      Effect.andThen(removeLeftovers(tasksDir), Effect.ignore(ignoreBookkeeping(tasksDir))),
+    );
+  });
+
+  const owner = yield* makeOwnerLock(path.join(tasksDir, OWNER_LOCK_FILE), {
+    wait: options.lockWait ?? "10 seconds",
+    onNewHolder: Effect.andThen(forgetAll, cleanUp),
+  });
+
+  /** Runs `effect` as the only octodo process writing the workspace. */
+  const holdingLock = <A, E>(effect: Effect.Effect<A, E>) =>
+    owner.hold(effect).pipe(
+      Effect.catchIf(
+        (error) => error instanceof OwnerLockBusy || error instanceof OwnerLockFailed,
+        (error) =>
+          Effect.fail(
+            new StorageError({
+              message:
+                error instanceof OwnerLockBusy
+                  ? "Another octodo process is writing this workspace; try again when it is done"
+                  : `Could not take the workspace's owner lock (${TASKS_DIR}/${OWNER_LOCK_FILE})`,
+              cause: error,
+            }),
+          ),
+      ),
+    );
+
+  const scanned = withPlatform(scanWorkspace(id, root, reads));
+
+  /** The highest id number this workspace handed out, so two ids in one hold always differ. */
+  let issued = 0;
+  /** The next task id, from this holder's own state; call it only holding the owner lock. */
+  const nextId = ({ nextIdNumber, snapshot }: Scan) => {
+    issued = Math.max(issued + 1, nextIdNumber);
+    return `${snapshot.workspace.key}-${issued}`;
+  };
+
+  /** Gives each task file without an id the next id, holding the owner lock. */
+  const giveIds = holdingLock(
+    Effect.gen(function* () {
+      const scan = yield* scanned;
+      for (const dir of scan.missingId) {
+        const file = path.join(dir, TASK_FILE);
+        const taskId = nextId(scan);
+        yield* Effect.gen(function* () {
+          const text = yield* fs.readFileString(file);
+          if (!needsId(text)) return;
+          yield* writeAtomic(file, patchFrontmatter(text, { id: taskId }));
+          yield* Effect.logInfo(`Assigned ${taskId} to ${path.relative(root, file)}`);
+        }).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning(`Could not give ${path.relative(root, file)} an id`, error),
+          ),
+        );
+      }
+    }),
+  );
+
+  /** The last scan, until a file changes. Files made by hand get an id the first time it reads them. */
   let kept: { readonly version: number; readonly scan: Scan } | undefined;
   const state = Effect.gen(function* () {
-    const version = reads.version();
-    if (kept?.version === version) return kept.scan;
-    const scan = yield* withPlatform(scanWorkspace(id, root, reads));
+    if (kept?.version === reads.version()) return kept.scan;
+    let version = reads.version();
+    let scan = yield* scanned;
+    if (scan.missingId.length > 0) {
+      yield* giveIds.pipe(Effect.catch((error) => Effect.logWarning(error.message)));
+      version = reads.version();
+      scan = yield* scanned;
+    }
     kept = { version, scan };
     return scan;
   });
   const current = Effect.map(state, ({ snapshot }) => snapshot);
-
-  /** Forgets every read, for when the files may have changed in ways nobody reported. */
-  const forgetAll = Effect.sync(() => reads.clear());
 
   const findTask = (snapshot: WorkspaceSnapshot, taskId: string) => {
     const task = snapshot.tasks.find((candidate) => candidate.id === taskId);
@@ -346,12 +429,17 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       return renamed;
     });
 
-  /** Serialises writes. Unless a watcher reports what others change, the next read rereads it all. */
+  /**
+   * Serialises writes, in this process and against every other one through the owner lock. Unless
+   * a watcher reports what others change, the next read rereads it all.
+   */
   const write = <A, E>(effect: Effect.Effect<A, E>) =>
     lock.withPermits(1)(
-      Effect.ensuring(
-        effect,
-        Effect.suspend(() => (watching ? Effect.void : forgetAll)),
+      holdingLock(
+        Effect.ensuring(
+          effect,
+          Effect.suspend(() => (watching ? Effect.void : forgetAll)),
+        ),
       ),
     );
 
@@ -373,27 +461,19 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   const reread = (taskId: string) =>
     Effect.flatMap(current, (snapshot) => findTask(snapshot, taskId));
 
-  /** A new task id that no other process on this machine hands out until the scope closes. */
-  const claimId = Effect.gen(function* () {
-    const cached = yield* state;
-    const { key } = cached.snapshot.workspace;
-    const [claimed] = yield* withPlatform(
-      claimIds(tasksDir, key, cached.nextIdNumber, 1, nextIdOnDisk(tasksDir, key)),
-    );
-    return claimed!;
-  });
+  const newId = Effect.map(state, nextId);
 
   const createTask = (input: CreateTaskInput) =>
     write(
       Effect.gen(function* () {
-        const taskId = yield* claimId.pipe(storage("Could not claim an id for the task"));
         const scan = yield* state;
         const { snapshot } = scan;
         const status = input.status ?? defaultStatus(snapshot.statuses)?.id;
         if (status === undefined) return yield* invalid("The workspace has no statuses");
         yield* checkStatus(snapshot, status);
         const container = yield* destination(snapshot, input, TOP);
-        let folder = yield* Effect.gen(function* () {
+        const taskId = nextId(scan);
+        yield* Effect.gen(function* () {
           const siblings = yield* orderedTasks(snapshot, container);
           const content = newTaskFile(input, {
             id: taskId,
@@ -404,28 +484,9 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           const dir = containerDir(scan, container);
           const name = yield* freeName(dir, taskFolderName(taskId, input.title));
           yield* createFolder(dir, name, TASK_FILE, content);
-          return path.join(dir, name);
         }).pipe(storage("Could not write the task"));
-        let id = taskId;
-        /**
-         * Whether a task with the same id appeared while this one was written. Reads every id on
-         * disk, since a sync tool's file can land anywhere before the watcher reports it.
-         */
-        const clashes = Effect.gen(function* () {
-          const file = path.join(folder, TASK_FILE);
-          if (yield* withPlatform(idElsewhereOnDisk(tasksDir, id, file))) yield* forgetAll;
-          return (yield* state).idClashes.has(id);
-        });
-        while (yield* clashes) {
-          id = yield* claimId.pipe(storage("Could not claim an id for the task"));
-          folder = yield* Effect.gen(function* () {
-            const file = path.join(folder, TASK_FILE);
-            yield* writeAtomic(file, patchFrontmatter(yield* fs.readFileString(file), { id }));
-            return yield* renameFolder(folder, taskFolderName(id, input.title));
-          }).pipe(storage("Could not write the task"));
-        }
-        return yield* reread(id).pipe(readBack);
-      }).pipe(Effect.scoped),
+        return yield* reread(taskId).pipe(readBack);
+      }),
     );
 
   /**
@@ -698,7 +759,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           );
           if (next === undefined) return { fixed, failed, diagnostics: scan.snapshot.diagnostics };
           tried.add(key(next));
-          const exit = yield* Effect.exit(withPlatform(applyFix(root, scan, next, claimId)));
+          const exit = yield* Effect.exit(withPlatform(applyFix(root, scan, next, newId)));
           if (exit._tag === "Success") fixed.push(next);
           else failed.push({ diagnostic: next, error: String(Cause.squash(exit.cause)) });
         }

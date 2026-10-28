@@ -1,31 +1,26 @@
 import { Effect, FileSystem, Option, Path, PlatformError } from "effect";
-import { hostname } from "node:os";
+import { OWNER_LOCK_FILE } from "./storage/owner-lock.ts";
 
 /**
- * Names of octodo's own bookkeeping files and folders: the temporary ones writes build and rename
- * into place, id claims and pending-id markers. All are dot names, which a scan never reads, and
- * each is distinct enough that `removeLeftovers` takes only octodo's own.
+ * Names of the temporary files and folders writes build and rename into place. Both are dot
+ * names, which a scan never reads, and distinct enough that `removeLeftovers` takes only octodo's.
  */
 export const tempName = {
   file: (name: string) => `.${name}.${crypto.randomUUID()}.tmp`,
   folder: () => `.new-${crypto.randomUUID()}`,
-  /** The file in `.octodo/` whose exclusive creation reserves task id `id` for one process. */
-  claim: (id: string) => `.claim-${id}`,
-  /** The file in a task folder naming the id being written into its `task.md`. */
-  pendingId: ".pending-id",
 };
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-const LEFTOVER = new RegExp(`^\\.(?:.+\\.${UUID}\\.tmp|new-${UUID}|claim-.+-\\d+|pending-id)$`);
+const LEFTOVER = new RegExp(`^\\.(?:.+\\.${UUID}\\.tmp|new-${UUID})$`);
 
-/** The name a sync tool's conflict copy of a bookkeeping file copies: `.claim-HM-5 2` copies `.claim-HM-5`. */
+/** The name a sync tool's conflict copy of a temporary name copies: `.new-<uuid> 2` copies `.new-<uuid>`. */
 const copied = (name: string) => name.replace(/ \d+(?=(?:\.tmp)?$)/, "");
 
 /** Whether `name` is one of octodo's own bookkeeping files, or a sync tool's copy of one. */
 const isBookkeeping = (name: string) => LEFTOVER.test(copied(name));
 
 /** Patterns in `.octodo/.gitignore` matching every bookkeeping name and its conflict copies. */
-const IGNORED = [".claim-*", ".pending-id*", ".new-*", ".*.tmp"];
+const IGNORED = [`${OWNER_LOCK_FILE}*`, ".new-*", ".*.tmp"];
 
 /** Adds the bookkeeping patterns `.octodo/.gitignore` lacks, keeping the lines it has. */
 export const ignoreBookkeeping = (
@@ -43,28 +38,9 @@ export const ignoreBookkeeping = (
     yield* writeFileAtomic(file, `${kept}${missing.join("\n")}\n`);
   });
 
-/** How old a temporary file must be before it is taken as a crash's leftover, not a write in progress. */
-const STALE_AFTER_MS = 60_000;
-
-/** What a claim file holds: the process that owns it and its machine. */
-export const claimOwner = (): string => `${process.pid} ${hostname()}\n`;
-
-/** Whether a claim's owner still runs, or null when this machine cannot tell. */
-const ownerRuns = (claim: string): boolean | null => {
-  const match = /^(\d+) (.+)$/.exec(claim.trim());
-  if (match === null || match[2] !== hostname()) return null;
-  try {
-    process.kill(Number(match[1]), 0);
-    return true;
-  } catch (error) {
-    return (error as { code?: string }).code === "EPERM";
-  }
-};
-
 /**
- * Removes the temporary files and folders under `dir` that a crashed write left: a
- * claim once its owner has stopped, anything else (and a claim from another machine) once it is
- * old enough that no live writer still owns it.
+ * Removes the temporary files and folders under `dir` that a crashed write left. Run it only
+ * holding the owner lock: then no write that owns one is still running.
  */
 export const removeLeftovers = (
   dir: string,
@@ -75,18 +51,9 @@ export const removeLeftovers = (
     for (const name of yield* fs.readDirectory(dir)) {
       const child = path.join(dir, name);
       yield* Effect.gen(function* () {
+        if (isBookkeeping(name)) return yield* fs.remove(child, { recursive: true });
         const info = yield* fs.lstat(child);
-        if (isBookkeeping(name)) {
-          const runs = name.startsWith(".claim-")
-            ? ownerRuns(yield* fs.readFileString(child).pipe(Effect.orElseSucceed(() => "")))
-            : null;
-          const modified = Option.getOrElse(info.mtime, () => new Date());
-          const stale = Date.now() - modified.getTime() > STALE_AFTER_MS;
-          if (runs === false || (runs === null && stale))
-            yield* fs.remove(child, { recursive: true });
-        } else if (!name.startsWith(".") && info.type === "Directory") {
-          yield* removeLeftovers(child);
-        }
+        if (!name.startsWith(".") && info.type === "Directory") yield* removeLeftovers(child);
       }).pipe(Effect.ignore);
     }
   }).pipe(Effect.ignore);

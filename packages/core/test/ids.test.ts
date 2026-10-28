@@ -1,122 +1,61 @@
 import { NodeServices } from "@effect/platform-node";
-import { Effect, FileSystem, Layer } from "effect";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  statSync,
-  utimesSync,
-  writeFileSync,
-} from "node:fs";
-import { spawnSync } from "node:child_process";
+import { Effect } from "effect";
+import { spawn, spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { initWorkspace, makeWorkspace, type Workspace } from "../src/workspace.ts";
 
 /** Each call is its own runtime, as another process would be: nothing is shared but the files. */
-const run = <A, E>(effect: Effect.Effect<A, E, any>, layer = NodeServices.layer) =>
-  Effect.runPromise(effect.pipe(Effect.scoped, Effect.provide(layer)) as Effect.Effect<A, E>);
+const run = <A, E>(effect: Effect.Effect<A, E, any>) =>
+  Effect.runPromise(
+    effect.pipe(Effect.scoped, Effect.provide(NodeServices.layer)) as Effect.Effect<A, E>,
+  );
 
-/**
- * A file system that sees `.octodo/` as it was before another process wrote, until this process
- * changes any file: `hidden` is left out of its listing and `stale` reads as `before`.
- */
-const lateReader = (
-  root: string,
-  view: { readonly hidden: string; readonly stale: string; readonly before: string },
-): typeof NodeServices.layer =>
-  Layer.effect(
-    FileSystem.FileSystem,
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      let wrote = false;
-      const writing =
-        <Args extends ReadonlyArray<unknown>, A, E>(
-          method: (...args: Args) => Effect.Effect<A, E>,
-        ) =>
-        (...args: Args) =>
-          Effect.suspend(() => {
-            wrote = true;
-            return method(...args);
-          });
-      return {
-        ...fs,
-        readDirectory: (path, options) =>
-          Effect.map(fs.readDirectory(path, options), (names) =>
-            wrote || path !== join(root, ".octodo")
-              ? names
-              : names.filter((name) => name !== view.hidden),
-          ),
-        readFileString: (path, encoding) =>
-          wrote || path !== join(root, ".octodo", view.stale)
-            ? fs.readFileString(path, encoding)
-            : Effect.succeed(view.before),
-        writeFile: writing(fs.writeFile),
-        writeFileString: writing(fs.writeFileString),
-        link: writing(fs.link),
-        rename: writing(fs.rename),
-        remove: writing(fs.remove),
-        makeDirectory: writing(fs.makeDirectory),
-      };
-    }),
-  ).pipe(Layer.provideMerge(NodeServices.layer));
+const CRASH = join(import.meta.dirname, "crash.ts");
 
-/** Runs `operation` on the workspace in another process that dies as it publishes its first write. */
+/** Another octodo process running `operation` on the workspace; see `crash.ts`. */
+const octodo = (root: string, operation: string, atPublish: "go" | "pause" | "kill" = "go") => {
+  const child = spawn(process.execPath, [CRASH, root, operation, atPublish]);
+  let out = "";
+  let err = "";
+  child.stdout.on("data", (data) => (out += String(data)));
+  child.stderr.on("data", (data) => (err += String(data)));
+  const exited = new Promise<{ ids: Array<string>; signal: string | null; stderr: string }>(
+    (resolve) =>
+      child.once("exit", (_code, signal) =>
+        resolve({ ids: out.match(/[A-Z]+-\d+/g) ?? [], signal, stderr: err }),
+      ),
+  );
+  const paused = new Promise<void>((resolve) =>
+    child.stdout.on("data", () => out.includes("paused") && resolve()),
+  );
+  let running = true;
+  void exited.then(() => (running = false));
+  return {
+    exited,
+    paused,
+    running: () => running,
+    resume: () => child.stdin.write("go\n"),
+  };
+};
+
+/** Runs `operation` in another process that dies with SIGKILL as it publishes its first write. */
 const crash = (root: string, operation: "create" | "read") => {
-  const child = spawnSync(process.execPath, [
-    join(import.meta.dirname, "crash.ts"),
-    root,
-    operation,
-  ]);
+  const child = spawnSync(process.execPath, [CRASH, root, operation, "kill"]);
   expect({ signal: child.signal, stderr: String(child.stderr) }).toMatchObject({
     signal: "SIGKILL",
   });
 };
 
-/**
- * A file system that holds the first rename publishing a hidden name under a visible one (a new
- * folder or file moving into place) until `open` is called.
- */
-const publishGate = () => {
-  let reach!: () => void;
-  let open!: () => void;
-  const reached = new Promise<void>((resolve) => (reach = resolve));
-  const opened = new Promise<void>((resolve) => (open = resolve));
-  let held = false;
-  const layer: typeof NodeServices.layer = Layer.effect(
-    FileSystem.FileSystem,
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      return {
-        ...fs,
-        rename: (from, to) => {
-          if (held || !basename(from).startsWith(".") || basename(to).startsWith("."))
-            return fs.rename(from, to);
-          held = true;
-          reach();
-          return Effect.andThen(
-            Effect.promise(() => opened),
-            fs.rename(from, to),
-          );
-        },
-      };
-    }),
-  ).pipe(Layer.provideMerge(NodeServices.layer));
-  return { layer, reached, open };
-};
-
-/** Sets `entries` under `.octodo/` two minutes back, as if the process owning them were slow. */
-const age = (root: string, entries: ReadonlyArray<string>) => {
-  const then = new Date(Date.now() - 120_000);
-  for (const entry of entries) utimesSync(join(root, ".octodo", entry), then, then);
-};
-
-/** Hidden entries under `.octodo/` other than its `.gitignore`. */
+/** Hidden entries under `.octodo/` other than its `.gitignore` and the owner lock. */
 const leftovers = (root: string) =>
   readdirSync(join(root, ".octodo"), { recursive: true, encoding: "utf8" }).filter(
-    (entry) => entry !== ".gitignore" && entry.split("/").some((part) => part.startsWith(".")),
+    (entry) =>
+      entry !== ".gitignore" &&
+      entry !== ".owner-lock" &&
+      entry.split("/").some((part) => part.startsWith(".")),
   );
 
 const fresh = async () => {
@@ -157,17 +96,98 @@ const ids = (root: string) =>
     diagnostics: snapshot.diagnostics.map((diagnostic) => diagnostic.message),
   }));
 
+const numbered = (count: number) =>
+  Array.from({ length: count }, (_, index) => `HM-${index + 1}`).toSorted();
+
 describe("task ids across processes", () => {
+  it("never hands out an id twice when two processes create tasks at once", async () => {
+    const root = await fresh();
+    const [first, second] = await Promise.all([
+      octodo(root, "create:15").exited,
+      octodo(root, "create:15").exited,
+    ]);
+    expect([first.stderr, second.stderr]).toEqual(["", ""]);
+    const created = [...first.ids, ...second.ids];
+    expect(created.toSorted()).toEqual(numbered(30));
+    expect(await ids(root)).toEqual({ ids: numbered(30), diagnostics: [] });
+    for (const id of created) {
+      const folder = readdirSync(join(root, ".octodo")).find((name) => name.startsWith(`${id}-`));
+      expect(read(root, `${folder}/task.md`)).toContain(`id: ${id}\n`);
+    }
+  });
+
+  it("lets only the holder write: another process waits for the lock, then writes after it", async () => {
+    const root = await fresh();
+    const holder = octodo(root, "create", "pause");
+    await holder.paused;
+    const waiting = octodo(root, "create");
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(waiting.running(), "the second create waits while the first holds the lock").toBe(true);
+    expect(await ids(root), "a read needs no lock").toEqual({ ids: [], diagnostics: [] });
+    holder.resume();
+    const [first, second] = await Promise.all([holder.exited, waiting.exited]);
+    expect([first.ids, second.ids]).toEqual([["HM-1"], ["HM-2"]]);
+    expect(await ids(root)).toEqual({ ids: ["HM-1", "HM-2"], diagnostics: [] });
+  });
+
+  it("reports that another octodo is writing once it has waited long enough", async () => {
+    const root = await fresh();
+    const holder = octodo(root, "create", "pause");
+    await holder.paused;
+    const error = await run(
+      Effect.flatMap(makeWorkspace("impatient", root, { lockWait: "200 millis" }), (ws) =>
+        Effect.flip(ws.createTask({ title: "Impatient" })),
+      ),
+    );
+    holder.resume();
+    await holder.exited;
+    expect(error).toMatchObject({
+      _tag: "StorageError",
+      message: "Another octodo process is writing this workspace; try again when it is done",
+    });
+    expect(await ids(root)).toEqual({ ids: ["HM-1"], diagnostics: [] });
+  });
+
+  it("takes over the lock of a holder killed with SIGKILL, and cleans up after it", async () => {
+    const root = await fresh();
+    crash(root, "create");
+    expect(leftovers(root), "the crash leaves its new folder").not.toEqual([]);
+    const started = Date.now();
+    const created = await run(
+      Effect.flatMap(makeWorkspace("cli", root, { lockWait: "1 second" }), (ws) =>
+        ws.createTask({ title: "Next" }),
+      ),
+    );
+    expect(Date.now() - started, "the lock is free at once").toBeLessThan(1000);
+    expect(created.id).toBe("HM-1");
+    expect(leftovers(root)).toEqual([]);
+    expect(await ids(root)).toEqual({ ids: ["HM-1"], diagnostics: [] });
+  });
+
+  it("gives a hand-made file its id after a process died giving it one", async () => {
+    const root = await fresh();
+    write(root, "milk/task.md", "Buy milk\n");
+    crash(root, "read");
+    expect(read(root, "milk/task.md"), "the crash came before the id was written").toBe(
+      "Buy milk\n",
+    );
+    const created = await run(
+      Effect.flatMap(makeWorkspace("cli", root), (ws) => ws.createTask({ title: "New" })),
+    );
+    expect(read(root, "milk/task.md")).toMatch(/^---\nid: HM-1\n/);
+    expect(created.id).toBe("HM-2");
+    expect(leftovers(root)).toEqual([]);
+    expect(await ids(root)).toEqual({ ids: ["HM-1", "HM-2"], diagnostics: [] });
+  });
+
   it("never gives a new task an id that another process created since this one last read", async () => {
     const root = await fresh();
     const app = await openApp(root);
     await app.use((ws) => ws.snapshot);
-    const cli = await run(
-      Effect.flatMap(makeWorkspace("cli", root), (ws) => ws.createTask({ title: "From the CLI" })),
-    );
+    const cli = await octodo(root, "create").exited;
     const fromApp = await app.use((ws) => ws.createTask({ title: "From the app" }));
     app.close();
-    expect(cli.id).toBe("HM-1");
+    expect(cli.ids).toEqual(["HM-1"]);
     expect(fromApp.id).toBe("HM-2");
     expect(await ids(root)).toEqual({ ids: ["HM-1", "HM-2"], diagnostics: [] });
   });
@@ -182,10 +202,9 @@ describe("task ids across processes", () => {
       ),
     );
     const created = (await Promise.all(creates)).map((task) => task.id);
-    expect(new Set(created).size).toBe(created.length);
-    const onDisk = await ids(root);
-    expect(onDisk.diagnostics).toEqual([]);
-    expect(onDisk.ids).toEqual(created.toSorted());
+    expect(created.toSorted()).toEqual(numbered(12));
+    expect(await ids(root)).toEqual({ ids: numbered(12), diagnostics: [] });
+    expect(leftovers(root)).toEqual([]);
   });
 
   it("gives a hand-made file one id when several workspaces read it at once, and two files two ids", async () => {
@@ -199,27 +218,12 @@ describe("task ids across processes", () => {
     );
     const milk = /id: (HM-\d+)/.exec(read(root, "milk/task.md"))![1];
     const bread = /id: (HM-\d+)/.exec(read(root, "bread/task.md"))![1];
-    expect(milk).not.toBe(bread);
+    expect(new Set([milk, bread])).toEqual(new Set(["HM-1", "HM-2"]));
     for (const snapshot of reads) {
       const byTitle = Object.fromEntries(snapshot.tasks.map((task) => [task.title, task.id]));
       expect(byTitle).toEqual({ Milk: milk, Bread: bread });
     }
     expect(read(root, "milk/task.md")).toBe(`---\nid: ${milk}\n---\n\nBuy milk\n`);
-  });
-
-  it("keeps the id another process gave a hand-made file after this one read it without an id", async () => {
-    const root = await fresh();
-    write(root, "milk/task.md", "Buy milk\n");
-    write(root, "bread/task.md", "Buy bread\n");
-    await run(Effect.flatMap(makeWorkspace("first", root), (ws) => ws.snapshot));
-    const first = { bread: read(root, "bread/task.md"), milk: read(root, "milk/task.md") };
-    const late = lateReader(root, { hidden: "bread", stale: "milk/task.md", before: "Buy milk\n" });
-    const snapshot = await run(
-      Effect.flatMap(makeWorkspace("late", root), (ws) => ws.snapshot),
-      late,
-    );
-    expect({ bread: read(root, "bread/task.md"), milk: read(root, "milk/task.md") }).toEqual(first);
-    expect(snapshot.diagnostics).toEqual([]);
   });
 
   it("gives a file whose id is null or ~ an id in one read", { timeout: 3000 }, async () => {
@@ -231,179 +235,6 @@ describe("task ids across processes", () => {
     expect(read(root, "bread/task.md")).toMatch(/^---\nid: HM-\d\n---\n\nBuy bread\n$/);
   });
 
-  it("reports a task it cannot give an id to and reads the rest", async () => {
-    const root = await fresh();
-    write(root, "milk/task.md", "Buy milk\n");
-    mkdirSync(join(root, ".octodo/milk/.pending-id"));
-    write(root, "bread/task.md", "Buy bread\n");
-    const onDisk = await ids(root);
-    expect(onDisk.ids).toEqual(["HM-1"]);
-    expect(onDisk.diagnostics).toEqual([
-      expect.stringMatching(/^This task has no id and writing one failed/),
-    ]);
-  });
-
-  it("gives a copied folder a new id when its pending marker names a task that has it", async () => {
-    const root = await fresh();
-    write(root, "HM-1-milk/task.md", "---\nid: HM-1\n---\n\nBuy milk\n");
-    write(root, "HM-1-milk/.pending-id", "HM-1\n");
-    write(root, "milk-copy/task.md", "Buy milk\n");
-    write(root, "milk-copy/.pending-id", "HM-1\n");
-    write(root, "junk/task.md", "Junk\n");
-    write(root, "junk/.pending-id", "not an id\n");
-    expect(await ids(root)).toEqual({ ids: ["HM-1", "HM-2", "HM-3"], diagnostics: [] });
-    const hidden = leftovers(root);
-    expect(hidden, "a task with its id keeps no marker").toEqual([]);
-  });
-
-  it("never hands out the id of a create that has run for more than a minute", async () => {
-    const root = await fresh();
-    const gate = publishGate();
-    const slow = run(
-      Effect.flatMap(makeWorkspace("slow", root), (ws) => ws.createTask({ title: "Slow" })),
-      gate.layer,
-    );
-    await gate.reached;
-    age(
-      root,
-      leftovers(root).filter((entry) => statSync(join(root, ".octodo", entry)).isFile()),
-    );
-    const quick = await run(
-      Effect.flatMap(makeWorkspace("quick", root), (ws) => ws.createTask({ title: "Quick" })),
-    );
-    gate.open();
-    expect([(await slow).id, quick.id]).toEqual(["HM-1", "HM-2"]);
-    expect(await ids(root)).toEqual({ ids: ["HM-1", "HM-2"], diagnostics: [] });
-  });
-
-  it("gives a new task another id when a task with its id appears while it is written", async () => {
-    const root = await fresh();
-    const gate = publishGate();
-    const slow = run(
-      Effect.flatMap(makeWorkspace("slow", root), (ws) => ws.createTask({ title: "Slow" })),
-      gate.layer,
-    );
-    await gate.reached;
-    write(root, "HM-1-synced/task.md", "---\nid: HM-1\n---\n");
-    gate.open();
-    const created = await slow;
-    expect(created.id).toBe("HM-2");
-    expect(created.path).toBe(".octodo/HM-2-slow/task.md");
-    expect(await ids(root)).toEqual({ ids: ["HM-1", "HM-2"], diagnostics: [] });
-  });
-
-  it("gives a new task another id when a task with its id appears in another list while it is written", async () => {
-    const root = await fresh();
-    write(root, "garden/list.md", "---\nname: Garden\n---\n");
-    const gate = publishGate();
-    const slow = run(
-      Effect.flatMap(makeWorkspace("slow", root), (ws) =>
-        Effect.andThen(ws.snapshot, ws.createTask({ title: "Slow" })),
-      ),
-      gate.layer,
-    );
-    await gate.reached;
-    write(root, "garden/HM-1-synced/task.md", "---\nid: HM-1\n---\n");
-    gate.open();
-    const created = await slow;
-    expect(created.id).toBe("HM-2");
-    expect(await ids(root)).toEqual({ ids: ["HM-1", "HM-2"], diagnostics: [] });
-  });
-
-  it("gives a hand-made file another id when a task with its id appears while it is written", async () => {
-    const root = await fresh();
-    write(root, "milk/task.md", "Buy milk\n");
-    const gate = publishGate();
-    const reading = run(
-      Effect.flatMap(makeWorkspace("app", root), (ws) => ws.snapshot),
-      gate.layer,
-    );
-    await gate.reached;
-    write(root, "HM-1-synced/task.md", "---\nid: HM-1\n---\n");
-    gate.open();
-    const snapshot = await reading;
-    expect(snapshot.tasks.map((task) => [task.title, task.id])).toEqual([
-      ["Synced", "HM-1"],
-      ["Milk", "HM-2"],
-    ]);
-    expect(snapshot.diagnostics).toEqual([]);
-  });
-
-  it("leaves nothing behind in .octodo once creates finish", async () => {
-    const root = await fresh();
-    await Promise.all(
-      Array.from({ length: 4 }, (_, index) =>
-        run(
-          Effect.flatMap(makeWorkspace(`p${index}`, root), (ws) =>
-            ws.createTask({ title: `Task ${index}` }),
-          ),
-        ),
-      ),
-    );
-    const hidden = leftovers(root);
-    expect(hidden).toEqual([]);
-  });
-
-  it("skips the id of a create still running in another process", async () => {
-    const root = await fresh();
-    const gate = publishGate();
-    const slow = run(
-      Effect.flatMap(makeWorkspace("slow", root), (ws) => ws.createTask({ title: "Slow" })),
-      gate.layer,
-    );
-    await gate.reached;
-    const quick = await run(
-      Effect.flatMap(makeWorkspace("quick", root), (ws) => ws.createTask({ title: "Quick" })),
-    );
-    gate.open();
-    expect([(await slow).id, quick.id]).toEqual(["HM-1", "HM-2"]);
-    expect(leftovers(root)).toEqual([]);
-  });
-
-  it("hands out the id of a create that crashed before its task was written, and cleans up after it", async () => {
-    const root = await fresh();
-    crash(root, "create");
-    expect(leftovers(root), "the crash leaves its claim and new folder").not.toEqual([]);
-    age(root, leftovers(root));
-    const created = await run(
-      Effect.flatMap(makeWorkspace("cli", root), (ws) => ws.createTask({ title: "Next" })),
-    );
-    expect(created.id).toBe("HM-1");
-    expect(leftovers(root)).toEqual([]);
-    expect(await ids(root)).toEqual({ ids: ["HM-1"], diagnostics: [] });
-  });
-  it("finishes giving the id a crashed process picked for a hand-made file, and never hands it out again", async () => {
-    const root = await fresh();
-    write(root, "milk/task.md", "Buy milk\n");
-    crash(root, "read");
-    expect(read(root, "milk/task.md"), "the crash came before the id was written").toBe(
-      "Buy milk\n",
-    );
-    age(root, leftovers(root));
-    const created = await run(
-      Effect.flatMap(makeWorkspace("cli", root), (ws) => ws.createTask({ title: "New" })),
-    );
-    expect(read(root, "milk/task.md")).toMatch(/^---\nid: HM-1\n/);
-    expect(created.id).toBe("HM-2");
-    expect(leftovers(root)).toEqual([]);
-    expect(await ids(root)).toEqual({ ids: ["HM-1", "HM-2"], diagnostics: [] });
-  });
-  it("gives a copied task a new id past the one a create in another process holds", async () => {
-    const root = await fresh();
-    write(root, "HM-1-paint/task.md", "---\nid: HM-1\n---\n");
-    write(root, "HM-1-paint-copy/task.md", "---\nid: HM-1\n---\n");
-    const gate = publishGate();
-    const slow = run(
-      Effect.flatMap(makeWorkspace("slow", root), (ws) => ws.createTask({ title: "Slow" })),
-      gate.layer,
-    );
-    await gate.reached;
-    const result = await run(Effect.flatMap(makeWorkspace("app", root), (ws) => ws.fixAll));
-    gate.open();
-    expect(result.failed).toEqual([]);
-    expect((await slow).id).toBe("HM-2");
-    expect(read(root, "HM-3-paint-copy/task.md")).toBe("---\nid: HM-3\n---\n");
-  });
   it("never gives a fixed copy the id of a task another workspace creates at the same time", async () => {
     const root = await fresh();
     write(root, "HM-1-a/task.md", "---\nid: HM-1\n---\n");
@@ -420,8 +251,7 @@ describe("task ids across processes", () => {
       ),
     ]);
     expect(fixed.failed).toEqual([]);
-    const onDisk = await ids(root);
-    expect(onDisk.diagnostics).toEqual([]);
-    expect(onDisk.ids).toHaveLength(1 + 4 + created.length);
+    expect(created).toHaveLength(8);
+    expect(await ids(root)).toEqual({ ids: numbered(1 + 4 + 8), diagnostics: [] });
   });
 });

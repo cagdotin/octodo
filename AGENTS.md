@@ -46,13 +46,15 @@ instead of keeping the code because it exists.
 - A task's identity is the `id` in its frontmatter, never its path. Files without an id get one the
   first time they are read. Frontmatter keys the app does not manage are kept untouched, including
   order and comments (edits go through the `yaml` document API).
-- Every new id is claimed first: creating `.octodo/.claim-<ID>` exclusively reserves it against the
-  other processes on the machine (app, CLI, MCP), for a create, a file read without an id and a fix
-  alike. A `.pending-id` file in a task folder names the id being written into its `task.md`, so
-  readers racing on one new file agree on its id.
-- Dot entries are octodo's own bookkeeping: claims, pending-id markers, `.*.tmp` files and `.new-*`
-  folders. Scans, diagnostics and attachments never see them, and one more than a minute old is a
-  crash's leftover, removed when a workspace opens.
+- One process at a time writes a workspace: every write holds the owner lock, an exclusive SQLite
+  transaction on `.octodo/.owner-lock` (`storage/owner-lock.ts`) that the OS releases when its
+  holder dies, even on SIGKILL. Another process waits for it (10 s) and then reports that another
+  octodo is writing; reads need no lock. The holder assigns new ids from its own scan, for a
+  create, a file read without an id and a fix alike. The lock's one row names the last holder, so
+  a holder that finds another one had it since forgets its cache and reads the files again.
+- Dot entries are octodo's own bookkeeping: the owner lock, `.*.tmp` files and `.new-*` folders.
+  Scans, diagnostics and attachments never see them. The first time a process holds the lock, it
+  removes the temporary ones, since no write that owns them can still be running.
 - Every problem a read finds is a diagnostic `{ path, kind, field, message, fix }`, and every kind
   is a row of `PROBLEMS` in `diagnostics.ts` with its remedy and its fixes. A fix runs only when asked
   (`octo doctor`, the app's dialog, MCP `fix_diagnostic`) and only if a fresh read still offers that

@@ -1,7 +1,7 @@
 ---
 id: OCT-73
 title: Generate effect/cli flags from a flat Schema (catalog groundwork)
-status: todo
+status: done
 priority: medium
 tags:
   - cli

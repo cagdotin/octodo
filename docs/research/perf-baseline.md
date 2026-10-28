@@ -126,3 +126,31 @@ is the workload and the harness (this one waits for the watcher to go quiet and 
 snapshot before each operation), not a regression. Since `ae416f2`, cold open got about 40% faster,
 and rename (about 15 ms) and hand edit seen (about 40 ms) got slower, by more than the run-to-run
 range. Status change and create did not change measurably.
+
+## After OCT-46
+
+Measured at commit `2f76ae3` against `e8fd424` (master before OCT-46), alternating in one session
+on the same machine, load average 2.3 to 3.1. Median and range of 7 runs.
+
+| Tasks | Operation      | Before, ms     | After, ms     |
+| ----- | -------------- | -------------- | ------------- |
+| 1,000 | cold open      | 250 (239–263)  | 159 (157–188) |
+| 1,000 | status change  | 42 (26–67)     | 50 (27–52)    |
+| 1,000 | rename         | 53 (45–58)     | 51 (45–56)    |
+| 1,000 | create         | 133 (127–168)  | 49 (45–56)    |
+| 1,000 | hand edit seen | 137 (124–148)  | 124 (113–141) |
+| 5,000 | cold open      | 947 (923–1013) | 564 (560–600) |
+| 5,000 | status change  | 138 (134–143)  | 134 (122–151) |
+| 5,000 | rename         | 135 (132–144)  | 127 (101–132) |
+| 5,000 | create         | 642 (528–683)  | 129 (103–161) |
+| 5,000 | hand edit seen | 231 (207–239)  | 228 (217–240) |
+
+- **Create** dropped by about 500 ms at 5,000 tasks: the two uncached id walks are gone, and the
+  holder takes the next id from its scan. It now costs what a status change costs (the snapshot
+  rebuild) plus the new folder.
+- **Cold open** dropped by about 380 ms at 5,000 tasks because opening no longer walks the tree
+  for leftovers: `removeLeftovers` alone took 340 to 435 ms on the generated 5,000-task workspace.
+  It now runs at a process's first write, inside the bench's warm-up, so the timed writes do not
+  include it. A CLI write command still pays it once.
+- Status change, rename and hand edit seen are within their ranges. A hold of the owner lock by
+  the process that held it last costs about 12 µs.

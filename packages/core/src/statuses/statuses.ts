@@ -32,7 +32,10 @@ export const statusOrderError = (
     : `The order must list every status once: ${[...ids].join(", ")}`;
 };
 
-/** `statuses` in `order` within each category; `order` lists each of them once. */
+/**
+ * `statuses` in `order` within each category, where `order` lists each of them once. An id in
+ * `order` that is not one of them, such as a status only tasks use, is left out.
+ */
 export const reorderedStatuses = (
   statuses: ReadonlyArray<StatusDefinition>,
   order: ReadonlyArray<string>,

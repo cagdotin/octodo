@@ -17,8 +17,15 @@ task's status becomes when it moves between lists with different status sets.
   Chores (a checklist with recurring tasks enabled).
 - A preset is copied into `config.json` when a workspace is created, not referenced. Every
   workspace stays self-contained.
+- `config.json` holds the statuses. A status that only tasks use (a hand edit, a copied task) is
+  shown as unstarted and reported as `unknown-status`, and it joins `config.json` only through
+  that diagnostic's `add-status` fix. Reordering takes the order of every status shown and writes
+  only the configured ones (OCT-50). Refusing to reorder while an unknown status exists was the
+  other option; it would block the settings page over a problem it does not touch.
 
 ## Consequences
 
 - Changing a preset later does not change existing workspaces.
 - Presets need no code. They are JSON in the plugins or engine package.
+- Dragging an unknown status in the settings page does not keep its place: it shows at the end of
+  the unstarted statuses until it is added.

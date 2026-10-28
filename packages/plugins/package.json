@@ -6,7 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./counters/shared": "./src/counters/shared.ts",
-    "./counters/web": "./src/counters/web.ts",
+    "./counters/web": "./src/counters/web.tsx",
     "./recurring/shared": "./src/recurring/shared.ts",
     "./recurring/web": "./src/recurring/web.tsx",
     "./web": "./src/web.ts"
@@ -15,6 +15,7 @@
     "@octodo/contract": "workspace:*",
     "@octodo/engine": "workspace:*",
     "@octodo/ui": "workspace:*",
+    "date-fns": "^4.4.0",
     "effect": "^4.0.6",
     "lucide-react": "^1.61.0",
     "react": "^19.3.1"

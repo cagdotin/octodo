@@ -1,7 +1,7 @@
 ---
 id: OCT-45
 title: One reader and writer for config.json (storage/config.ts)
-status: todo
+status: done
 priority: medium
 tags:
   - core

@@ -17,8 +17,8 @@ import {
   type FolderListing,
   type WorkspaceInfo,
 } from "./domain.ts";
-import { CONFIG_FILE, TASKS_DIR, slugify } from "./layout.ts";
-import { readConfig } from "./storage/config.ts";
+import { slugify } from "./layout.ts";
+import { hasConfig, readConfig } from "./storage/config.ts";
 import { initWorkspace, makeWorkspace, type Workspace } from "./workspace.ts";
 
 const RegistryEntry = Schema.Struct({ id: Schema.String, root: Schema.String });
@@ -47,8 +47,8 @@ export class Workspaces extends Context.Service<
     readonly remove: (id: string) => Effect.Effect<void, WorkspaceNotFound | StorageError>;
     readonly get: (id: string) => Effect.Effect<Workspace, WorkspaceNotFound | StorageError>;
     /**
-     * `target` as a folder when it starts with `/` or `.` (the nearest ancestor holding a `.octodo/`
-     * folder), otherwise as a registered id.
+     * `target` as a folder when it starts with `/` or `.` (the nearest ancestor holding a
+     * `.octodo/config.json`), otherwise as a registered id.
      */
     readonly open: (target: string) => Effect.Effect<Workspace, WorkspaceNotFound | StorageError>;
     /**
@@ -165,9 +165,9 @@ export class Workspaces extends Context.Service<
           Effect.gen(function* () {
             let current = path.resolve(dir);
             while (true) {
-              const found = yield* fs
-                .exists(path.join(current, TASKS_DIR, CONFIG_FILE))
-                .pipe(Effect.mapError(fail(`Could not read ${current}`)));
+              const found = yield* withPlatform(hasConfig(current)).pipe(
+                Effect.mapError(fail(`Could not read ${current}`)),
+              );
               if (found) {
                 const registered = (yield* readRegistry).workspaces.find(
                   (entry) => entry.root === current,
@@ -187,7 +187,7 @@ export class Workspaces extends Context.Service<
           target.startsWith("/") || target.startsWith(".") ? containing(target) : get(target);
 
         const hasWorkspace = (dir: string) =>
-          fs.exists(path.join(dir, TASKS_DIR, CONFIG_FILE)).pipe(Effect.orElseSucceed(() => false));
+          withPlatform(hasConfig(dir)).pipe(Effect.orElseSucceed(() => false));
 
         const browse = (dir: string) =>
           Effect.gen(function* () {

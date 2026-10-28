@@ -44,14 +44,14 @@ flowchart LR
 
 ### Today
 
-| Package           | What                                                                                                                                                        |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/core`   | Effect domain: schemas, markdown round-trip, folder rules, `Workspace` and `Workspaces`. `@octodo/core/layout` is plain functions the browser also imports. |
-| `packages/mcp`    | MCP tools on Effect's `McpServer`, stdio and HTTP layers                                                                                                    |
-| `packages/server` | Hono HTTP API, MCP mount, SSE change feed, static web app on 127.0.0.1; `./client` is the typed Hono RPC client                                             |
-| `packages/cli`    | `octo` on `effect/cli`                                                                                                                                      |
-| `apps/web`        | Vite and React; imports types from core plus `@octodo/core/layout`                                                                                          |
-| `apps/desktop`    | Electron shell                                                                                                                                              |
+| Package           | What                                                                                                                                                                                                                                                                 |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/core`   | Effect domain: schemas, markdown round-trip, folder rules, `Workspace` and `Workspaces`. `storage/config.ts` is the one reader and writer of `config.json`, the first piece of the storage layer. `@octodo/core/layout` is plain functions the browser also imports. |
+| `packages/mcp`    | MCP tools on Effect's `McpServer`, stdio and HTTP layers                                                                                                                                                                                                             |
+| `packages/server` | Hono HTTP API, MCP mount, SSE change feed, static web app on 127.0.0.1; `./client` is the typed Hono RPC client                                                                                                                                                      |
+| `packages/cli`    | `octo` on `effect/cli`                                                                                                                                                                                                                                               |
+| `apps/web`        | Vite and React; imports types from core plus `@octodo/core/layout`                                                                                                                                                                                                   |
+| `apps/desktop`    | Electron shell                                                                                                                                                                                                                                                       |
 
 ### Target
 

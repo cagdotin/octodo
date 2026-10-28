@@ -296,6 +296,16 @@ describe("file health", () => {
     expect(await diagnostics(root)).toEqual([]);
   });
 
+  it("offers no status fix while config.json does not read, and never rewrites it", async () => {
+    const root = await fresh({ "HM-1-a/task.md": "---\nid: HM-1\nstatus: in-review\n---\n" });
+    write(root, "config.json", '{ "name": 3, "key": "HM" }');
+    expect(await diagnostics(root)).toEqual([
+      one("HM-1-a/task.md", "unknown-status", "status", null),
+      one("config.json", "invalid-config", null, null),
+    ]);
+    expect(read(root, "config.json")).toBe('{ "name": 3, "key": "HM" }');
+  });
+
   it("wraps a loose markdown file as a task folder with an id", async () => {
     const root = await fresh({
       "home/list.md": "",

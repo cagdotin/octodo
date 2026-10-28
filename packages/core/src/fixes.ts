@@ -2,9 +2,7 @@ import { Effect, FileSystem, Path, PlatformError, Scope } from "effect";
 import { DEFAULT_STATUSES, type Diagnostic, type FixAction } from "./domain.ts";
 import { createFolder, freeName, writeFileAtomic } from "./files.ts";
 import {
-  CONFIG_FILE,
   TASK_FILE,
-  TASKS_DIR,
   conflictCopyOf,
   humanize,
   idNumber,
@@ -13,6 +11,7 @@ import {
 } from "./layout.ts";
 import { frontmatterId, keepLinks, patchFrontmatter, readFrontmatter } from "./markdown.ts";
 import type { Scan } from "./scan.ts";
+import { editConfig } from "./storage/config.ts";
 
 /** What a fix knows: the workspace and a scan of it taken just before, which found the problem. */
 interface FixContext {
@@ -149,19 +148,17 @@ const FIXES: Record<FixAction, Handler> = {
   "drop-unknown-links": keepLinksWhere((id, { known }) => known.has(id)),
   "drop-self-link": keepLinksWhere((id, { own }) => id !== own),
   "normalize-links": keepLinksWhere(() => true),
-  "add-status": ({ root, diagnostic, scan }) =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const status = scan.snapshot.tasks.find((task) => task.path === diagnostic.path)?.status;
-      if (status === undefined) return;
-      const file = path.join(root, TASKS_DIR, CONFIG_FILE);
-      const config = JSON.parse(yield* fs.readFileString(file)) as Record<string, unknown>;
-      const statuses = Array.isArray(config["statuses"]) ? config["statuses"] : DEFAULT_STATUSES;
-      if (statuses.some((known: { id?: unknown }) => known.id === status)) return;
-      const added = [...statuses, { id: status, name: humanize(status), category: "unstarted" }];
-      yield* writeFileAtomic(file, `${JSON.stringify({ ...config, statuses: added }, null, 2)}\n`);
-    }),
+  "add-status": ({ root, diagnostic, scan }) => {
+    const status = scan.snapshot.tasks.find((task) => task.path === diagnostic.path)?.status;
+    if (status === undefined) return Effect.void;
+    return editConfig(root, (config) => {
+      const statuses = config.statuses ?? DEFAULT_STATUSES;
+      if (statuses.some((known) => known.id === status)) return null;
+      return {
+        statuses: [...statuses, { id: status, name: humanize(status), category: "unstarted" }],
+      };
+    });
+  },
 };
 
 /** Applies the fix a fresh scan found for `diagnostic`; nothing when it has none. */

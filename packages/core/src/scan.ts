@@ -728,9 +728,7 @@ export const scanWorkspace = (
         "unknown-status",
         path.join(root, task.path),
         `The status "${task.status}" is not in config.json`,
-        {
-          field: "status",
-        },
+        { field: "status", fix: problem === null ? "add-status" : null },
       );
     }
 

@@ -810,6 +810,21 @@ describe("workspace", () => {
     expect(config.extra).toBe(true);
     expect(config.statuses[2]).toEqual({ id: "in-review", name: "In Review", category: "started" });
   });
+
+  it("refuses to reorder statuses in a config.json that does not read, leaving it as it is", async () => {
+    const root = fresh();
+    const error = await run(
+      Effect.gen(function* () {
+        yield* open(root);
+        writeFileSync(join(root, ".octodo/config.json"), '{ "name": 3, "key": "HM" }');
+        const reopened = yield* makeWorkspace("test", root);
+        const order = (yield* reopened.snapshot).statuses.map((status) => status.id);
+        return yield* Effect.flip(reopened.reorderStatuses({ order: order.toReversed() }));
+      }),
+    );
+    expect(error._tag).toBe("StorageError");
+    expect(read(root, "config.json")).toBe('{ "name": 3, "key": "HM" }');
+  });
 });
 
 describe("attachments", () => {

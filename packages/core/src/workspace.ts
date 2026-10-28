@@ -40,7 +40,6 @@ import {
   writeFileAtomic,
 } from "./files.ts";
 import {
-  CONFIG_FILE,
   LINK_KINDS,
   LIST_FILE,
   MAX_LIST_DEPTH,
@@ -62,6 +61,7 @@ import { editTaskFile, newListFile, newTaskFile, patchFrontmatter, keepLinks } f
 import { claimIds, idElsewhereOnDisk, nextIdOnDisk } from "./ids.ts";
 import { applyFix } from "./fixes.ts";
 import { scanWorkspace, type Scan } from "./scan.ts";
+import { createConfig, editConfig, hasConfig } from "./storage/config.ts";
 import { invisibleToScans, makeScanCache, reportingChanges } from "./scan-cache.ts";
 
 /** One workspace on disk: a folder with a `.octodo/` directory. The files are the source of truth. */
@@ -175,8 +175,7 @@ export const initWorkspace = Effect.fnUntraced(function* (
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const tasksDir = path.join(root, TASKS_DIR);
-  const configPath = path.join(tasksDir, CONFIG_FILE);
-  if (yield* storage("Could not read the workspace")(fs.exists(configPath))) return;
+  if (yield* storage("Could not read the workspace")(hasConfig(root))) return;
   if (options.key !== undefined && !isWorkspaceKey(options.key))
     return yield* new InvalidRequest({
       message: `The key ${JSON.stringify(options.key)} must be letters and digits, starting with a letter, such as HM`,
@@ -189,7 +188,7 @@ export const initWorkspace = Effect.fnUntraced(function* (
   };
   yield* Effect.gen(function* () {
     yield* fs.makeDirectory(tasksDir, { recursive: true });
-    yield* writeFileAtomic(configPath, `${JSON.stringify(config, null, 2)}\n`);
+    yield* createConfig(root, config);
     yield* ignoreBookkeeping(tasksDir);
   }).pipe(storage("Could not create the workspace"));
 });
@@ -598,12 +597,9 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           );
         }
         const statuses = sortStatuses(input.order.map((status) => known.get(status)!));
-        yield* Effect.gen(function* () {
-          const configPath = path.join(tasksDir, CONFIG_FILE);
-          const text = yield* fs.readFileString(configPath);
-          const raw = yield* Effect.try(() => JSON.parse(text) as Record<string, unknown>);
-          yield* writeAtomic(configPath, `${JSON.stringify({ ...raw, statuses }, null, 2)}\n`);
-        }).pipe(storage("Could not reorder the statuses"));
+        yield* withPlatform(editConfig(root, () => ({ statuses }))).pipe(
+          storage("Could not reorder the statuses"),
+        );
         return (yield* current).statuses;
       }),
     );

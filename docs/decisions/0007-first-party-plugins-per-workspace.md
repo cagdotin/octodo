@@ -20,7 +20,9 @@ use itself is not ready to ship.
 - The plain task is built in and registered through the same registry API as the plugins.
 - A plugin declares:
   - the frontmatter keys it owns, as a versioned schema
-  - the files it owns in a task folder (these names stop counting as attachments)
+  - the files it owns in a task folder (these names stop counting as attachments, and clients
+    read what they hold only through the plugin's fields and operations,
+    [0011](0011-attachments-are-one-operation-plugin-files-are-private.md))
   - the fields it computes on read
   - its operations, as catalog entries ([0005](0005-one-operation-catalog.md))
   - its validators, as rows in `PROBLEMS`

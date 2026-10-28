@@ -210,6 +210,27 @@ describe("a call through a connection", () => {
     expect(paths).toEqual([]);
   });
 
+  it("sends a body of only optional fields as {}, so a server reads it as the engine does", async () => {
+    const { home, root } = await scratch();
+    const bodies: Array<string> = [];
+    const server = createServer((request, response) => {
+      let body = "";
+      request.on("data", (chunk: Buffer) => (body += chunk));
+      request.on("end", () => {
+        if (request.url !== "/api/health") bodies.push(`${request.method} ${body}`);
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify(request.url === "/api/health" ? health : SERVED));
+      });
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    nameServer(home, `http://127.0.0.1:${(server.address() as AddressInfo).port}`);
+    await run(home, (connection) =>
+      Effect.ignore(connection.run("update_task", { workspace: root, id: "HM-1" })),
+    );
+    expect(bodies).toEqual(["PATCH {}"]);
+  });
+
   it("refuses an attachment over the limit from a server, as declared or as read", async () => {
     const { home, root } = await scratch();
     for (const declared of [true, false]) {

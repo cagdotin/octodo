@@ -122,9 +122,12 @@ export const remoteBackend = (url: string): Backend => {
     const params = Object.fromEntries(inPath.map((key) => [key, String(input[key])]));
     const rest = Object.fromEntries(Object.entries(input).filter(([key]) => !inPath.includes(key)));
     const part = operation.http.method === "GET" ? "query" : "payload";
+    // The endpoint has a query or a body when the operation has fields beyond the path, even when
+    // none of them is given: a body of only optional fields is still `{}`.
+    const hasRest = Object.keys(operation.input.fields).some((key) => !inPath.includes(key));
     return {
       key: `${operation.http.method} /api${operation.http.path}` as JsonRouteKey,
-      request: { params, ...(Object.keys(rest).length === 0 ? {} : { [part]: rest }) } as never,
+      request: { params, ...(hasRest ? { [part]: rest } : {}) } as never,
     };
   };
 

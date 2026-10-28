@@ -1,7 +1,7 @@
 import { Duration, Effect, Scope, Semaphore } from "effect";
 import { join, relative } from "node:path";
 import { TASK_FILE } from "./layout.ts";
-import { InvalidRequest, StorageError } from "@octodo/contract";
+import { InvalidRequest, StorageError, type WorkspaceBusy } from "@octodo/contract";
 import { patchFrontmatter } from "./frontmatter.ts";
 import { fileText, scanWorkspace, type Scan } from "./scan.ts";
 import type { Files } from "./storage/files.ts";
@@ -30,7 +30,7 @@ export interface State {
   /** Runs `change` holding the owner lock, taking turns with this process's reads. */
   readonly write: <A, E>(
     change: (files: Files, ids: Ids) => Effect.Effect<A, E>,
-  ) => Effect.Effect<A, E | StorageError>;
+  ) => Effect.Effect<A, E | StorageError | WorkspaceBusy>;
 }
 
 export const invalid = (message: string) => Effect.fail(new InvalidRequest({ message }));

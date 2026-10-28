@@ -142,8 +142,8 @@ describe("task ids across processes", () => {
     holder.resume();
     await holder.exited;
     expect(error).toMatchObject({
-      _tag: "StorageError",
-      message: "Another octodo process is writing this workspace; try again when it is done",
+      _tag: "WorkspaceBusy",
+      message: `Another octodo process is writing ${root}; try again when it is done`,
     });
     expect(await ids(root)).toEqual({ ids: ["HM-1"], diagnostics: [] });
   });

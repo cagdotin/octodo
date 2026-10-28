@@ -2,6 +2,7 @@ import { Context, Effect, Layer, Path, PubSub, Scope, Semaphore, Stream } from "
 import {
   InvalidRequest,
   StorageError,
+  type WorkspaceBusy,
   WorkspaceNotFound,
   type FolderListing,
   type WorkspaceChange,
@@ -38,7 +39,7 @@ export class Workspaces extends Context.Service<
     readonly add: (
       root: string,
       options?: WorkspaceOptions,
-    ) => Effect.Effect<WorkspaceInfo, InvalidRequest | StorageError>;
+    ) => Effect.Effect<WorkspaceInfo, InvalidRequest | StorageError | WorkspaceBusy>;
     readonly remove: (id: string) => Effect.Effect<void, WorkspaceNotFound | StorageError>;
     readonly get: (id: string) => Effect.Effect<Workspace, WorkspaceNotFound | StorageError>;
     /**

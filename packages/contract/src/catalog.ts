@@ -18,6 +18,7 @@ import {
   MoveTaskInput,
   PluginInfo,
   StorageError,
+  WorkspaceBusy,
   Task,
   TaskDetail,
   TaskNotFound,
@@ -106,8 +107,8 @@ const listId = "List id, e.g. groceries or garden/seeds";
 const parentTask = "Parent task id, making this a subtask";
 
 /** The errors of an operation in a workspace: finding the workspace and reading it can fail too. */
-const inWorkspace = <const Errors extends ReadonlyArray<Schema.Top>>(...errors: Errors) =>
-  Schema.Union([WorkspaceNotFound, StorageError, ...errors]);
+export const inWorkspace = <const Errors extends ReadonlyArray<Schema.Top>>(...errors: Errors) =>
+  Schema.Union([WorkspaceNotFound, StorageError, WorkspaceBusy, ...errors]);
 
 export const catalog = {
   list_workspaces: {
@@ -140,7 +141,7 @@ export const catalog = {
       }),
     }),
     success: WorkspaceInfo,
-    error: Schema.Union([InvalidRequest, StorageError]),
+    error: Schema.Union([InvalidRequest, StorageError, WorkspaceBusy]),
     http: { method: "POST", path: "/workspaces" },
   },
   get_workspace: {

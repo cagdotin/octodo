@@ -10,7 +10,7 @@ import {
   Stream,
 } from "effect";
 import { TASKS_DIR } from "../layout.ts";
-import { StorageError, type WorkspaceConfig } from "@octodo/contract";
+import { StorageError, WorkspaceBusy, type WorkspaceConfig } from "@octodo/contract";
 import { ignoreBookkeeping, isHidden, removeLeftovers } from "./bookkeeping.ts";
 import { configFile, configText, readConfig, type ConfigRead } from "./config.ts";
 import { makeFiles, type Files } from "./files.ts";
@@ -76,7 +76,7 @@ export interface Storage {
    */
   readonly write: <A, E>(
     change: (files: Files, ids: Ids) => Effect.Effect<A, E>,
-  ) => Effect.Effect<A, E | StorageError>;
+  ) => Effect.Effect<A, E | StorageError | WorkspaceBusy>;
   /** Emits after files under `.octodo/` change, whoever changed them. Empty unless watching. */
   readonly changes: Stream.Stream<void>;
 }
@@ -145,13 +145,12 @@ export const makeStorage = (
             (error) => error instanceof OwnerLockBusy || error instanceof OwnerLockFailed,
             (error) =>
               Effect.fail(
-                new StorageError({
-                  message:
-                    error instanceof OwnerLockBusy
-                      ? "Another octodo process is writing this workspace; try again when it is done"
-                      : `Could not take the workspace's owner lock (${TASKS_DIR}/${OWNER_LOCK_FILE})`,
-                  cause: error,
-                }),
+                error instanceof OwnerLockBusy
+                  ? new WorkspaceBusy({ workspace: root })
+                  : new StorageError({
+                      message: `Could not take the workspace's owner lock (${TASKS_DIR}/${OWNER_LOCK_FILE})`,
+                      cause: error,
+                    }),
               ),
           ),
         );
@@ -215,7 +214,7 @@ export const makeStorage = (
 export const createWorkspace = (
   root: string,
   config: WorkspaceConfig,
-): Effect.Effect<void, PlatformError.PlatformError | StorageError, Platform> =>
+): Effect.Effect<void, PlatformError.PlatformError | StorageError | WorkspaceBusy, Platform> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;

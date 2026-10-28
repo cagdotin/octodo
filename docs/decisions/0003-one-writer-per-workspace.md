@@ -34,7 +34,8 @@ the risks of that walk. With [0001](0001-octodo-is-the-only-writer.md) and
   stdio MCP server runs its own when no server is up. A lifetime lock would let only the first of
   them write. A server could still hold the lock for longer later; the API does not change.
 - A process that finds the lock taken retries with a short backoff (1 to 50 ms) for 10 seconds,
-  then fails the write with "Another octodo process is writing this workspace". Reads never take
+  then fails the write with `WorkspaceBusy` ("Another octodo process is writing <folder>"), which
+  HTTP answers with 503, a state that passes, unlike a 500. Reads never take
   the lock. Retrying in Effect, rather than SQLite's busy timeout, keeps a waiting server's event
   loop free.
 - The lock's one row names the last holder. A process that takes the lock from another holder

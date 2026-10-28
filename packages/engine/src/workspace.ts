@@ -8,6 +8,7 @@ import {
   type AttachmentNotFound,
   type AttachmentTooLarge,
   StorageError,
+  type WorkspaceBusy,
   TaskNotFound,
   type CreateListInput,
   type CreateTaskInput,
@@ -62,7 +63,7 @@ export interface Workspace {
   readonly createTask: (
     input: CreateTaskInput,
     kind?: NewKind,
-  ) => Effect.Effect<Task, InvalidRequest | StorageError>;
+  ) => Effect.Effect<Task, InvalidRequest | StorageError | WorkspaceBusy>;
   /**
    * Writes the plugin `plugin`'s keys and files of a task of its kind, refusing any other task,
    * key or file. Its plugin's handlers reach it as `editOfKind`.
@@ -71,12 +72,15 @@ export interface Workspace {
     plugin: string,
     taskId: string,
     change: KindChange,
-  ) => Effect.Effect<Task, TaskNotFound | InvalidRequest | StorageError>;
+  ) => Effect.Effect<Task, TaskNotFound | InvalidRequest | StorageError | WorkspaceBusy>;
   /** The text of the plugin `plugin`'s files in a task of its kind, refusing any other task. */
   readonly kindFiles: (
     plugin: string,
     taskId: string,
-  ) => Effect.Effect<ReadonlyMap<string, string>, TaskNotFound | InvalidRequest | StorageError>;
+  ) => Effect.Effect<
+    ReadonlyMap<string, string>,
+    TaskNotFound | InvalidRequest | StorageError | WorkspaceBusy
+  >;
   /**
    * Refuses links to the task itself and to unknown tasks, except unknown ones its field already
    * lists, so a dangling blocker never stops an edit of the others.
@@ -84,26 +88,31 @@ export interface Workspace {
   readonly updateTask: (
     id: string,
     input: UpdateTaskInput,
-  ) => Effect.Effect<Task, TaskNotFound | InvalidRequest | StorageError>;
+  ) => Effect.Effect<Task, TaskNotFound | InvalidRequest | StorageError | WorkspaceBusy>;
   readonly moveTask: (
     id: string,
     input: MoveTaskInput,
-  ) => Effect.Effect<Task, TaskNotFound | InvalidRequest | StorageError>;
+  ) => Effect.Effect<Task, TaskNotFound | InvalidRequest | StorageError | WorkspaceBusy>;
   /**
    * Removes the task's folder: its subtasks and attachments go with it. Other tasks' links to any
    * of them are removed first, so a rerun after a crash finishes the cleanup.
    */
-  readonly deleteTask: (id: string) => Effect.Effect<void, TaskNotFound | StorageError>;
+  readonly deleteTask: (
+    id: string,
+  ) => Effect.Effect<void, TaskNotFound | StorageError | WorkspaceBusy>;
   readonly createList: (
     input: CreateListInput,
-  ) => Effect.Effect<List, InvalidRequest | StorageError>;
+  ) => Effect.Effect<List, InvalidRequest | StorageError | WorkspaceBusy>;
   readonly moveList: (
     id: string,
     input: MoveListInput,
-  ) => Effect.Effect<List, InvalidRequest | StorageError>;
+  ) => Effect.Effect<List, InvalidRequest | StorageError | WorkspaceBusy>;
   readonly reorderStatuses: (
     input: ReorderStatusesInput,
-  ) => Effect.Effect<ReadonlyArray<StatusDefinition>, InvalidRequest | StorageError>;
+  ) => Effect.Effect<
+    ReadonlyArray<StatusDefinition>,
+    InvalidRequest | StorageError | WorkspaceBusy
+  >;
   /**
    * Adds the plugin to config.json's `plugins` or takes it out, and gives the plugins the
    * workspace enables then. Enabling refuses a plugin octodo does not have.
@@ -111,7 +120,7 @@ export interface Workspace {
   readonly setPlugin: (
     plugin: string,
     enabled: boolean,
-  ) => Effect.Effect<ReadonlyArray<string>, InvalidRequest | StorageError>;
+  ) => Effect.Effect<ReadonlyArray<string>, InvalidRequest | StorageError | WorkspaceBusy>;
   /** The files in a task's folder that are its attachments, with their sizes and media types. */
   readonly attachments: (
     taskId: string,
@@ -144,17 +153,19 @@ export interface Workspace {
     taskId: string,
     relativePath: string,
     bytes: Uint8Array,
-  ) => Effect.Effect<string, TaskNotFound | InvalidRequest | StorageError>;
+  ) => Effect.Effect<string, TaskNotFound | InvalidRequest | StorageError | WorkspaceBusy>;
   /**
    * Applies fix `action` to the problem `kind` at `path` if a fresh read still offers that fix
    * there. Repeating a request, or sending one the files no longer match, changes nothing.
    */
-  readonly fixDiagnostic: (request: FixRequest) => Effect.Effect<FixResult, StorageError>;
+  readonly fixDiagnostic: (
+    request: FixRequest,
+  ) => Effect.Effect<FixResult, StorageError | WorkspaceBusy>;
   /**
    * Applies every fix that cannot lose what a person meant, reading the files again after each,
    * until none is left to try.
    */
-  readonly fixAll: Effect.Effect<FixResult, StorageError>;
+  readonly fixAll: Effect.Effect<FixResult, StorageError | WorkspaceBusy>;
   /** Emits after files under `.octodo/` change, whoever changed them. Empty unless watching. */
   readonly changes: Stream.Stream<void>;
 }

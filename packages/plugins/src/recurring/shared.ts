@@ -1,13 +1,5 @@
-import {
-  CreateTaskInput,
-  DueDate,
-  InvalidRequest,
-  StorageError,
-  Task,
-  TaskNotFound,
-  WorkspaceNotFound,
-} from "@octodo/contract";
-import { cli } from "@octodo/contract/catalog";
+import { CreateTaskInput, DueDate, InvalidRequest, Task, TaskNotFound } from "@octodo/contract";
+import { cli, inWorkspace } from "@octodo/contract/catalog";
 import type { PluginShared } from "@octodo/contract/plugin";
 import { Schema } from "effect";
 import { dueDay, RULE_EXAMPLES } from "./rule.ts";
@@ -25,9 +17,6 @@ const repeat = Schema.NonEmptyString.annotate({
   description: `How often it comes back: ${RULE_EXAMPLES}`,
   ...cli({ alias: "r" }),
 });
-
-const inWorkspace = <const Errors extends ReadonlyArray<Schema.Top>>(...errors: Errors) =>
-  Schema.Union([WorkspaceNotFound, StorageError, InvalidRequest, ...errors]);
 
 /** One time the task was done: UTC, to the minute. */
 export const Occurrence = Schema.Struct({ at: Schema.String });
@@ -69,7 +58,7 @@ export const recurringShared = {
         ...createFields,
       }),
       success: Task,
-      error: inWorkspace(),
+      error: inWorkspace(InvalidRequest),
       http: { method: "POST", path: "/workspaces/:workspace/recurring" },
       cli: {
         command: ["recurring", "create"],
@@ -89,7 +78,7 @@ export const recurringShared = {
       idempotent: true,
       input: Schema.Struct({ workspace, id, repeat: repeat.annotate(cli({ positional: true })) }),
       success: Task,
-      error: inWorkspace(TaskNotFound),
+      error: inWorkspace(InvalidRequest, TaskNotFound),
       http: { method: "PATCH", path: "/workspaces/:workspace/recurring/:id" },
       cli: { command: ["recurring", "repeat"], description: "Change a recurring task's rule" },
     },
@@ -107,7 +96,7 @@ export const recurringShared = {
         }),
       }),
       success: Task,
-      error: inWorkspace(TaskNotFound),
+      error: inWorkspace(InvalidRequest, TaskNotFound),
       http: { method: "POST", path: "/workspaces/:workspace/recurring/:id/occurrences" },
       cli: {
         command: ["recurring", "log"],
@@ -134,7 +123,7 @@ export const recurringShared = {
         }),
       }),
       success: Task,
-      error: inWorkspace(TaskNotFound),
+      error: inWorkspace(InvalidRequest, TaskNotFound),
       http: { method: "DELETE", path: "/workspaces/:workspace/recurring/:id/occurrences/:at" },
       cli: { command: ["recurring", "unlog"], description: "Remove one logged occurrence" },
     },
@@ -143,7 +132,7 @@ export const recurringShared = {
       readonly: true,
       input: Schema.Struct({ workspace, id }),
       success: Schema.Array(Occurrence),
-      error: inWorkspace(TaskNotFound),
+      error: inWorkspace(InvalidRequest, TaskNotFound),
       http: { method: "GET", path: "/workspaces/:workspace/recurring/:id/occurrences" },
       cli: { command: ["recurring", "history"], description: "List when a task was done" },
     },

@@ -1,13 +1,5 @@
-import {
-  CreateTaskInput,
-  DueDate,
-  InvalidRequest,
-  StorageError,
-  Task,
-  TaskNotFound,
-  WorkspaceNotFound,
-} from "@octodo/contract";
-import { cli } from "@octodo/contract/catalog";
+import { CreateTaskInput, DueDate, InvalidRequest, Task, TaskNotFound } from "@octodo/contract";
+import { cli, inWorkspace } from "@octodo/contract/catalog";
 import type { PluginShared } from "@octodo/contract/plugin";
 import { Schema } from "effect";
 import { counted, daysText, localDay } from "./days.ts";
@@ -20,9 +12,6 @@ const id = Schema.String.annotate({
   description: "Counter task id, e.g. HM-42",
   ...cli({ positional: true }),
 });
-
-const inWorkspace = <const Errors extends ReadonlyArray<Schema.Top>>(...errors: Errors) =>
-  Schema.Union([WorkspaceNotFound, StorageError, InvalidRequest, ...errors]);
 
 /** One time the counter was reset: UTC, to the minute. */
 export const Reset = Schema.Struct({ at: Schema.String });
@@ -67,7 +56,7 @@ export const counterShared = {
         ...createFields,
       }),
       success: Task,
-      error: inWorkspace(),
+      error: inWorkspace(InvalidRequest),
       http: { method: "POST", path: "/workspaces/:workspace/counters" },
       cli: {
         command: ["counter", "create"],
@@ -94,7 +83,7 @@ export const counterShared = {
         }),
       }),
       success: Task,
-      error: inWorkspace(TaskNotFound),
+      error: inWorkspace(InvalidRequest, TaskNotFound),
       http: { method: "POST", path: "/workspaces/:workspace/counters/:id/resets" },
       cli: {
         command: ["counter", "reset"],
@@ -120,7 +109,7 @@ export const counterShared = {
         }),
       }),
       success: Task,
-      error: inWorkspace(TaskNotFound),
+      error: inWorkspace(InvalidRequest, TaskNotFound),
       http: { method: "DELETE", path: "/workspaces/:workspace/counters/:id/resets/:at" },
       cli: { command: ["counter", "unreset"], description: "Take back one reset" },
     },
@@ -129,7 +118,7 @@ export const counterShared = {
       readonly: true,
       input: Schema.Struct({ workspace, id }),
       success: Schema.Array(Reset),
-      error: inWorkspace(TaskNotFound),
+      error: inWorkspace(InvalidRequest, TaskNotFound),
       http: { method: "GET", path: "/workspaces/:workspace/counters/:id/resets" },
       cli: { command: ["counter", "history"], description: "List when a counter was reset" },
     },

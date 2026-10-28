@@ -471,6 +471,17 @@ export class StorageError extends Schema.TaggedError<StorageError>()(
   { httpApiStatus: 500 },
 ) {}
 
+/** Another octodo process held the workspace's owner lock for as long as this one waits. */
+export class WorkspaceBusy extends Schema.TaggedError<WorkspaceBusy>()(
+  "WorkspaceBusy",
+  { workspace: Schema.String },
+  { httpApiStatus: 503 },
+) {
+  override get message(): string {
+    return `Another octodo process is writing ${this.workspace}; try again when it is done`;
+  }
+}
+
 /**
  * `<home>/server.json`, which a running server writes so the CLI and stdio MCP find it
  * (decision 0018). A hint: a client probes `url` before it trusts it.

@@ -20,6 +20,7 @@ import {
   ReorderStatusesInput,
   StatusDefinition,
   StorageError,
+  WorkspaceBusy,
   TaskNotFound,
   WorkspaceChange,
   WorkspaceNotFound,
@@ -229,12 +230,12 @@ export class AppGroup extends HttpApiGroup.make("app").add(
     params: inWorkspace,
     payload: ReorderStatusesInput,
     success: Schema.Array(StatusDefinition),
-    error: errors(WorkspaceNotFound, InvalidRequest, StorageError),
+    error: errors(WorkspaceNotFound, InvalidRequest, StorageError, WorkspaceBusy),
   }),
   HttpApiEndpoint.post("fix_all", "/workspaces/:workspace/diagnostics/fix-all", {
     params: inWorkspace,
     success: FixResult,
-    error: errors(WorkspaceNotFound, StorageError),
+    error: errors(WorkspaceNotFound, StorageError, WorkspaceBusy),
   }),
   // The request body is the file; a taken name gets -2, -3, and the reply says which.
   HttpApiEndpoint.put("upload_attachment", "/workspaces/:workspace/tasks/:id/files/:path", {
@@ -253,6 +254,7 @@ export class AppGroup extends HttpApiGroup.make("app").add(
       InvalidRequest,
       AttachmentTooLarge,
       StorageError,
+      WorkspaceBusy,
     ),
   }),
   HttpApiEndpoint.get("events", "/events", {

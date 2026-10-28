@@ -6,6 +6,7 @@ import {
   type CreateTaskInput,
   type InvalidRequest,
   type StorageError,
+  type WorkspaceBusy,
   type Task,
   type TaskNotFound,
 } from "@octodo/contract";
@@ -85,16 +86,19 @@ export interface PluginWorkspace extends Workspace {
   readonly createOfKind: (
     input: CreateTaskInput,
     keys: Readonly<Record<string, unknown>>,
-  ) => Effect.Effect<Task, InvalidRequest | StorageError>;
+  ) => Effect.Effect<Task, InvalidRequest | StorageError | WorkspaceBusy>;
   /** Changes the plugin's keys and files of a task of its kind, refusing a task of another kind. */
   readonly editOfKind: (
     taskId: string,
     change: KindChange,
-  ) => Effect.Effect<Task, TaskNotFound | InvalidRequest | StorageError>;
+  ) => Effect.Effect<Task, TaskNotFound | InvalidRequest | StorageError | WorkspaceBusy>;
   /** The text of each of the plugin's files a task of its kind has, refusing a task of another kind. */
   readonly filesOfKind: (
     taskId: string,
-  ) => Effect.Effect<ReadonlyMap<string, string>, TaskNotFound | InvalidRequest | StorageError>;
+  ) => Effect.Effect<
+    ReadonlyMap<string, string>,
+    TaskNotFound | InvalidRequest | StorageError | WorkspaceBusy
+  >;
 }
 
 type Success<O extends Operation> = O["success"] extends FileSuccess

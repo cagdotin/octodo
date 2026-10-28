@@ -1,12 +1,5 @@
-import {
-  CreateTaskInput,
-  InvalidRequest,
-  StorageError,
-  Task,
-  TaskNotFound,
-  WorkspaceNotFound,
-} from "@octodo/contract";
-import { cli } from "@octodo/contract/catalog";
+import { CreateTaskInput, InvalidRequest, Task, TaskNotFound } from "@octodo/contract";
+import { cli, inWorkspace } from "@octodo/contract/catalog";
 import type { PluginShared } from "@octodo/contract/plugin";
 import { Schema } from "effect";
 import { nextOccurrence, occurrenceDay, today } from "./day.ts";
@@ -20,9 +13,6 @@ const date = Schema.String.annotate({
     "The day it first happened, YYYY-MM-DD, such as a birthday 1990-06-14. It comes back on that day every year; February 29 comes back on the 28th in other years.",
   ...cli({ alias: "d" }),
 });
-
-const inWorkspace = <const Errors extends ReadonlyArray<Schema.Top>>(...errors: Errors) =>
-  Schema.Union([WorkspaceNotFound, StorageError, InvalidRequest, ...errors]);
 
 export const AnniversaryFields = Schema.Struct({
   /**
@@ -57,7 +47,7 @@ export const anniversaryShared = {
         ...createFields,
       }),
       success: Task,
-      error: inWorkspace(),
+      error: inWorkspace(InvalidRequest),
       http: { method: "POST", path: "/workspaces/:workspace/anniversaries" },
       cli: {
         command: ["anniversary", "create"],
@@ -84,7 +74,7 @@ export const anniversaryShared = {
         date: date.annotate(cli({ positional: true })),
       }),
       success: Task,
-      error: inWorkspace(TaskNotFound),
+      error: inWorkspace(InvalidRequest, TaskNotFound),
       http: { method: "PATCH", path: "/workspaces/:workspace/anniversaries/:id" },
       cli: { command: ["anniversary", "date"], description: "Change an anniversary's date" },
     },

@@ -25,6 +25,7 @@ export interface State {
    * them. Use it inside `read` or `write`, which take turns over it.
    */
   readonly scan: Effect.Effect<Scan>;
+  /** Runs `effect` over a scan that has what other processes wrote, taking turns with writes. */
   readonly read: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
   /** Runs `change` holding the owner lock, taking turns with this process's reads. */
   readonly write: <A, E>(
@@ -96,7 +97,7 @@ export const makeState = (
       storage,
       plugins,
       scan,
-      read: lock.withPermits(1),
+      read: (effect) => lock.withPermits(1)(Effect.andThen(storage.refresh, effect)),
       write: (change) => lock.withPermits(1)(storage.write(change)),
     } satisfies State;
   });

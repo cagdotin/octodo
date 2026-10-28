@@ -1,5 +1,5 @@
 import { NodeServices } from "@effect/platform-node";
-import { Effect, FileSystem, Layer } from "effect";
+import { Effect, FileSystem, Layer, Stream } from "effect";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -113,7 +113,6 @@ describe("the kept snapshot", () => {
           write(root, "HM-9-old/task.md", "---\nid: HM-9\ntitle: Old\nblocked_by: [HM-10]\n---\n");
           const ws = yield* makeWorkspace("test", root, { watch });
           for (const [name, change, external] of steps) {
-            if (external && !watch) continue;
             const before = yield* ws.snapshot;
             yield* change(ws, root);
             const { kept, scanned } = yield* settled(ws, root, external ? 5000 : 0);
@@ -124,6 +123,30 @@ describe("the kept snapshot", () => {
       );
     },
   );
+
+  it("sees changes by hand once its watcher has stopped", async () => {
+    const root = fresh();
+    await run(initWorkspace(root));
+    write(root, "HM-1-a/task.md", "---\nid: HM-1\ntitle: Before\n---\n");
+    const deadWatcher = Layer.effect(
+      FileSystem.FileSystem,
+      Effect.map(FileSystem.FileSystem, (fs) => ({
+        ...fs,
+        watch: () => Stream.fail(new Error("watcher died") as never),
+      })),
+    ).pipe(Layer.provideMerge(NodeServices.layer));
+    const titles = await Effect.runPromise(
+      Effect.gen(function* () {
+        const ws = yield* makeWorkspace("test", root, { watch: true });
+        yield* Effect.sleep("50 millis");
+        const before = yield* ws.snapshot;
+        write(root, "HM-1-a/task.md", "---\nid: HM-1\ntitle: After\n---\n");
+        const after = yield* ws.snapshot;
+        return [before, after].map((snapshot) => snapshot.tasks[0]!.title);
+      }).pipe(Effect.scoped, Effect.provide(deadWatcher)),
+    );
+    expect(titles).toEqual(["Before", "After"]);
+  });
 
   it("reads everything again after a write when nothing reports changes by hand", async () => {
     const root = fresh();

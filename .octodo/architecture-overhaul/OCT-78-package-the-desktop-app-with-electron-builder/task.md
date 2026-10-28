@@ -1,7 +1,7 @@
 ---
 id: OCT-78
 title: Package the desktop app with electron-builder
-status: todo
+status: done
 priority: medium
 tags:
   - desktop

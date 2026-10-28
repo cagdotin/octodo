@@ -1,7 +1,7 @@
 ---
 id: OCT-80
 title: Today and Next 7 days show tasks by their kind's date
-status: backlog
+status: todo
 priority: medium
 tags:
   - plugins

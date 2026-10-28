@@ -6,7 +6,6 @@ import {
   mkdtempSync,
   readFileSync,
   symlinkSync,
-  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -96,19 +95,27 @@ describe("scanWorkspace", () => {
     );
   });
 
-  it("dates a task.md that is a link by the file it links to", async () => {
+  it("reports a task.md or list.md that is a link without reading its folder", async () => {
     const root = await fresh({});
-    const target = join(dirname(root), "elsewhere.md");
-    writeFileSync(target, "---\nid: HM-1\ntitle: Linked\n---\n");
-    utimesSync(target, new Date("2020-01-01T00:00:00Z"), new Date("2020-01-01T00:00:00Z"));
+    const target = (name: string) => join(dirname(root), name);
+    writeFileSync(target("task.md"), "---\nid: HM-1\ntitle: Linked\n---\n");
+    writeFileSync(target("list.md"), "---\nname: Linked\n---\n");
     mkdirSync(join(root, ".octodo/HM-1-linked"));
-    symlinkSync(target, join(root, ".octodo/HM-1-linked/task.md"));
+    symlinkSync(target("task.md"), join(root, ".octodo/HM-1-linked/task.md"));
+    mkdirSync(join(root, ".octodo/garden/HM-2-dig"), { recursive: true });
+    symlinkSync(target("list.md"), join(root, ".octodo/garden/list.md"));
+    writeFileSync(join(root, ".octodo/garden/HM-2-dig/task.md"), "---\nid: HM-2\n---\n");
 
-    const { snapshot } = await run(scanWorkspace("test", root));
-    expect(snapshot.tasks.map((task) => [task.id, task.updated])).toEqual([
-      ["HM-1", "2020-01-01T00:00:00.000Z"],
+    const scan = await run(scanWorkspace("test", root));
+    expect(scan.snapshot.tasks).toEqual([]);
+    expect(scan.snapshot.lists).toEqual([]);
+    expect(
+      scan.snapshot.diagnostics.map((diagnostic) => [diagnostic.path, diagnostic.kind]),
+    ).toEqual([
+      [".octodo/HM-1-linked/task.md", "symlink"],
+      [".octodo/garden/list.md", "symlink"],
     ]);
-    expect(snapshot.diagnostics.map((diagnostic) => diagnostic.kind)).toEqual(["symlink"]);
+    expect(scan.nextIdNumber, "the ids in the folders it does not read are still taken").toBe(3);
   });
 
   it("reports a folder it can list but not enter as unreadable, in a list and in a task", async () => {

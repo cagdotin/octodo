@@ -17,9 +17,9 @@ export interface TaskFolder {
   readonly type: "task";
   readonly name: string;
   readonly path: string;
-  /** The text of its `task.md`, read through a link. */
+  /** The text of its `task.md`. */
   readonly file: Read<string>;
-  /** When `task.md` last changed; for a link, when its target did. */
+  /** When `task.md` last changed. */
   readonly updated: Date | null;
   /** In name order. */
   readonly children: Read<ReadonlyArray<TaskChild>>;
@@ -30,7 +30,7 @@ export interface ListFolder {
   readonly type: "list";
   readonly name: string;
   readonly path: string;
-  /** The text of its `list.md`, read through a link. */
+  /** The text of its `list.md`. */
   readonly file: Read<string>;
   /** In name order. */
   readonly children: Read<ReadonlyArray<ListChild>>;
@@ -74,16 +74,23 @@ export const CALLS_AT_ONCE = 32;
 const calls = Semaphore.makeUnsafe(CALLS_AT_ONCE);
 const ENTRIES_AT_ONCE = 32;
 
+type Symlink = { readonly type: "symlink"; readonly target: string };
+
+/** A folder's `task.md` or `list.md`: a file with its text, or a link, which is not followed. */
+type Marker =
+  | Symlink
+  | { readonly type: "file"; readonly text: Read<string>; readonly mtime: Date | null };
+
 /** What a read finds at one path before it reads the folders inside it. */
 type Node =
-  | { readonly type: "symlink"; readonly target: string }
-  | { readonly type: "file"; readonly mtime: Date | null }
+  | Symlink
+  | { readonly type: "file" }
   | {
       readonly type: "folder";
       readonly names: Read<ReadonlyArray<string>>;
-      /** The text of its `task.md` or `list.md`, or null when it has none. */
-      readonly task: Read<string> | null;
-      readonly list: Read<string> | null;
+      /** Its `task.md` and `list.md`, null for one it does not have. */
+      readonly task: Marker | null;
+      readonly list: Marker | null;
     };
 
 type Container =
@@ -96,7 +103,9 @@ const settled = (node: Node | null): boolean =>
   node !== null &&
   (node.type !== "folder" ||
     (Result.isSuccess(node.names) &&
-      [node.task, node.list].every((read) => read === null || Result.isSuccess(read))));
+      [node.task, node.list].every(
+        (marker) => marker?.type !== "file" || Result.isSuccess(marker.text),
+      )));
 
 /** Everything but a list, which a task folder reads as a problem. */
 const isTaskChild = (child: ListChild): child is TaskChild => child.type !== "list";
@@ -123,16 +132,21 @@ const readWith = (
       keep?: (value: A) => boolean,
     ) => (cache === undefined ? read : cache.read(at, aspect, read, keep));
 
-    /**
-     * The marker file `file` read, or null when the folder does not have it. A failed read asks
-     * `exists`, so a dangling link or an unlistable folder decides as it would.
-     */
+    /** The marker file `file`, or null when the folder does not have it. */
     const readMarker = (names: Read<ReadonlyArray<string>>, file: string) =>
       Effect.gen(function* () {
         if (Result.isSuccess(names) && !names.success.includes(path.basename(file))) return null;
-        const result = yield* Effect.result(call(fs.readFileString(file)));
-        if (Result.isSuccess(result)) return result;
-        return (yield* call(fs.exists(file))) ? result : null;
+        const info = yield* call(fs.lstat(file)).pipe(
+          Effect.catchIf(isNotFound, () => Effect.succeed(null)),
+        );
+        if (info === null) return null;
+        if (info.type === "SymbolicLink")
+          return { type: "symlink" as const, target: yield* call(fs.readLink(file)) };
+        return {
+          type: "file" as const,
+          text: yield* Effect.result(call(fs.readFileString(file))),
+          mtime: Option.getOrNull(info.mtime),
+        };
       });
 
     const readNode = (at: string) =>
@@ -140,8 +154,7 @@ const readWith = (
         const info = yield* call(fs.lstat(at));
         if (info.type === "SymbolicLink")
           return { type: "symlink" as const, target: yield* call(fs.readLink(at)) };
-        if (info.type === "File")
-          return { type: "file" as const, mtime: Option.getOrNull(info.mtime) };
+        if (info.type === "File") return { type: "file" as const };
         if (info.type !== "Directory") return null;
         const names = yield* Effect.result(call(fs.readDirectory(at)));
         const task = yield* readMarker(names, path.join(at, TASK_FILE));
@@ -154,28 +167,7 @@ const readWith = (
         return { type: "folder" as const, names, task, list };
       });
 
-    /**
-     * Whether the folder `at` has a marker that is a link: what a folder like that is follows its
-     * targets, whose changes report no path in the workspace, so it is read anew each time.
-     */
-    const linksMarker = (at: string, names: Read<ReadonlyArray<string>>) =>
-      Effect.forEach(
-        MARKERS.filter((marker) => Result.isSuccess(names) && names.success.includes(marker)),
-        (marker) => {
-          const file = path.join(at, marker);
-          return Effect.map(
-            kept(file, "node", readNode(file), settled),
-            (node) => node?.type === "symlink",
-          );
-        },
-      ).pipe(Effect.map((links) => links.includes(true)));
-
-    const nodeAt = (at: string) =>
-      Effect.gen(function* () {
-        const node = yield* kept(at, "node", readNode(at), settled);
-        if (cache === undefined || node?.type !== "folder") return node;
-        return (yield* linksMarker(at, node.names)) ? yield* readNode(at) : node;
-      });
+    const nodeAt = (at: string) => kept(at, "node", readNode(at), settled);
 
     const markdownText = (file: string) =>
       Effect.result(kept(file, "text", call(fs.readFileString(file))));
@@ -187,8 +179,8 @@ const readWith = (
     const markdownUnder = (at: string, node: Node | null): Effect.Effect<Array<string>> =>
       Effect.gen(function* () {
         if (node?.type !== "folder" || Result.isFailure(node.names)) return [];
-        const own = [node.task, node.list].flatMap((read) =>
-          read !== null && Result.isSuccess(read) ? [read.success] : [],
+        const own = [node.task, node.list].flatMap((marker) =>
+          marker?.type === "file" && Result.isSuccess(marker.text) ? [marker.text.success] : [],
         );
         const inside = yield* Effect.forEach(
           visible(node.names.success),
@@ -218,12 +210,22 @@ const readWith = (
         unread(at, { kind, field: null, detail }, texts),
       );
 
+    /** The folder at `at` as unread, its marker `name` being a link, with the markdown under it. */
+    const linkedFolder = (at: string, node: Node, name: string, link: Symlink) =>
+      Effect.map(markdownUnder(at, node), (texts) =>
+        unread(
+          path.join(at, name),
+          { kind: "symlink", field: null, detail: `This is a link to ${link.target}` },
+          texts,
+        ),
+      );
+
     /** The entry `name` in the folder `dir`, as `container` reads it; null for what it ignores. */
     const entry = (
       dir: string,
       name: string,
       container: Container,
-    ): Effect.Effect<ListChild | { readonly type: "marker"; readonly node: Node } | null> => {
+    ): Effect.Effect<ListChild | null> => {
       const at = path.join(dir, name);
       return Effect.gen(function* () {
         const node = yield* nodeAt(at);
@@ -235,8 +237,6 @@ const readWith = (
             detail: `This is a link to ${node.target}`,
           });
         if (node.type === "file") {
-          const root = container.kind === "list" && container.depth === 0;
-          if (!root && MARKERS.includes(name)) return { type: "marker" as const, node };
           if (!name.endsWith(".md")) return null;
           return { type: "markdown" as const, name, path: at, text: yield* markdownText(at) };
         }
@@ -248,16 +248,16 @@ const readWith = (
             "both-markers",
             "This folder has both task.md and list.md",
           );
+        if (task?.type === "symlink") return yield* linkedFolder(at, node, TASK_FILE, task);
+        if (list?.type === "symlink") return yield* linkedFolder(at, node, LIST_FILE, list);
         if (task !== null) {
-          const { children, marker } = yield* childrenOf(at, node.names, { kind: "task" });
-          const updated =
-            marker?.type === "file" ? marker.mtime : yield* linkedTime(path.join(at, TASK_FILE));
+          const children = yield* childrenOf(at, node.names, { kind: "task" });
           return {
             type: "task" as const,
             name,
             path: at,
-            file: task,
-            updated,
+            file: task.text,
+            updated: task.mtime,
             children: Result.map(children, (found) => found.filter(isTaskChild)),
           };
         }
@@ -284,11 +284,11 @@ const readWith = (
             "list-too-deep",
             `This list is ${container.depth + 1} levels deep`,
           );
-        const { children } = yield* childrenOf(at, node.names, {
+        const children = yield* childrenOf(at, node.names, {
           kind: "list",
           depth: container.depth + 1,
         });
-        return { type: "list" as const, name, path: at, file: list, children };
+        return { type: "list" as const, name, path: at, file: list.text, children };
       }).pipe(
         Effect.catch((error) =>
           Effect.succeed(
@@ -304,37 +304,22 @@ const readWith = (
       );
     };
 
-    /** A `task.md` that is a link is dated by its target. */
-    const linkedTime = (file: string) =>
-      call(fs.stat(file)).pipe(
-        Effect.map((info) => Option.getOrNull(info.mtime)),
-        Effect.orElseSucceed(() => null),
-      );
-
-    /** The children of the folder `dir`, and the node of its own marker file when it is a file. */
+    /** The children of the folder `dir`; a task's or list's own marker is not one. */
     const childrenOf = (
       dir: string,
       names: Read<ReadonlyArray<string>>,
       container: Container,
-    ): Effect.Effect<{
-      readonly children: Read<Array<ListChild>>;
-      readonly marker: Node | undefined;
-    }> =>
-      Result.isFailure(names)
-        ? Effect.succeed({ children: Result.fail(names.failure), marker: undefined })
-        : Effect.forEach(visible(names.success), (name) => entry(dir, name, container), {
-            concurrency: ENTRIES_AT_ONCE,
-          }).pipe(
-            Effect.map((found) => ({
-              children: Result.succeed(
-                found.filter((child) => child !== null && child.type !== "marker"),
-              ),
-              marker: found.find((child) => child?.type === "marker")?.node,
-            })),
-          );
+    ): Effect.Effect<Read<Array<ListChild>>> => {
+      if (Result.isFailure(names)) return Effect.succeed(Result.fail(names.failure));
+      const root = container.kind === "list" && container.depth === 0;
+      const children = visible(names.success).filter((name) => root || !MARKERS.includes(name));
+      return Effect.forEach(children, (name) => entry(dir, name, container), {
+        concurrency: ENTRIES_AT_ONCE,
+      }).pipe(Effect.map((found) => Result.succeed(found.filter((child) => child !== null))));
+    };
 
     const names = yield* Effect.result(kept(tasksDir, "names", call(fs.readDirectory(tasksDir))));
-    const { children } = yield* childrenOf(tasksDir, names, { kind: "list", depth: 0 });
+    const children = yield* childrenOf(tasksDir, names, { kind: "list", depth: 0 });
     return { path: tasksDir, children };
   });
 

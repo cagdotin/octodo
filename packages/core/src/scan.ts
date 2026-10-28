@@ -209,7 +209,7 @@ export const scanWorkspace = (
       readonly list: string | null;
       readonly read: Exclude<TaskFileRead, { _tag: "Invalid" }>;
     }
-    /** Task folders read and waiting to be served. Of several with one id, the first is the task. */
+    /** Task folders read, waiting to be served. Of several with one id, the first is the task. */
     const waiting: Array<Waiting> = [];
 
     const readTask = (folder: TaskFolder, list: string | null, parent: string | null) => {

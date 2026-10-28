@@ -1,14 +1,6 @@
 import { NodeServices } from "@effect/platform-node";
 import { Effect, FileSystem, Layer } from "effect";
-import {
-  cpSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -124,50 +116,6 @@ describe("the kept snapshot", () => {
             const { kept, scanned } = yield* settled(ws, root, external ? 5000 : 0);
             expect(kept, `after "${name}"`).toEqual(scanned);
             expect(kept, `"${name}" changes the snapshot`).not.toEqual(before);
-          }
-        }),
-      );
-    },
-  );
-
-  it(
-    "rereads a task.md or list.md that is a link, whose target changes report nothing",
-    { timeout: 30_000 },
-    async () => {
-      const root = fresh();
-      const outside = (name: string) => join(dirname(root), name);
-      await run(
-        Effect.gen(function* () {
-          yield* initWorkspace(root);
-          writeFileSync(outside("list.md"), "---\nname: Old\n---\n");
-          writeFileSync(outside("gone.md"), "---\nid: HM-2\ntitle: Gone\n---\n");
-          for (const [folder, target] of [
-            ["garden", "list.md"],
-            ["HM-1-linked", "later.md"],
-            ["HM-2-gone", "gone.md"],
-          ] as const) {
-            mkdirSync(join(root, ".octodo", folder));
-            const marker = target === "list.md" ? "list.md" : "task.md";
-            symlinkSync(outside(target), join(root, ".octodo", folder, marker));
-          }
-          const ws = yield* makeWorkspace("test", root, { watch: true });
-          yield* ws.snapshot;
-          const changes: ReadonlyArray<readonly [string, () => void]> = [
-            [
-              "edit a linked list.md",
-              () => writeFileSync(outside("list.md"), "---\nname: New\n---\n"),
-            ],
-            [
-              "create a linked task.md's target",
-              () => writeFileSync(outside("later.md"), "---\nid: HM-1\ntitle: Later\n---\n"),
-            ],
-            ["delete a linked task.md's target", () => rmSync(outside("gone.md"))],
-          ];
-          for (const [index, [name, change]] of changes.entries()) {
-            change();
-            write(root, `HM-${index + 10}-nudge/task.md`, `---\nid: HM-${index + 10}\n---\n`);
-            const { kept, scanned } = yield* settled(ws, root, 5000);
-            expect(kept, `after "${name}"`).toEqual(scanned);
           }
         }),
       );

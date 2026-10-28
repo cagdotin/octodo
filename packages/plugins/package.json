@@ -5,6 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./anniversary/shared": "./src/anniversary/shared.ts",
+    "./anniversary/web": "./src/anniversary/web.tsx",
     "./recurring/shared": "./src/recurring/shared.ts",
     "./recurring/web": "./src/recurring/web.tsx",
     "./web": "./src/web.ts"

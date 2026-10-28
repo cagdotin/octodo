@@ -1,7 +1,7 @@
 ---
 id: OCT-46
 title: Replace id claims with one owner lock per workspace
-status: todo
+status: done
 priority: high
 tags:
   - core

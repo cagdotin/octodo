@@ -18,10 +18,11 @@ Make the safety rules structural instead of conventional. Only `storage/` holds 
 ## Scope
 
 - `makeStorage(id, root)` returns `read`, `write`, `changes` and id assignment. Storage is passed as a plain argument (`createTask(storage, input)`), not as an Effect service.
+- `makeStorage` owns the owner lock (`storage/owner-lock.ts`, OCT-46): `storage.write` runs inside `hold`, so no write can skip it. That includes `initWorkspace`'s `config.json` and `.gitignore` writes, which run outside the lock today.
 - `storage.write(files => ...)` takes `(files: Files) => Effect<A, E, never>`. `Files` exposes only safe operations: atomic `writeFile`, `createFolder` (built under a dot name, renamed in), `moveFolder`, `renameFolder`, `remove`. A domain module reaching for `FileSystem` fails the typecheck.
 - Brand ids so only the owner-lock holder's assigner produces an id that can be written into frontmatter.
 - Writes report their touched paths so the cache forgets them before the change is published.
-- Fix `initWorkspace`'s recursive mkdir (`workspace.ts:191`). Route the attachment subfolder create (`workspace.ts:674`) through `Files`.
+- `initWorkspace` may create the folder it is asked to make a workspace (AGENTS.md); every other create goes through `Files`, including the attachment subfolder create.
 - Decide whether `files.ts` dissolves into `storage/files.ts` (likely) and record it in `docs/architecture.md`.
 
 ## Done when

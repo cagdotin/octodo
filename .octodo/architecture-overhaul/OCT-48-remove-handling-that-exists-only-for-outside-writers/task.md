@@ -17,8 +17,9 @@ Decision `docs/decisions/0001-octodo-is-the-only-writer.md`: octodo's clients ar
 
 ## Scope
 
-- Inventory first: list every branch in `scan.ts`, `fixes.ts`, `diagnostics.ts` and `workspace.ts` that exists for sync tools or hand edits. Classify each as "validate and report" (keep) or "reconcile" (delete).
+- Inventory first: list every branch in `scan.ts`, `fixes.ts`, `diagnostics.ts`, `files.ts` and `workspace.ts` that exists for sync tools or hand edits. Classify each as "validate and report" (keep) or "reconcile" (delete).
 - Known candidates: picking between several task folders with one id (the sync-copy name `HM-3-paint 2`, then the name matching id and title, then the first read) becomes a plain duplicate-id diagnostic; reads that re-read a folder whose marker is a link anew each scan (commit 9fa6f03).
+- From OCT-46: the retry in `writeFresh` when a path is gone (it guarded against another octodo process moving folders, which the owner lock now prevents), and the handling of sync-tool copies of temporary names (`.new-<uuid> 2`) in `files.ts`.
 - Each `PROBLEMS` row stays a validator. Fixes that only exist to merge outside edits go.
 - Update `AGENTS.md` where it describes removed rules.
 

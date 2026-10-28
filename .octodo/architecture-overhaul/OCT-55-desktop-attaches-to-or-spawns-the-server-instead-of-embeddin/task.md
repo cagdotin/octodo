@@ -1,7 +1,7 @@
 ---
 id: OCT-55
 title: Desktop attaches to or spawns the server instead of embedding it
-status: todo
+status: done
 priority: medium
 tags:
   - architecture

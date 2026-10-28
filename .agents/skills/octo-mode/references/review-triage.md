@@ -76,7 +76,7 @@ Use `candidate` for one or two examples. Use `recurring` after multiple real dis
 
 Do not auto-skip these categories, even if a previous PR dismissed something similar:
 
-- Security findings, above all anything near the server's token auth, Host allowlist, or cross-origin write checks (see `AGENTS.md`).
+- Security findings, above all anything that would expose the server beyond this computer (see **Security** in `AGENTS.md`).
 - Anything that changes what lands on disk: frontmatter round-trips, folder numbering, atomic writes, ids.
 - High-severity findings.
 - Migration, schema, idempotency, concurrency, and cross-system behavior findings.

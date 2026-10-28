@@ -54,6 +54,8 @@ import type { NewKind } from "./tasks/task-file.ts";
 export interface Workspace {
   readonly id: string;
   readonly root: string;
+  /** The plugins octodo has, whether this workspace enables them or not. */
+  readonly plugins: ReadonlyArray<Plugin>;
   readonly snapshot: Effect.Effect<WorkspaceSnapshot, StorageError>;
   readonly getTask: (id: string) => Effect.Effect<Task, TaskNotFound | StorageError>;
   /** `kind` makes it a task of an enabled plugin's kind, with that plugin's keys. */
@@ -201,6 +203,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   return {
     id,
     root,
+    plugins: state.plugins,
     snapshot: state.read(Effect.map(state.scan, (scan) => scan.snapshot)),
     getTask: (taskId) => getTask(state, taskId),
     createTask: (input, kind?: NewKind) => createTask(state, input, kind),

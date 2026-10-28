@@ -1,5 +1,6 @@
 import type { Schema } from "effect";
 import type { Operation } from "./catalog.ts";
+import type { KindDay } from "./rules.ts";
 
 /**
  * A plugin's half that any client may import: what its tasks store, what it computes and which
@@ -29,4 +30,10 @@ export interface PluginShared {
    * cached across midnight.
    */
   readonly label?: (fields: never) => string;
+  /**
+   * The day a task of its kind is due on, from its `kind.fields` and today, or none: what
+   * `list_tasks`' `due_by` and the app's Today read in place of `due` (decision 0025). A plain
+   * function from a module the web half imports too, as its `PluginWeb.day`.
+   */
+  readonly day?: KindDay;
 }

@@ -30,5 +30,4 @@ supersedes the old one and mark the old one's status.
 | [0022](0022-presets-in-the-contract-workspace-and-plugin-settings-are-operations.md) | Presets live in the contract, and adding a workspace and choosing its plugins are operations             | accepted |
 | [0023](0023-plugins-contribute-their-create-fields-and-own-the-date-slot.md)         | Plugins contribute their create fields to the new-task dialog, and a kind's date replaces Due            | accepted |
 | [0024](0024-the-desktop-app-is-packaged-with-electron-builder.md)                    | The desktop app is packaged with electron-builder, and its server child runs from app.asar               | accepted |
-| #                                                                                    | Decision                                                                                                 | Status   |
-| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | -------- |
+| [0025](0025-a-kind-gives-its-due-day-and-list-tasks-filters-by-it.md)                | A kind gives its due day, and Today, Next 7 days and `list_tasks` filter by it                           | accepted |

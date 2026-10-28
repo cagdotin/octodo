@@ -1,9 +1,13 @@
 import type { Task, WorkspaceSnapshot } from "@octodo/contract";
+import type { KindDay } from "@octodo/contract/rules";
 import { webPlugins, type KindCreate } from "@octodo/plugins/web";
 
 /** The web half of the plugin whose kind the task is, if it has one (decision 0016). */
 export const kindWeb = (task: Task) =>
   task.kind === undefined ? undefined : webPlugins[task.kind.id];
+
+/** The `day` of the kind with this id, which Today and Next 7 days read (decision 0025). */
+export const kindDay = (kind: string): KindDay | undefined => webPlugins[kind]?.day;
 
 /** Whether completing the task logs it and leaves it open instead of closing it. */
 export const completesInPlace = (task: Task) => kindWeb(task)?.completesInPlace === true;

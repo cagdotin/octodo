@@ -9,7 +9,14 @@ import { cn } from "@octodo/ui/lib/utils";
 import { CakeIcon } from "lucide-react";
 import { useState } from "react";
 import type { CreateFieldsProps, KindProps, PluginWeb, TaskOf } from "../web.ts";
-import { daysBetween, nextOccurrence, today, type Day, type Occurrence } from "./day.ts";
+import {
+  daysBetween,
+  nextOccurrence,
+  occurrenceDay,
+  today,
+  type Day,
+  type Occurrence,
+} from "./day.ts";
 import type { AnniversaryFields, anniversaryShared } from "./shared.ts";
 
 const api = createClient<ServedApi<typeof anniversaryShared.operations>>("");
@@ -205,6 +212,7 @@ function Panel({ workspace, task }: KindProps<AnniversaryFields>) {
 export const anniversaryWeb: PluginWeb<AnniversaryFields, Draft> = {
   Row,
   Panel,
+  day: occurrenceDay,
   completesInPlace: false,
   create: {
     noun: "Anniversary",

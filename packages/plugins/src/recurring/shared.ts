@@ -10,7 +10,7 @@ import {
 import { cli } from "@octodo/contract/catalog";
 import type { PluginShared } from "@octodo/contract/plugin";
 import { Schema } from "effect";
-import { RULE_EXAMPLES } from "./rule.ts";
+import { dueDay, RULE_EXAMPLES } from "./rule.ts";
 
 const workspace = Schema.optionalKey(Schema.String).annotate({
   description: "Registered workspace id or absolute path. Omit to use the current project.",
@@ -154,4 +154,5 @@ export const recurringShared = {
   },
   label: (fields: RecurringFields) =>
     `${fields.repeat ?? "no rule"}, ${fields.next === null ? "no next day" : `next ${fields.next}`}`,
+  day: dueDay,
 } satisfies PluginShared;

@@ -13,11 +13,12 @@ import {
   destination,
   inSubtree,
   isClosedCategory,
+  isDueBy,
   movedListId,
   readiness,
   taskSubtree,
+  type DayContext,
 } from "@octodo/contract/rules";
-import { dueDay } from "@octodo/ui/lib/dates";
 import { addDays, format, parseISO } from "date-fns";
 
 export const PRIORITIES: ReadonlyArray<{ value: Priority; label: string }> = [
@@ -125,23 +126,25 @@ export const todayKey = () => format(new Date(), "yyyy-MM-dd");
 
 /**
  * The tasks a view shows. Views of a list show top-level tasks, with subtasks inside their parent;
- * the date views show every task due in their range, and Ready every task open and not blocked,
- * subtasks too.
+ * the date views show every task due on or before their last day, a task of a kind by its kind's
+ * day (`kindDay`), and Ready every task open and not blocked, subtasks too.
  */
 export const filterTasks = (
   { tasks: all }: Pick<WorkspaceSnapshot, "tasks">,
   list: string | undefined,
+  kindDay: DayContext["kindDay"],
 ): ReadonlyArray<Task> => {
-  const dueBy = (last: string) =>
-    all.filter((task) => task.due !== null && dueDay(task.due) <= last);
+  const now = new Date();
+  const context = { today: format(now, "yyyy-MM-dd"), kindDay };
+  const dueBy = (last: string) => all.filter((task) => isDueBy(task, last, context));
   const tasks = all.filter((task) => task.parent === null);
   switch (list) {
     case undefined:
       return tasks;
     case SMART.today:
-      return dueBy(todayKey());
+      return dueBy(context.today);
     case SMART.upcoming:
-      return dueBy(format(addDays(new Date(), 7), "yyyy-MM-dd"));
+      return dueBy(format(addDays(now, 7), "yyyy-MM-dd"));
     case SMART.ready:
       return all.filter((task) => task.ready);
     case SMART.none:

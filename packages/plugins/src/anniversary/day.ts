@@ -47,3 +47,7 @@ export const nextOccurrence = (date: Day, from: Day): Occurrence => {
 /** Whole days from `from` to `to`. */
 export const daysBetween = (from: Day, to: Day): number =>
   Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
+
+/** The day an anniversary is due on: its next occurrence from `from` on, none without a date. */
+export const occurrenceDay = ({ date }: { readonly date: Day | null }, from: Day): Day | null =>
+  date === null ? null : nextOccurrence(date, from).next;

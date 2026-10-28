@@ -62,6 +62,7 @@ clears a value; `octo <command> --help` lists them):
 ```sh
 octo list                                                         # Open tasks, subtasks under their parent
 octo list --ready                                                 # Open tasks that are not blocked
+octo list --due-by 2026-11-01                                     # Open tasks due by November 1, overdue ones and chores included
 octo show HM-42                                                   # One task
 octo attachment HM-42 images/plan.png --output plan.png           # Save an attachment
 octo create "Book the movers" -p high -t quotes                   # A high-priority task

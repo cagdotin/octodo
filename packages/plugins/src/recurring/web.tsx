@@ -10,7 +10,7 @@ import { cn } from "@octodo/ui/lib/utils";
 import { RepeatIcon } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import type { CreateFieldsProps, KindProps, PluginWeb, TaskOf } from "../web.ts";
-import { localDay, nextDue, parseRule, RULE_EXAMPLES } from "./rule.ts";
+import { dueDay, localDay, nextDue, parseRule, RULE_EXAMPLES } from "./rule.ts";
 import type { RecurringFields, recurringShared } from "./shared.ts";
 
 const api = createClient<ServedApi<typeof recurringShared.operations>>("");
@@ -214,6 +214,7 @@ function Panel({ workspace, task }: KindProps<RecurringFields>) {
 export const recurringWeb: PluginWeb<RecurringFields, Draft> = {
   Row,
   Panel,
+  day: dueDay,
   completesInPlace: true,
   create: {
     noun: "Recurring task",

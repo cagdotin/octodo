@@ -144,3 +144,6 @@ export const nextDue = (rule: Rule, last: Day | null, start: Day | null): Day | 
   }
   return rule.kind === "interval" ? after(rule, last) : onOrAfter(rule, addDays(last, 1));
 };
+
+/** The day a recurring task is due on: its `next`, past days included until it is done. */
+export const dueDay = ({ next }: { readonly next: Day | null }): Day | null => next;

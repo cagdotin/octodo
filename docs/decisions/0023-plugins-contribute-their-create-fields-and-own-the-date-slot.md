@@ -95,6 +95,7 @@ done, and an anniversary's does not move to next year (OCT-76).
 - Converting an existing plain task into a kind is OCT-79. The disabled "Repeat" row in the due
   picker waits for it.
 - Today and Next 7 days still filter on `due`, so a chore due today is not in Today. Since a
-  kind's date now replaces Due, that is OCT-80.
+  kind's date now replaces Due, that is OCT-80: they list a task of a kind by its kind's day
+  ([0025](0025-a-kind-gives-its-due-day-and-list-tasks-filters-by-it.md)).
 - The inline composer still creates plain tasks only (OCT-81).
 - A new kind's web half must export `create`; the type makes it required.

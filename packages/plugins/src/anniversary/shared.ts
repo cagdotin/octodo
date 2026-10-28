@@ -9,7 +9,7 @@ import {
 import { cli } from "@octodo/contract/catalog";
 import type { PluginShared } from "@octodo/contract/plugin";
 import { Schema } from "effect";
-import { nextOccurrence, today } from "./day.ts";
+import { nextOccurrence, occurrenceDay, today } from "./day.ts";
 
 const workspace = Schema.optionalKey(Schema.String).annotate({
   description: "Registered workspace id or absolute path. Omit to use the current project.",
@@ -100,4 +100,5 @@ export const anniversaryShared = {
       ? `first on ${next}`
       : `next ${next}, ${years} ${years === 1 ? "year" : "years"}`;
   },
+  day: occurrenceDay,
 } satisfies PluginShared;

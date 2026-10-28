@@ -22,6 +22,7 @@ import { NewListDialog } from "@/components/new-list-dialog";
 import { ITEM, SidebarLists } from "@/components/sidebar-lists";
 import { SyncIndicator } from "@/components/sync-indicator";
 import { ViewIcon } from "@/components/task-bits";
+import { kindDay } from "@/components/task-kind";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@octodo/ui/components/button";
 import {
@@ -74,7 +75,7 @@ export function AppSidebar({
   const { counts, none, open } = listCounts(snapshot);
   const statuses = statusMap(snapshot.statuses);
   const openCount = (list: string) =>
-    filterTasks(snapshot, list).filter(
+    filterTasks(snapshot, list, kindDay).filter(
       (task) => !isClosedCategory(statuses.get(task.status)?.category),
     ).length;
   const [newListOpen, setNewListOpen] = useState(false);

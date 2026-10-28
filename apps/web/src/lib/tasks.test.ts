@@ -1,6 +1,7 @@
 import { type Task, type WorkspaceSnapshot, DEFAULT_STATUSES } from "@octodo/contract";
 import { readiness } from "@octodo/contract/rules";
 import { dueInfo } from "@octodo/ui/lib/dates";
+import { addDays, format } from "date-fns";
 import { describe, expect, it } from "vitest";
 import {
   applyMove,
@@ -13,6 +14,7 @@ import {
   withBlockedBy,
   withoutSubtree,
 } from "./tasks.ts";
+import { kindDay } from "../components/task-kind.tsx";
 
 const task = (id: string, fields: Partial<Task> = {}): Task => ({
   id,
@@ -66,7 +68,7 @@ describe("subtasks in views", () => {
       task("HM-7", { due: "2000-01-01" }),
     ];
     const ids = (list: string | undefined) =>
-      filterTasks(snapshot(tasks), list).map((entry) => entry.id);
+      filterTasks(snapshot(tasks), list, kindDay).map((entry) => entry.id);
     expect(ids(undefined)).toEqual(["HM-1", "HM-5", "HM-7"]);
     expect(ids("home")).toEqual(["HM-1"]);
     expect(ids(SMART.none)).toEqual(["HM-5", "HM-7"]);
@@ -85,7 +87,7 @@ describe("subtasks in views", () => {
       task("HM-6", { parent: "HM-1", blockedBy: ["HM-5"] }),
     ]);
     const ready = (current: WorkspaceSnapshot) =>
-      filterTasks(current, SMART.ready).map((entry) => entry.id);
+      filterTasks(current, SMART.ready, kindDay).map((entry) => entry.id);
     expect(ready(tasks)).toEqual(["HM-1", "HM-4", "HM-5"]);
     expect(ready(applyMove(tasks, "HM-1", { status: "done" })), "a finished blocker").toEqual([
       "HM-2",
@@ -209,11 +211,51 @@ describe("due dates", () => {
   it("groups a due date-time by its date", () => {
     const today = todayKey();
     const tasks = [task("HM-1", { due: `${today}T23:00` }), task("HM-2", { due: today })];
-    expect(filterTasks(snapshot(tasks), SMART.today).map((found) => found.id)).toEqual([
+    expect(filterTasks(snapshot(tasks), SMART.today, kindDay).map((found) => found.id)).toEqual([
       "HM-1",
       "HM-2",
     ]);
     expect(dueInfo(`${today}T23:00`)).toMatchObject({ label: "Today", today: true });
     expect(dueInfo(`${today}T00:30+14:00`)).toMatchObject({ label: "Today", overdue: false });
+  });
+
+  it("lists a task of a kind by its kind's day, never its due, as list_tasks' due_by does", () => {
+    const now = new Date();
+    const day = (offset: number) => format(addDays(now, offset), "yyyy-MM-dd");
+    const recurring = (next: string | null) => ({
+      id: "recurring",
+      fields: { repeat: "every 3 days", next, last: null, count: 0, recent: [] },
+    });
+    const anniversary = (date: string | null) => ({ id: "anniversary", fields: { date } });
+    const tasks = [
+      task("HM-1", { due: day(0) }),
+      task("HM-2", { kind: recurring(day(0)) }),
+      task("HM-3", { kind: recurring(day(-4)) }),
+      task("HM-4", { kind: recurring(day(5)) }),
+      task("HM-5", { kind: anniversary(`1990-${day(0).slice(5)}`) }),
+      task("HM-6", { kind: anniversary(`1990-${day(6).slice(5)}`) }),
+      task("HM-7", { kind: { id: "counter", fields: { since: day(-2) } } }),
+      task("HM-8", { kind: recurring(day(20)), due: day(0) }),
+      task("HM-9", { kind: anniversary(null) }),
+      task("HM-10", { due: day(-1) }),
+    ];
+    const ids = (list: string) =>
+      filterTasks(snapshot(tasks), list, kindDay).map((found) => found.id);
+    expect(ids(SMART.today), "due today, the chores due today and overdue").toEqual([
+      "HM-1",
+      "HM-2",
+      "HM-3",
+      "HM-5",
+      "HM-10",
+    ]);
+    expect(ids(SMART.upcoming), "and what comes back within a week").toEqual([
+      "HM-1",
+      "HM-2",
+      "HM-3",
+      "HM-4",
+      "HM-5",
+      "HM-6",
+      "HM-10",
+    ]);
   });
 });

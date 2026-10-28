@@ -56,5 +56,7 @@ A list keeps its manual order; there is no sort hook in `PluginWeb`.
 ## Consequences
 
 - `PluginWeb` is unchanged. A general "sort by date" view option, when it comes, needs each kind's
-  row day; `PluginWeb` then gains a `day(fields)` the sort reads.
+  row day; `PluginWeb` then gains a `day(fields)` the sort reads. Done for Today and Next 7 days:
+  `day` on both halves and `taskDay` in the rules
+  ([0025](0025-a-kind-gives-its-due-day-and-list-tasks-filters-by-it.md)).
 - Completing an anniversary closes it like a plain task; it has no `complete` hook.

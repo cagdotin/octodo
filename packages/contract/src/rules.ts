@@ -371,3 +371,38 @@ export const readiness = (
 /** Whether a diagnostic is something to fix: everything but a note, a markdown file read as text. */
 export const isProblem = (diagnostic: Pick<Diagnostic, "kind">): boolean =>
   diagnostic.kind !== "note";
+
+/** A plugin's due day for a task of its kind, from its `kind.fields` and today (decision 0025). */
+export type KindDay = (fields: never, today: string) => string | null;
+
+/** Today where this runs, `YYYY-MM-DD`: the person's computer (decision 0010). */
+export const localDay = (now = new Date()): string =>
+  [now.getFullYear(), now.getMonth() + 1, now.getDate()]
+    .map((part, index) => String(part).padStart(index === 0 ? 4 : 2, "0"))
+    .join("-");
+
+/** What a task's due day depends on besides the task: today, and each kind's `day`. */
+export interface DayContext {
+  readonly today: string;
+  /** The `day` of the plugin with this id; undefined for a kind that has no due day. */
+  readonly kindDay: (kind: string) => KindDay | undefined;
+}
+
+/**
+ * The day a task is due on: a plain task's `due` day; for a task of a kind, the day its plugin
+ * gives (a recurring task's next, an anniversary's next occurrence), never its `due` (0025).
+ */
+export const taskDay = (task: Pick<Task, "due" | "kind">, context: DayContext): string | null =>
+  task.kind === undefined
+    ? (task.due?.slice(0, 10) ?? null)
+    : (context.kindDay(task.kind.id)?.(task.kind.fields as never, context.today) ?? null);
+
+/** Whether a task is due on or before `last`, overdue included, as Today and Next 7 days list it. */
+export const isDueBy = (
+  task: Pick<Task, "due" | "kind">,
+  last: string,
+  context: DayContext,
+): boolean => {
+  const day = taskDay(task, context);
+  return day !== null && day <= last;
+};

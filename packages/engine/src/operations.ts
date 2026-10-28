@@ -12,7 +12,7 @@ import {
   type FileSuccess,
   type OperationName,
 } from "@octodo/contract/catalog";
-import { isClosedCategory } from "@octodo/contract/rules";
+import { isClosedCategory, isDueBy, localDay, type DayContext } from "@octodo/contract/rules";
 import { Effect, type Schema } from "effect";
 import type { Workspace } from "./workspace.ts";
 import { Workspaces } from "./workspaces.ts";
@@ -81,7 +81,17 @@ const overview = (snapshot: WorkspaceSnapshot): WorkspaceOverview => {
 
 const listTasks = (
   snapshot: WorkspaceSnapshot,
-  { status, list, parent, tag, query, ready, all }: Omit<OperationInput<"list_tasks">, "workspace">,
+  {
+    status,
+    list,
+    parent,
+    tag,
+    query,
+    ready,
+    due_by,
+    all,
+  }: Omit<OperationInput<"list_tasks">, "workspace">,
+  days: DayContext,
 ): Array<TaskSummary> => {
   const closed = new Set(
     snapshot.statuses.filter((known) => isClosedCategory(known.category)).map((known) => known.id),
@@ -98,6 +108,7 @@ const listTasks = (
         (parent === undefined || task.parent === parent) &&
         (tag === undefined || task.tags.includes(tag)) &&
         (ready !== true || task.ready) &&
+        (due_by === undefined || isDueBy(task, due_by.slice(0, 10), days)) &&
         (needle === undefined ||
           task.title.toLowerCase().includes(needle) ||
           task.body.toLowerCase().includes(needle)),
@@ -124,7 +135,13 @@ export const handlers: { readonly [K in OperationName]: Handler<K> } = {
   add_workspace: ({ root, ...options }) =>
     Workspaces.use((workspaces) => workspaces.add(root, options)),
   get_workspace: (ws) => Effect.map(ws.snapshot, overview),
-  list_tasks: (ws, filters) => Effect.map(ws.snapshot, (snapshot) => listTasks(snapshot, filters)),
+  list_tasks: (ws, filters) =>
+    Effect.map(ws.snapshot, (snapshot) =>
+      listTasks(snapshot, filters, {
+        today: localDay(),
+        kindDay: (kind) => ws.plugins.find((plugin) => plugin.shared.id === kind)?.shared.day,
+      }),
+    ),
   get_task: (ws, { id }) => detail(ws, id),
   read_attachment: (ws, { id, path }) => ws.readAttachment(id, path),
   create_task: (ws, input) => ws.createTask(input),

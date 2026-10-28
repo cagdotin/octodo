@@ -53,6 +53,11 @@ export interface PluginWeb<Fields, Draft = unknown> {
   /** A section of the task panel. */
   readonly Panel: ComponentType<KindProps<Fields>>;
   /**
+   * The day a task of the kind is due on, which Today and Next 7 days read in place of `due`; the
+   * same function as its shared half's `day` (decision 0025). None for a kind without one.
+   */
+  readonly day?: (fields: Fields, today: string) => string | null;
+  /**
    * Whether a move into a completed status leaves the task open in the first unstarted status,
    * as the engine's `complete` does for this kind, so the app's optimistic update agrees.
    */

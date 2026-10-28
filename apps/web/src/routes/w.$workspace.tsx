@@ -10,6 +10,7 @@ import { DragAndDrop } from "@/components/drag-and-drop";
 import { ListView } from "@/components/list-view";
 import { NewTaskDialog } from "@/components/new-task-dialog";
 import { TaskDetail } from "@/components/task-detail";
+import { kindDay } from "@/components/task-kind";
 import { ViewHeader } from "@/components/workspace-header";
 import {
   Empty,
@@ -153,7 +154,7 @@ function WorkspacePage() {
 
   const statuses = snapshot.statuses.filter((status) => visibleCategory(status.category, display));
   const shown = new Set(statuses.map((status) => status.id));
-  const inList = filterTasks(snapshot, search.list);
+  const inList = filterTasks(snapshot, search.list, kindDay);
   const tasks = inList.filter((task) => shown.has(task.status) && matchesFilter(task, filter));
   const title = viewTitle(search.list, snapshot.lists);
   const selected =

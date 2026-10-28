@@ -9,6 +9,7 @@ import {
   CreateListInput,
   CreateTaskInput,
   Diagnostic,
+  DueDate,
   FixRequest,
   FixResult,
   InvalidRequest,
@@ -172,6 +173,10 @@ export const catalog = {
       ready: Schema.optionalKey(Schema.Boolean).annotate({
         description: "Only tasks that can start now: open and not blocked",
       }),
+      due_by: Schema.optionalKey(DueDate).annotate({
+        description:
+          "Only tasks due on or before this day, YYYY-MM-DD, overdue ones included: today's date for what is due today, as the app's Today lists it. A plain task is due on its due; a recurring task on its next day, an anniversary on its next occurrence, and a days-since counter never.",
+      }),
       all: Schema.optionalKey(Schema.Boolean).annotate({
         description: "Include tasks in closed statuses (done, canceled, archived)",
         ...cli({ alias: "a" }),
@@ -187,6 +192,10 @@ export const catalog = {
       examples: [
         { command: "octo list", description: "Open tasks, subtasks under their parent" },
         { command: "octo list --ready", description: "Open tasks that are not blocked" },
+        {
+          command: "octo list --due-by 2026-11-01",
+          description: "Open tasks due by November 1, overdue ones and chores included",
+        },
       ],
     },
   },

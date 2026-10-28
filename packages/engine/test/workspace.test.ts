@@ -738,6 +738,30 @@ describe("workspace", () => {
     });
   });
 
+  it("orders lists around a sibling whose list.md does not read, and leaves that file alone", async () => {
+    const root = fresh();
+    await run(initWorkspace(root));
+    const broken = "---\nname: [unclosed\n---\n";
+    write(root, "a/list.md", "---\norder: a0\n---\n");
+    write(root, "b/list.md", broken);
+    write(root, "c/list.md", "---\norder: a1\n---\n");
+    const result = await run(
+      Effect.gen(function* () {
+        const ws = yield* makeWorkspace("test", root);
+        yield* ws.createList({ name: "D" });
+        yield* ws.moveList("c", { before: "a" });
+        const refused = yield* Effect.flip(ws.moveList("b", { before: "a" }));
+        return { refused, lists: (yield* ws.snapshot).lists.map((list) => list.id) };
+      }),
+    );
+    expect(result.refused).toMatchObject({
+      _tag: "InvalidRequest",
+      message: expect.stringContaining("b/list.md"),
+    });
+    expect(result.lists).toEqual(["c", "a", "d", "b"]);
+    expect(read(root, "b/list.md")).toBe(broken);
+  });
+
   it("refuses to move a list into itself or deeper than three levels", async () => {
     const root = fresh();
     const errors = await run(

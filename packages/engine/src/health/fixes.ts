@@ -36,7 +36,7 @@ const renumberCopy = (dir: string, { files, scan, newId }: FixContext) =>
       const old = frontmatterId(text);
       if (folder !== dir && (old === null || !scan.dirs.tasks.has(old))) continue;
       const id = newId();
-      yield* files.writeFile(file, patchFrontmatter(text, { id }));
+      yield* files.writeFile(file, yield* patchFrontmatter(text, { id }));
       renames.push({ dir: folder, old, id });
     }
     for (const { dir: folder, old, id } of renames.toReversed()) {
@@ -49,7 +49,8 @@ const renumberCopy = (dir: string, { files, scan, newId }: FixContext) =>
     }
   });
 
-const withId = (text: string, id: AssignedId) => ({ id, content: patchFrontmatter(text, { id }) });
+const withId = (text: string, id: AssignedId) =>
+  Effect.map(patchFrontmatter(text, { id }), (content) => ({ id, content }));
 
 /**
  * Turns a markdown file into a task folder in `container`. The file gets its id in place first,
@@ -64,7 +65,8 @@ const adopt = (file: string, container: string, { files, scan, newId }: FixConte
     const { key } = scan.snapshot.workspace;
     const kept =
       own !== null && idNumber(own, key) !== null && !scan.dirs.tasks.has(own) ? own : null;
-    const { id, content } = kept === null ? withId(text, newId()) : { id: kept, content: text };
+    const { id, content } =
+      kept === null ? yield* withId(text, newId()) : { id: kept, content: text };
     if (kept === null) yield* files.writeFile(file, content);
     const title = read.data["title"];
     const name = taskFolderName(id, typeof title === "string" ? title : basename(file, ".md"));
@@ -89,7 +91,12 @@ const keepLinksWhere =
         own: frontmatterId(text),
         known: scan.idsOnDisk,
       };
-      const changed = keepLinks(text, field, (id) => keep(id, task), scan.snapshot.workspace.key);
+      const changed = yield* keepLinks(
+        text,
+        field,
+        (id) => keep(id, task),
+        scan.snapshot.workspace.key,
+      );
       if (changed !== null) yield* files.writeFile(target, changed);
     });
 

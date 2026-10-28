@@ -31,8 +31,8 @@ import { markdownTexts, type ListFolder, type TaskFolder, type Tree } from "./st
 export interface Scan {
   readonly snapshot: WorkspaceSnapshot;
   readonly dirs: {
-    /** Each list's absolute folder and the order key from its `list.md`. */
-    readonly lists: ReadonlyMap<string, { readonly dir: string; readonly order: string }>;
+    /** Each list's absolute folder and the order key from its `list.md`, null when it does not read. */
+    readonly lists: ReadonlyMap<string, { readonly dir: string; readonly order: string | null }>;
     /** Each task's absolute folder. */
     readonly tasks: ReadonlyMap<string, string>;
   };
@@ -126,7 +126,7 @@ export const scanWorkspace = (
   const lists: Array<List> = [];
   const taskFiles: Array<TaskFile> = [];
   const kindFiles = new Map<string, ReadonlyMap<string, string>>();
-  const listDirs = new Map<string, { dir: string; order: string }>();
+  const listDirs = new Map<string, { dir: string; order: string | null }>();
   const taskDirs = new Map<string, string>();
   const taskTexts = new Map<string, string>();
   const missingId: Array<string> = [];
@@ -259,7 +259,13 @@ export const scanWorkspace = (
   };
 
   const readList = (folder: Tree | ListFolder, list: string | null) => {
-    const children: Array<{ name: string; order: string; folder: ListFolder; list: List }> = [];
+    const children: Array<{
+      name: string;
+      order: string;
+      readable: boolean;
+      folder: ListFolder;
+      list: List;
+    }> = [];
     for (const child of readAhead(folder.path, folder.children) ?? []) {
       if (child.type === "unread") {
         report(child.problem.kind, child.path, child.problem.detail);
@@ -286,6 +292,7 @@ export const scanWorkspace = (
         children.push({
           name: child.name,
           order: listFile?.order ?? "",
+          readable: listFile !== null,
           folder: child,
           list: {
             id: listId,
@@ -298,7 +305,10 @@ export const scanWorkspace = (
     }
     for (const child of children.toSorted(compareOrder)) {
       lists.push(child.list);
-      listDirs.set(child.list.id, { dir: child.folder.path, order: child.order });
+      listDirs.set(child.list.id, {
+        dir: child.folder.path,
+        order: child.readable ? child.order : null,
+      });
       readList(child.folder, child.list.id);
     }
   };

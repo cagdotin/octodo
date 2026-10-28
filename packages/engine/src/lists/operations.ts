@@ -64,7 +64,11 @@ export const moveList = (state: State, listId: string, input: MoveListInput) =>
       if (parent !== null) yield* findList(snapshot, parent);
       const refused = listMoveError(snapshot.lists, listId, parent);
       if (refused !== null) return yield* invalid(refused);
-      const dir = dirs.lists.get(listId)!.dir;
+      const { dir, order: own } = dirs.lists.get(listId)!;
+      if (own === null)
+        return yield* invalid(
+          `${relative(snapshot.workspace.root, join(dir, LIST_FILE))} does not read; fix it before moving the list`,
+        );
       const container = containerDir(scan, { list: parent, parent: null });
       const moved = join(container, basename(dir));
       if (parent !== list.parent && (yield* exists(state, moved)))
@@ -74,7 +78,10 @@ export const moveList = (state: State, listId: string, input: MoveListInput) =>
       yield* Effect.gen(function* () {
         const order = orderBetween(yield* orderedLists(files, scan, parent, listId), input);
         const file = join(dir, LIST_FILE);
-        yield* files.writeFile(file, patchFrontmatter(yield* fileText(scan, file), { order }));
+        yield* files.writeFile(
+          file,
+          yield* patchFrontmatter(yield* fileText(scan, file), { order }),
+        );
         if (parent !== list.parent) yield* files.moveFolder(dir, container);
       }).pipe(storageError("Could not move the list"));
       return yield* reread(state, movedListId(listId, parent));

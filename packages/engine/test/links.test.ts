@@ -8,6 +8,9 @@ import { findMentions } from "@octodo/contract/rules";
 import { editTaskFile, keepLinks, readTaskFile } from "../src/tasks/task-file.ts";
 import { initWorkspace, makeWorkspace } from "../src/workspace.ts";
 
+const edit = (...args: Parameters<typeof editTaskFile>) => Effect.runSync(editTaskFile(...args));
+const kept = (...args: Parameters<typeof keepLinks>) => Effect.runSync(keepLinks(...args));
+
 const run = <A, E>(effect: Effect.Effect<A, E, any>) =>
   Effect.runPromise(
     effect.pipe(Effect.scoped, Effect.provide(NodeServices.layer)) as Effect.Effect<A, E>,
@@ -151,11 +154,11 @@ describe("link fields in task.md", () => {
 
   it("writes blocked_by as a flow list of ids and removes the key when empty", () => {
     const text = taskFile("HM-1", "estimate: 3 # hours\n");
-    const linked = editTaskFile(text, { blocked_by: ["HM-3", "HM-7"] });
+    const linked = edit(text, { blocked_by: ["HM-3", "HM-7"] });
     expect(linked).toBe(
       "---\nid: HM-1\ntitle: Task HM-1\nestimate: 3 # hours\nblocked_by: [HM-3, HM-7]\n---\n",
     );
-    expect(editTaskFile(linked, { blocked_by: [] })).toBe(
+    expect(edit(linked, { blocked_by: [] })).toBe(
       "---\nid: HM-1\ntitle: Task HM-1\nestimate: 3 # hours\n---\n",
     );
   });
@@ -163,21 +166,21 @@ describe("link fields in task.md", () => {
   it("keeps the ids a link field holds that pass, and leaves a field it would not change alone", () => {
     const text = taskFile("HM-1", "blocked_by: [HM-3, HM-7]\n", "\nAfter [[HM-3]]\n");
     const without = (ids: ReadonlyArray<string>) =>
-      keepLinks(text, "blocked_by", (id) => !ids.includes(id), "HM");
+      kept(text, "blocked_by", (id) => !ids.includes(id), "HM");
     expect(without(["HM-3"])).toBe(
       "---\nid: HM-1\ntitle: Task HM-1\nblocked_by: [HM-7]\n---\n\nAfter [[HM-3]]\n",
     );
     expect(without(["HM-3", "HM-7"])).not.toContain("blocked_by");
     expect(without(["HM-9"])).toBeNull();
-    expect(keepLinks(taskFile("HM-1"), "blocked_by", () => false, "HM")).toBeNull();
-    expect(keepLinks("---\ntitle: [unclosed\n---\n", "blocked_by", () => false, "HM")).toBeNull();
+    expect(kept(taskFile("HM-1"), "blocked_by", () => false, "HM")).toBeNull();
+    expect(kept("---\ntitle: [unclosed\n---\n", "blocked_by", () => false, "HM")).toBeNull();
   });
 
   it.each([
     ["blocked_by: [[HM-3]]\n", "blocked_by: [HM-3]\n"],
     ["blocked_by: HM-3\n", "blocked_by: [HM-3]\n"],
   ])("rewrites the malformed field %j as a list of the ids in it", (field, written) => {
-    expect(keepLinks(taskFile("HM-1", field), "blocked_by", () => true, "HM")).toBe(
+    expect(kept(taskFile("HM-1", field), "blocked_by", () => true, "HM")).toBe(
       taskFile("HM-1", written),
     );
   });

@@ -1,4 +1,4 @@
-import { Predicate } from "effect";
+import { Data, Effect, Predicate } from "effect";
 import { generateKeyBetween } from "fractional-indexing";
 import { isMap, parseDocument, type Document } from "yaml";
 import { isLinkField } from "./layout.ts";
@@ -46,13 +46,16 @@ export const frontmatterId = (text: string): string | null => {
   return yaml === null ? null : (/^id:[ \t]*["']?([^\s"'#]+)/m.exec(yaml)?.[1] ?? null);
 };
 
-const parseYaml = (yaml: string | null): Document => {
+/** A file whose frontmatter does not parse, so octodo leaves it as it is. */
+export class InvalidFrontmatter extends Data.TaggedError("InvalidFrontmatter")<{
+  readonly message: string;
+}> {}
+
+const parseYaml = (yaml: string | null): Document | InvalidFrontmatter => {
   const doc = parseDocument(yaml ?? "");
-  if (doc.errors.length > 0) {
-    const first = doc.errors[0]?.message.split("\n")[0]?.replace(/:$/, "") ?? "unknown error";
-    throw new Error(`Invalid frontmatter: ${first}`);
-  }
-  return doc;
+  if (doc.errors.length === 0) return doc;
+  const first = doc.errors[0]?.message.split("\n")[0]?.replace(/:$/, "") ?? "unknown error";
+  return new InvalidFrontmatter({ message: `Invalid frontmatter: ${first}` });
 };
 
 /** The frontmatter as plain data, or why it is not a set of keys. */
@@ -61,15 +64,20 @@ export const readFrontmatter = (
 ):
   | { readonly data: Readonly<Record<string, unknown>>; readonly body: string }
   | { readonly error: string } => {
+  const parts = splitFrontmatter(text);
+  const doc = parseYaml(parts.yaml);
+  if (doc instanceof InvalidFrontmatter) return { error: doc.message };
+  let value: unknown;
   try {
-    const parts = splitFrontmatter(text);
-    const value: unknown = parseYaml(parts.yaml).toJS();
-    if (value !== null && !Predicate.isObject(value))
-      return { error: "Invalid frontmatter: it must be a set of key: value pairs" };
-    return { data: (value ?? {}) as Record<string, unknown>, body: parts.body };
+    value = doc.toJS();
   } catch (error) {
-    return { error: error instanceof Error ? error.message : String(error) };
+    return {
+      error: `Invalid frontmatter: ${error instanceof Error ? error.message : String(error)}`,
+    };
   }
+  if (value !== null && !Predicate.isObject(value))
+    return { error: "Invalid frontmatter: it must be a set of key: value pairs" };
+  return { data: (value ?? {}) as Record<string, unknown>, body: parts.body };
 };
 
 export const invalidFrontmatter = (error: string) => ({
@@ -79,22 +87,31 @@ export const invalidFrontmatter = (error: string) => ({
 
 type FrontmatterChanges = Readonly<Record<string, unknown>> & { readonly id?: AssignedId };
 
-/**
- * Edits the frontmatter through the YAML document rather than re-serialising plain data, so keys
- * the app does not know about, their order and their comments survive. `undefined` removes a key.
- */
-export const patchFrontmatter = (
-  existing: string | null,
-  changes: FrontmatterChanges,
-  body?: string,
-): string => {
-  const parts = existing === null ? { yaml: null, body: "" } : splitFrontmatter(existing);
-  const doc = parseYaml(parts.yaml);
+const withChanges = (doc: Document, changes: FrontmatterChanges, body: string): string => {
   if (!isMap(doc.contents)) doc.contents = doc.createNode({});
   for (const [key, value] of Object.entries(changes)) {
     if (value === undefined) doc.delete(key);
     else doc.set(key, isLinkField(key) ? doc.createNode(value, { flow: true }) : value);
   }
-  const nextBody = body ?? parts.body;
-  return `---\n${doc.toString({ lineWidth: 0, flowCollectionPadding: false })}---\n${nextBody.length > 0 ? `\n${nextBody.replace(/\n*$/, "\n")}` : ""}`;
+  return `---\n${doc.toString({ lineWidth: 0, flowCollectionPadding: false })}---\n${body.length > 0 ? `\n${body.replace(/\n*$/, "\n")}` : ""}`;
+};
+
+/** A new file with `changes` as its frontmatter. */
+export const newFrontmatter = (changes: FrontmatterChanges, body = ""): string =>
+  withChanges(parseDocument(""), changes, body);
+
+/**
+ * Edits the frontmatter through the YAML document rather than re-serialising plain data, so keys
+ * the app does not know about, their order and their comments survive. `undefined` removes a key.
+ */
+export const patchFrontmatter = (
+  existing: string,
+  changes: FrontmatterChanges,
+  body?: string,
+): Effect.Effect<string, InvalidFrontmatter> => {
+  const parts = splitFrontmatter(existing);
+  const doc = parseYaml(parts.yaml);
+  return doc instanceof InvalidFrontmatter
+    ? Effect.fail(doc)
+    : Effect.succeed(withChanges(doc, changes, body ?? parts.body));
 };

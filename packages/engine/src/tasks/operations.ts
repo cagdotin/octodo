@@ -132,7 +132,7 @@ export const updateTask = (state: State, taskId: string, given: UpdateTaskInput)
                 dirs.tasks.get(taskId)!,
                 taskFolderName(taskId, input.title),
               );
-        yield* files.writeFile(join(dir, TASK_FILE), editTaskFile(text, input));
+        yield* files.writeFile(join(dir, TASK_FILE), yield* editTaskFile(text, input));
       }).pipe(storageError("Could not write the task"));
       return yield* reread(state, taskId);
     }),
@@ -189,7 +189,10 @@ export const editKind = (state: State, id: string, taskId: string, change: KindC
         yield* writeChangedFiles(files, scan.dirs.tasks.get(taskId)!, change, read);
         if (change.keys !== undefined) {
           const file = join(snapshot.workspace.root, task.path);
-          yield* files.writeFile(file, patchFrontmatter(yield* fileText(scan, file), change.keys));
+          yield* files.writeFile(
+            file,
+            yield* patchFrontmatter(yield* fileText(scan, file), change.keys),
+          );
         }
       }).pipe(storageError("Could not write the task"));
       return yield* reread(state, taskId);
@@ -259,7 +262,7 @@ export const moveTask = (state: State, taskId: string, input: MoveTaskInput) =>
           containerDir(scan, container),
         );
         if (completed !== null) yield* writeChangedFiles(files, dir, completed.change, read!);
-        yield* files.writeFile(join(dir, TASK_FILE), patchFrontmatter(text, changes));
+        yield* files.writeFile(join(dir, TASK_FILE), yield* patchFrontmatter(text, changes));
       }).pipe(storageError("Could not move the task"));
       return yield* reread(state, taskId);
     }),
@@ -281,11 +284,15 @@ export const deleteTask = (state: State, taskId: string) =>
         for (const task of linking) {
           const file = join(snapshot.workspace.root, task.path);
           const original = yield* fileText(scan, file);
-          const text = LINK_KINDS.reduce(
-            (text, kind) =>
-              keepLinks(text, kind.field, (id) => !isRemoved(id), snapshot.workspace.key) ?? text,
-            original,
-          );
+          let text = original;
+          for (const kind of LINK_KINDS)
+            text =
+              (yield* keepLinks(
+                text,
+                kind.field,
+                (id) => !isRemoved(id),
+                snapshot.workspace.key,
+              )) ?? text;
           if (text !== original) yield* files.writeFile(file, text);
         }
         yield* files.remove(dirs.tasks.get(taskId)!);

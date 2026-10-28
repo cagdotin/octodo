@@ -1,6 +1,6 @@
 import {
   invalidFrontmatter,
-  patchFrontmatter,
+  newFrontmatter,
   readFrontmatter,
   readOrder,
   stringOrNull,
@@ -27,4 +27,4 @@ export const readListFile = (text: string): FrontmatterRead<ListFile> => {
 };
 
 export const newListFile = (list: { readonly name: string; readonly order: string }): string =>
-  patchFrontmatter(null, { name: list.name, order: list.order });
+  newFrontmatter({ name: list.name, order: list.order });

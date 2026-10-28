@@ -53,7 +53,7 @@ const giveIds = (files: Files, ids: Ids, scan: Scan) =>
     return Effect.gen(function* () {
       const text = yield* fileText(scan, file);
       if (!needsId(text)) return;
-      yield* files.writeFile(file, patchFrontmatter(text, { id: taskId }));
+      yield* files.writeFile(file, yield* patchFrontmatter(text, { id: taskId }));
       yield* Effect.logInfo(`Assigned ${taskId} to ${shown}`);
     }).pipe(Effect.catch((error) => Effect.logWarning(`Could not give ${shown} an id`, error)));
   });

@@ -1,4 +1,4 @@
-import { Option, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { isTaskId, taskIdsIn } from "../layout.ts";
 import {
   DueDate,
@@ -13,6 +13,8 @@ import { findMentions, humanize, type LinkField } from "@octodo/contract/rules";
 import {
   absent,
   invalidFrontmatter,
+  type InvalidFrontmatter,
+  newFrontmatter,
   patchFrontmatter,
   readFrontmatter,
   readOrder,
@@ -251,8 +253,7 @@ export const newTaskFile = (
     readonly kind?: NewKind | undefined;
   },
 ): string =>
-  patchFrontmatter(
-    null,
+  newFrontmatter(
     {
       id,
       title: input.title,
@@ -271,7 +272,7 @@ export interface NewKind {
   readonly keys: Readonly<Record<string, unknown>>;
 }
 
-export const editTaskFile = (text: string, input: UpdateTaskInput): string =>
+export const editTaskFile = (text: string, input: UpdateTaskInput) =>
   patchFrontmatter(text, editChanges(input), input.body);
 
 /**
@@ -285,11 +286,11 @@ export const keepLinks = (
   field: LinkField,
   keep: (id: string) => boolean,
   key: string,
-): string | null => {
+): Effect.Effect<string | null, InvalidFrontmatter> => {
   const read = readFrontmatter(text);
-  if ("error" in read) return null;
+  if ("error" in read) return Effect.succeed(null);
   const { ids, malformed } = readLinkField(read.data[field], key);
   const kept = ids.filter(keep);
-  if (kept.length === ids.length && !malformed) return null;
+  if (kept.length === ids.length && !malformed) return Effect.succeed(null);
   return patchFrontmatter(text, { [field]: kept.length > 0 ? kept : undefined });
 };

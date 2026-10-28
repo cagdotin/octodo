@@ -67,14 +67,19 @@ is no auth middleware and no pairing endpoint.
   `wireError(error)` is the codec of the body: the error's encoded fields plus `message`, which a
   tagged error has only as a getter. A request that fails its schema is an `InvalidRequest`
   through the `Validation` middleware, and an `/api` path no endpoint has is a JSON 404
-  `{ _tag: "RouteNotFound", message }`, never the web app.
+  `{ _tag: "RouteNotFound", message }`, never the web app. A body of a content type the route does
+  not take is a 415 with an `InvalidRequest` body, which HttpApi would send as plain text. `HEAD`
+  on any `GET` route, the attachment download included, answers as the `GET` without the body.
 - MCP tool errors are the same `{ _tag, ...fields, message }` body as HTTP (OCT-52 left the MCP
   shape open): one shape on every surface, so an agent reading a tool error branches on `_tag`
   exactly as an HTTP client does.
 - The client is `@octodo/contract/client`: `createClient(base)` gives `request(key, input)` and
   `url(key, input)`, where `key` is `"METHOD /api/path"` and `input` is `{ params, query, payload }`
-  typed from `typeof Api`. A query `null` is the string `"null"` and an array repeats its key, as
-  the server's codec reads them. It imports only types from Effect and `api.ts`, and lint enforces
+  typed from `typeof Api`. A query `null` is an empty value (`?list=`), which the server reads back
+  as `null` for a field that takes it, so the string `"null"` stays a value like any other; no such
+  field is ever empty. An array repeats its key. `url` throws an `ApiError` with an
+  `InvalidRequest` body for a path parameter that is empty, `.` or `..`, since `fetch` would drop
+  or resolve that segment (`%2e` too) and send the request to another route. It imports only types from Effect and `api.ts`, and lint enforces
   that for it and for `apps/web`. Built, it is 0.8 KB gzipped; the web bundle has no Effect
   runtime, and its gzipped JavaScript went from 431 KB to 430 KB.
 - Upload is `PUT .../files/:path` with any content type (a raw handler: the body is the file

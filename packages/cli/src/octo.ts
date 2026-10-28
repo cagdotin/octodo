@@ -13,7 +13,7 @@ import { isProblem } from "@octodo/contract/rules";
 import { defaultHome, makeRegistry } from "@octodo/engine";
 import { stdioLayer } from "@octodo/mcp";
 import { plugins } from "@octodo/plugins";
-import { DEFAULT_PORT, startServer } from "@octodo/server";
+import { DEFAULT_PORT, HomeTaken, startServer } from "@octodo/server";
 import { Console, Effect, FileSystem, Layer, Option, Path } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { homedir } from "node:os";
@@ -247,15 +247,29 @@ const serveCommand = Command.make(
         message: `octodo already runs at ${running.value.url} (pid ${running.value.pid}). Use it, or stop it first.`,
       });
     const defaultWeb = fileURLToPath(new URL("../../../apps/web/dist", import.meta.url));
-    const server = yield* Effect.acquireRelease(
-      Effect.promise(() =>
+    const start = Effect.tryPromise({
+      try: () =>
         startServer({
           home,
           port: options.port,
           webDir: Option.getOrElse(options.webDir, () => defaultWeb),
         }),
+      catch: (error) => error as NodeJS.ErrnoException,
+    }).pipe(
+      Effect.catch((error) =>
+        error.code === "EADDRINUSE"
+          ? Effect.fail(
+              new InvalidRequest({
+                message: `Port ${options.port} is in use. Pass another with --port, or stop what listens there.`,
+              }),
+            )
+          : error instanceof HomeTaken
+            ? Effect.fail(new InvalidRequest({ message: error.message }))
+            : Effect.die(error),
       ),
-      (running) => Effect.promise(() => running.close()),
+    );
+    const server = yield* Effect.acquireRelease(start, (running) =>
+      Effect.promise(() => running.close()),
     );
     yield* Console.log(`octodo on ${server.url}`);
     yield* Console.log(`MCP: ${server.mcpUrl}`);

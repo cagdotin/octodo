@@ -115,7 +115,8 @@ const commandFor = <E, R>(
   const flags = schemaFlags(Schema.Struct(fields));
   const isFile = operation.success === FileSuccess;
   const render = rendererOf(name, operation);
-  const extra = isFile ? { output } : render === undefined ? {} : { json };
+  // Every command that prints a value takes --json, so a script can always pass it.
+  const extra = isFile ? { output } : { json };
   const command = Command.make(
     cli.command.at(-1)!,
     { input: flags.params, ...extra },

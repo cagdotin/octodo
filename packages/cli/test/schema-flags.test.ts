@@ -139,6 +139,12 @@ describe("create task flags", () => {
     });
   });
 
+  it("leave out the empty items of a comma list", async () => {
+    expect(await octo(CreateTask, ["Paint", "-t", "a,,b, ,", "-t", ","])).toEqual({
+      input: { title: "Paint", tags: ["a", "b"] },
+    });
+  });
+
   it("leave out what was not given", async () => {
     expect(await octo(CreateTask, ["Paint"])).toEqual({ input: { title: "Paint" } });
   });

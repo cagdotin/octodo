@@ -59,8 +59,9 @@ and generates its API, CLI flags and JSON Schema from that declaration, with a t
   entry, typed from the entry, and `packages/server/src/operations.ts` implements them all in one
   loop over `runOperation`, with the `workspace` path parameter naming a registered workspace or an absolute folder
   ([0018](0018-connect-finds-the-server-through-server-json.md)).
-- CLI-only flags stay out of the catalog: `--workspace`, `--json` (on a command with a text
-  renderer) and `--output` (on a file operation).
+- CLI-only flags stay out of the catalog: `--workspace`, `--json` (on every command that prints a
+  value, a no-op where JSON is all it prints, so a script can always pass it) and `--output` (on a
+  file operation).
 - Tests: `packages/cli/test/surfaces.test.ts` runs a table of calls covering every operation on the
   engine, over MCP, over HTTP and through the CLI, each on its own scratch workspace, and asserts they give
   the same result, file or error. `packages/cli/test/catalog.test.ts` checks the HTTP paths and

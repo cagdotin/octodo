@@ -1,4 +1,5 @@
 import {
+  AttachmentTooLarge,
   InvalidRequest,
   ServerUnavailable,
   StorageError,
@@ -8,6 +9,7 @@ import {
 } from "@octodo/contract";
 import { FileSuccess, pathParams, type Operation } from "@octodo/contract/catalog";
 import { ApiError, createClient, type JsonRouteKey } from "@octodo/contract/client";
+import { MAX_ATTACHMENT_BYTES } from "@octodo/contract/rules";
 import { Effect, Schema } from "effect";
 import { fileURLToPath } from "node:url";
 import type { Backend, ClientError } from "./backend.ts";
@@ -78,6 +80,38 @@ const decodeSuccess = (url: string, schema: Schema.Top, value: unknown) =>
     ),
   );
 
+/** The `AttachmentTooLarge` the engine fails with, as the server would send it. */
+const tooLarge = (path: string, size: number) => {
+  const error = new AttachmentTooLarge({ path, size });
+  return new ApiError(413, { _tag: error._tag, path, size, message: error.message });
+};
+
+/**
+ * The body of an attachment download, refused past the limit `read_attachment` has in the engine,
+ * as declared or as read; the download route itself has none, for the browser.
+ */
+const limitedBytes = async (path: string, response: Response): Promise<Uint8Array> => {
+  const declared = Number(response.headers.get("content-length"));
+  if (declared > MAX_ATTACHMENT_BYTES) {
+    await response.body?.cancel();
+    throw tooLarge(path, declared);
+  }
+  const chunks: Array<Uint8Array> = [];
+  let size = 0;
+  for await (const chunk of response.body ?? []) {
+    size += chunk.length;
+    if (size > MAX_ATTACHMENT_BYTES) throw tooLarge(path, size);
+    chunks.push(chunk);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return bytes;
+};
+
 /** The operations and endpoints of the server at `url`, over its HTTP API. */
 export const remoteBackend = (url: string): Backend => {
   const client = createClient(url);
@@ -96,13 +130,14 @@ export const remoteBackend = (url: string): Backend => {
 
   const readFile = (operation: Operation, input: Record<string, unknown>) => {
     const { key, request } = requestOf(operation, input);
+    const path = String(input["path"]);
     return send(url, operation.error, async (): Promise<AttachmentContent> => {
       const response = await fetch(client.url(key, request));
       if (!response.ok)
         throw new ApiError(response.status, await response.json().catch(() => undefined));
-      const bytes = new Uint8Array(await response.arrayBuffer());
+      const bytes = await limitedBytes(path, response);
       return {
-        path: String(input["path"]),
+        path,
         size: bytes.length,
         mediaType: response.headers.get("content-type") ?? "application/octet-stream",
         file: fileURLToPath(response.headers.get("content-location")!),

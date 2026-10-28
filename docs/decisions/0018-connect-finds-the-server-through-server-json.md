@@ -20,8 +20,8 @@ the question of whether to prefer the server at all is open again.
 - `startServer` writes `<home>/server.json` once it listens: `{ "url", "pid", "version" }`, the
   `ServerInfo` schema in `@octodo/contract`. It writes through a temporary file and a rename
   (`writeServerInfo` in `engine/src/storage/home.ts`), and on `close()` removes the file only if it
-  still names this server's url and pid, so a server that started later keeps its entry. The last
-  server to start wins; there is one per machine ([0002](0002-server-preferred-topology.md)).
+  still names this server's url and pid. One server runs per home: it holds a lock on the home
+  while it runs ([0026](0026-a-server-claims-its-home-with-a-lock.md)).
 - Only servers write it. A client never deletes it, even when it is stale: the next server
   overwrites it, and the pid check below ignores it until then.
 - `version` is `VERSION` from `@octodo/contract/api`, the contract package's version. `/api/health`,
@@ -50,18 +50,25 @@ a workspace is the operation `add_workspace`
   embedded engine is built on the first call that needs it and kept.
 - A `workspace` that starts with `.` is made absolute against the client's directory before either
   path runs it, since the server has its own directory.
+- A path parameter of the operation that is empty, `.` or `..` is refused with `InvalidRequest` in
+  both modes before either path runs it: a URL drops or resolves such a segment, so the request
+  would reach another route (`delete ..` would have been `DELETE /api/workspaces/<id>`).
 - The embedded path and the remote path give the same values and errors: the remote one decodes
   each success through the operation's `success` schema and each error body through `wireError`
   back into the engine's tagged error. `octo` prints `--json` through the success schema in both
   modes, so key order is the schema's.
 - `read_attachment` over HTTP takes `size` from the bytes, `mediaType` from `Content-Type`, and the
-  file's absolute path from `Content-Location`, a `file://` URL the download now sends.
+  file's absolute path from `Content-Location`, a `file://` URL the download now sends. It fails
+  with `AttachmentTooLarge` past 20 MB, by `Content-Length` or by the bytes read, as the engine
+  does; the download route itself has no limit, for the browser.
 
 ### The workspace in an HTTP path
 
 `:workspace` takes what `Workspaces.open` takes: a registered id, or an absolute folder path in one
 percent-encoded segment, meaning the workspace containing it. A relative path is refused with
-`InvalidRequest`. `DELETE /api/workspaces/:workspace` still takes an id only. The router's
+`InvalidRequest`. `DELETE /api/workspaces/:workspace` still takes an id only. The `workspace`
+argument of an MCP tool over HTTP at `/mcp` is read the same way and is required; over stdio,
+omitting it means the workspace containing the folder `octo mcp` started in (or its `--workspace`). The router's
 parameter limit is raised from 100 characters to 12,288, so a folder path fits.
 
 ### Surfaces
@@ -108,9 +115,8 @@ parameter limit is raised from 100 characters to 12,288, so a folder path fits.
 - The CLI still loads the engine in server mode: its commands are generated from `makeRegistry`,
   which lives there. Startup, about 0.4 s of module loading, is the same in both modes and limits
   a command on a small workspace.
-- Two `startServer` calls on one home leave `server.json` to the later one. A server removed while
-  another rewrites the file can, in a narrow window, remove the other's entry; clients then embed,
-  which the lock keeps safe.
+- Two `startServer` calls on one home run one server
+  ([0026](0026-a-server-claims-its-home-with-a-lock.md)).
 - The server keeps a handle, and a watcher, for each folder a client names, registered or not.
   Handles are keyed by the folder's real path, so one folder reached by two paths shares one.
 - OCT-55: the desktop app reads the same `server.json` to attach, and the server it spawns writes

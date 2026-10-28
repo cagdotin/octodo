@@ -31,3 +31,4 @@ supersedes the old one and mark the old one's status.
 | [0023](0023-plugins-contribute-their-create-fields-and-own-the-date-slot.md)         | Plugins contribute their create fields to the new-task dialog, and a kind's date replaces Due            | accepted |
 | [0024](0024-the-desktop-app-is-packaged-with-electron-builder.md)                    | The desktop app is packaged with electron-builder, and its server child runs from app.asar               | accepted |
 | [0025](0025-a-kind-gives-its-due-day-and-list-tasks-filters-by-it.md)                | A kind gives its due day, and Today, Next 7 days and `list_tasks` filter by it                           | accepted |
+| [0026](0026-a-server-claims-its-home-with-a-lock.md)                                 | A server claims its home with a lock, so one runs per home                                               | accepted |

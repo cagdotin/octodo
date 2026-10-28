@@ -7,16 +7,14 @@ import {
   type StorageError,
   type WorkspaceNotFound,
 } from "@octodo/contract";
-import { VERSION } from "@octodo/contract/api";
+import { RELATIVE_WORKSPACE, VERSION } from "@octodo/contract/api";
 import { FileSuccess, inOneWorkspace, type Operation } from "@octodo/contract/catalog";
 import { makeRegistry, Workspaces, type Registry, type Workspace } from "@octodo/engine";
 import { Context, Effect, Layer, Logger, Schema } from "effect";
 import { McpProtocol, McpSchema, McpServer, Tool, Toolkit } from "effect/ai";
 import { pathToFileURL } from "node:url";
 
-export const SERVER_NAME = "octodo";
-
-export const INSTRUCTIONS = `octodo manages tasks stored as markdown files under a project's .octodo/ folder. Use these tools to change them rather than editing files.
+const INSTRUCTIONS = `octodo manages tasks stored as markdown files under a project's .octodo/ folder. Use these tools to change them rather than editing files.
 - Every task is a folder holding task.md, whose frontmatter has its id, title, status, priority, tags, due date and order. Other files in the folder are its attachments: get_task lists them and read_attachment reads one.
 - A task folder inside another task is a subtask: create_task and move_task take a parent task id, and get_task lists a task's subtasks.
 - Folders with list.md are lists, nested up to 3 levels. List ids are folder names joined by slashes: garden/seeds.
@@ -24,7 +22,7 @@ export const INSTRUCTIONS = `octodo manages tasks stored as markdown files under
 - blocked_by in a task's frontmatter lists the task ids it waits for. A task is blocked while any of them is open or missing; update_task sets blocked_by, and list_tasks with ready: true lists open tasks that are not blocked. [[HM-3]] in a body mentions task HM-3.
 - Call get_workspace first to learn the statuses and lists before creating or moving tasks.
 - Files that octodo cannot read cleanly show up as diagnostics (list_diagnostics). Fix one with fix_diagnostic when it offers a fix; otherwise tell the user what its message says to do. Never edit the files to fix them.
-- The workspace parameter takes a registered workspace id or an absolute folder path; omit it to use the workspace containing the server's working directory.`;
+- The workspace parameter takes a registered workspace id or an absolute folder path. Over stdio (octo mcp), omit it to use the workspace containing the folder the server started in; over HTTP, always pass it.`;
 
 /** Runs an operation by name on its decoded input, the way the process reaches the engine. */
 export type RunOperation = (name: string, input: object) => Effect.Effect<unknown, unknown>;
@@ -161,7 +159,7 @@ const fileTools = (operations: Registry["operations"], run: RunOperation) =>
   );
 
 const serverOptions = {
-  name: SERVER_NAME,
+  name: "octodo",
   version: VERSION,
   instructions: INSTRUCTIONS,
   protocols: [McpProtocol.v2025_11_25, McpProtocol.v2025_06_18, McpProtocol.v2025_03_26] as const,
@@ -198,7 +196,8 @@ export const stdioLayer = (options: {
 
 /**
  * Streamable HTTP MCP endpoint registered on an `HttpRouter`, with the tools of the plugins
- * `Workspaces` has. A call over HTTP has no directory to fall back on, so it names its workspace.
+ * `Workspaces` has. A call over HTTP has no directory to fall back on or to resolve a relative
+ * folder against, so it names its workspace by id or absolute folder, as `/api` takes it.
  */
 export const httpLayer = (options: { readonly path: `/${string}` }) =>
   Layer.unwrap(
@@ -211,7 +210,9 @@ export const httpLayer = (options: { readonly path: `/${string}` }) =>
           ? Effect.fail(
               new InvalidRequest({ message: "Pass a workspace: call list_workspaces to see them" }),
             )
-          : workspaces.open(workspace);
+          : workspace.startsWith(".")
+            ? Effect.fail(new InvalidRequest({ message: RELATIVE_WORKSPACE }))
+            : workspaces.open(workspace);
       const run: RunOperation = (name, input) =>
         registry.run(name, input, open).pipe(Effect.provideService(Workspaces, workspaces));
       return Effect.succeed(tools(registry.operations, run));

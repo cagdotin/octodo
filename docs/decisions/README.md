@@ -21,3 +21,4 @@ supersedes the old one and mark the old one's status.
 | [0013](0013-every-surface-gives-the-operations-result.md)              | Every surface gives an operation's own result                                          | accepted |
 | [0014](0014-one-plugin-api-for-the-plain-task-and-every-plugin.md)     | One plugin API for the plain task and every plugin                                     | accepted |
 | [0015](0015-http-endpoints-outside-the-catalog.md)                     | HTTP endpoints outside the catalog                                                     | accepted |
+| [0016](0016-recurring-tasks-complete-in-place.md)                      | Recurring tasks complete in place, through a hook on the move                          | accepted |

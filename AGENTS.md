@@ -28,7 +28,10 @@ instead of keeping the code because it exists.
   `task.md`. `type: recurring` makes it a task of an enabled plugin's kind, which owns more keys
   and files in its folder; no `type` is the plain task, and a `type` the workspace does not enable
   reads as a plain task with an `unknown-kind` diagnostic
-  ([0014](docs/decisions/0014-one-plugin-api-for-the-plain-task-and-every-plugin.md)).
+  ([0014](docs/decisions/0014-one-plugin-api-for-the-plain-task-and-every-plugin.md)). A
+  recurring task keeps its rule in `repeat` and one line per time it was done in `log.jsonl`;
+  moving it into a completed status logs that line and leaves it in the first unstarted status
+  ([0016](docs/decisions/0016-recurring-tasks-complete-in-place.md)).
 - A link is a frontmatter key holding a list of plain task ids, `blocked_by: [HM-3, HM-7]`;
   `LINK_KINDS` in `contract/src/rules.ts` lists the keys. Only one end stores an edge: the reverse (`blocks`),
   `mentionedIn` (from `[[HM-3]]` in a body, outside code), `blocked` and `ready` (open and not
@@ -81,7 +84,7 @@ instead of keeping the code because it exists.
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/contract` | What every client shares: Effect schemas and errors (`domain.ts`), the operation catalog (`catalog.ts`), the HTTP API (`api.ts`), its typed `fetch` client (`client.ts`), a plugin's shared shape (`plugin.ts`) and `rules.ts`, the plain rules the browser runs too |
 | `packages/engine`   | Effect v4 domain: storage, scan, markdown round-trip, folder grammar, tasks, lists, statuses, health, `Workspace(s)`                                                                                                                                                 |
-| `packages/plugins`  | First-party plugins (none yet), each a folder with `shared`, `engine` and `web` halves; `plugins` is the list every process gives `Workspaces.layer`                                                                                                                 |
+| `packages/plugins`  | First-party plugins (`recurring`), each a folder with `shared`, `engine` and `web` halves; `plugins` is the list every process gives `Workspaces.layer`, `./web` the app's `webPlugins`                                                                              |
 | `packages/mcp`      | MCP tools generated from the operation catalog, and stdio/HTTP layers on Effect's `McpServer`                                                                                                                                                                        |
 | `packages/server`   | Serves `makeApi` over the catalog and the plugins' operations on Effect HttpApi at `/api` (OpenAPI at `/api/openapi.json`), MCP at `/mcp`, the SSE change feed, the built web app, on one router                                                                     |
 | `packages/cli`      | `octo` CLI on `effect/cli`, its commands and the bundled agent skill generated from the catalog; run it with `bin/octo`                                                                                                                                              |

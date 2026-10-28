@@ -43,19 +43,26 @@ clears a value; `octo <command> --help` lists them):
 - `move_list`, `octo lists move <id>`: Reorder a list among its siblings (before/after another list id) and/or move it under another parent (null for the top level).
 - `list_diagnostics`, no command: List the problems with files in the workspace: each has a path, a kind, the frontmatter field at fault, a message saying what to do, and a fix when octodo can repair it.
 - `fix_diagnostic`, no command: Apply the fix of one diagnostic, given its path, kind and fix action from list_diagnostics.
+- `create_recurring`, `octo recurring create <title>`: Create a recurring task, which comes back after it is done.
+- `set_repeat`, `octo recurring repeat <id> <repeat>`: Change a recurring task's rule.
+- `log_occurrence`, `octo recurring log <id>`: Record that a recurring task was done, now or at an earlier time, without changing its status.
+- `remove_occurrence`, `octo recurring unlog <id> <at>`: Remove one time a recurring task was done, by its time as list_occurrences gives it.
+- `list_occurrences`, `octo recurring history <id>`: List every time a recurring task was done, newest first.
 
 ```sh
-octo list                                                # Open tasks, subtasks under their parent
-octo list --ready                                        # Open tasks that are not blocked
-octo show HM-42                                          # One task
-octo attachment HM-42 images/plan.png --output plan.png  # Save an attachment
-octo create "Book the movers" -p high -t quotes          # A high-priority task
-octo create "Buy primer" --parent HM-12                  # A subtask of HM-12
-octo update HM-4 --body "Notes in markdown"              # A new body
-octo update HM-4 --blocked-by HM-2,HM-3                  # HM-4 waits for both
-octo update HM-4 --blocked-by ''                         # HM-4 waits for nothing
-octo move HM-42 in-progress                              # Change its status
-octo move HM-43 --parent HM-42                           # Make it a subtask; --no-parent lifts it out
+octo list                                                         # Open tasks, subtasks under their parent
+octo list --ready                                                 # Open tasks that are not blocked
+octo show HM-42                                                   # One task
+octo attachment HM-42 images/plan.png --output plan.png           # Save an attachment
+octo create "Book the movers" -p high -t quotes                   # A high-priority task
+octo create "Buy primer" --parent HM-12                           # A subtask of HM-12
+octo update HM-4 --body "Notes in markdown"                       # A new body
+octo update HM-4 --blocked-by HM-2,HM-3                           # HM-4 waits for both
+octo update HM-4 --blocked-by ''                                  # HM-4 waits for nothing
+octo move HM-42 in-progress                                       # Change its status
+octo move HM-43 --parent HM-42                                    # Make it a subtask; --no-parent lifts it out
+octo recurring create "Water the plants" --repeat "every 3 days"  # A chore that comes back three days after each time
+octo recurring log HM-4 --at 2026-10-25                           # It was done on the 25th
 ```
 
 If a command warns about a file, run `octo doctor`: it lists each problem and what to do about

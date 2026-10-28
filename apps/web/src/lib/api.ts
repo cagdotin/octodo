@@ -14,6 +14,7 @@ import { sortStatuses } from "@octodo/contract/rules";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { attachmentName, attachmentPath, type Attachments } from "@/lib/attachments";
+import { completesInPlace } from "@/components/task-kind";
 import { applyListMove, applyMove, withBlockedBy, withoutSubtree } from "@/lib/tasks";
 
 export const api = createClient(typeof window === "undefined" ? "" : window.location.origin);
@@ -149,7 +150,7 @@ export const useMoveTask = (ws: string) =>
         params: { workspace: ws, id },
         payload: move,
       }),
-    (snapshot, { id, move }) => applyMove(snapshot, id, move),
+    (snapshot, { id, move }) => applyMove(snapshot, id, move, completesInPlace),
   );
 
 export const useDeleteTask = (ws: string) =>

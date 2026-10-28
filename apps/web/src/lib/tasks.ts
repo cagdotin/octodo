@@ -9,6 +9,7 @@ import type {
   WorkspaceSnapshot,
 } from "@octodo/contract";
 import {
+  defaultStatus,
   destination,
   inSubtree,
   isClosedCategory,
@@ -316,19 +317,25 @@ export const listLabel = (lists: ReadonlyArray<List>, id: string | null) => {
 /**
  * Mirrors a move in a cached snapshot, whose task array is the order views render in. As in core,
  * the task keeps its place unless the move names a neighbour or changes its list or parent; then it
- * goes next to the neighbour, or last.
+ * goes next to the neighbour, or last. A task that `completesInPlace` (a recurring task) moved into
+ * a completed status goes to the first unstarted status instead, as the engine moves it.
  */
 export const applyMove = (
   snapshot: WorkspaceSnapshot,
   id: string,
   move: MoveTaskInput,
+  completesInPlace: (task: Task) => boolean = () => false,
 ): WorkspaceSnapshot => {
   const task = snapshot.tasks.find((entry) => entry.id === id);
   if (!task) return snapshot;
   const container = destination(snapshot, move, task);
   if (typeof container === "string") return snapshot;
   const { list, parent } = container;
-  const moved: Task = { ...task, status: move.status ?? task.status, list, parent };
+  const completing =
+    snapshot.statuses.find((status) => status.id === move.status)?.category === "completed" &&
+    completesInPlace(task);
+  const status = completing ? (defaultStatus(snapshot.statuses)?.id ?? task.status) : move.status;
+  const moved: Task = { ...task, status: status ?? task.status, list, parent };
   const placed = move.before !== undefined || move.after !== undefined;
   if (!placed && list === task.list && parent === task.parent)
     return withReadiness({

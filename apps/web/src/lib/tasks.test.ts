@@ -131,6 +131,14 @@ describe("subtasks in views", () => {
     });
   });
 
+  it("keeps a task that completes in place open, as the engine does", () => {
+    const inPlace = (entry: Task) => entry.id === "HM-3";
+    const moved = applyMove(snapshot(TASKS), "HM-3", { status: "done" }, inPlace);
+    expect(moved.tasks.find((entry) => entry.id === "HM-3")?.status).toBe("todo");
+    const archived = applyMove(snapshot(TASKS), "HM-3", { status: "archived" }, inPlace);
+    expect(archived.tasks.find((entry) => entry.id === "HM-3")?.status).toBe("archived");
+  });
+
   it("leaves the snapshot as it is for a move the server refuses", () => {
     const before = snapshot(TASKS);
     expect(applyMove(before, "HM-5", { list: "nowhere" })).toBe(before);

@@ -26,6 +26,7 @@ import {
   TagChips,
 } from "@/components/task-bits";
 import { TagsEditor } from "@/components/tags-editor";
+import { KindPanel } from "@/components/task-kind";
 import { TaskRelations, useMentions } from "@/components/task-relations";
 import { ParentLink, SubtasksGoing, TaskSubtasks } from "@/components/task-subtasks";
 import {
@@ -208,6 +209,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
         onBlur={() => editor.send({ type: "FLUSH" })}
         className="min-h-0 flex-1 text-base md:text-sm"
       />
+      <KindPanel workspace={workspace} task={task} />
       <TaskRelations workspace={workspace} snapshot={snapshot} task={task} />
       <TaskSubtasks workspace={workspace} snapshot={snapshot} task={task} />
 

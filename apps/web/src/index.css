@@ -4,6 +4,9 @@
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
 
+/* Plugins' web halves render inside the app with its classes. */
+@source "../../../packages/plugins/src";
+
 @custom-variant dark (&:is(.dark *));
 
 /* The macOS desktop app draws its own title bar; see src/lib/desktop.ts. `windowed-mac` is the

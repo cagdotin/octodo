@@ -129,6 +129,7 @@
       "files": [
         "apps/web/src/**",
         "apps/desktop/src/preload.ts",
+        "packages/plugins/src/web.ts",
         "packages/plugins/src/*/web.ts",
         "packages/plugins/src/*/web.tsx"
       ],

@@ -16,6 +16,7 @@ import {
   LockOpenIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { KindRow, kindWeb } from "@/components/task-kind";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -246,6 +247,7 @@ export function ChecklistCount({ body, className }: { body: string; className?: 
 }
 
 export function TaskDate({ task, className }: { task: Task; className?: string }) {
+  if (kindWeb(task) !== undefined) return <KindRow task={task} className={className} />;
   const due = dueInfo(task.due);
   if (due) {
     return (

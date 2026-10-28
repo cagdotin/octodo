@@ -1,3 +1,4 @@
+import { DEFAULT_PRESET, PRESET_IDS, PRESETS, type PresetId } from "@octodo/contract/presets";
 import { deriveKey, humanize } from "@octodo/contract/rules";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -24,8 +25,12 @@ import {
   Field,
   FieldDescription,
   FieldError,
+  FieldContent,
   FieldGroup,
   FieldLabel,
+  FieldSet,
+  FieldLegend,
+  FieldTitle,
 } from "@octodo/ui/components/field";
 import { Input } from "@octodo/ui/components/input";
 import {
@@ -35,6 +40,7 @@ import {
   InputGroupInput,
 } from "@octodo/ui/components/input-group";
 import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from "@octodo/ui/components/item";
+import { RadioGroup, RadioGroupItem } from "@octodo/ui/components/radio-group";
 import { ScrollArea } from "@octodo/ui/components/scroll-area";
 import { Skeleton } from "@octodo/ui/components/skeleton";
 import { Spinner } from "@octodo/ui/components/spinner";
@@ -62,6 +68,7 @@ export function AddWorkspaceDialog({ trigger, open, onOpenChange }: Props) {
   const [root, setRoot] = useState("");
   const [name, setName] = useState("");
   const [key, setKey] = useState("");
+  const [preset, setPreset] = useState<PresetId>(DEFAULT_PRESET);
   const [browsing, setBrowsing] = useState(false);
   const [pathError, setPathError] = useState<string | null>(null);
   const add = useAddWorkspace();
@@ -79,6 +86,7 @@ export function AddWorkspaceDialog({ trigger, open, onOpenChange }: Props) {
     setRoot("");
     setName("");
     setKey("");
+    setPreset(DEFAULT_PRESET);
     setBrowsing(false);
     setPathError(null);
     add.reset();
@@ -111,6 +119,7 @@ export function AddWorkspaceDialog({ trigger, open, onOpenChange }: Props) {
         root: trimmed,
         ...(!existing && name.trim() ? { name: name.trim() } : {}),
         ...(!existing && key.trim() ? { key: key.trim().toUpperCase() } : {}),
+        ...(!existing ? { preset } : {}),
       },
       {
         onSuccess: (workspace) => {
@@ -131,7 +140,7 @@ export function AddWorkspaceDialog({ trigger, open, onOpenChange }: Props) {
       }}
     >
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
-      <DialogContent>
+      <DialogContent className="sm:max-w-md">
         <form onSubmit={submit} className="contents">
           <DialogHeader>
             <DialogTitle>Add workspace</DialogTitle>
@@ -205,6 +214,28 @@ export function AddWorkspaceDialog({ trigger, open, onOpenChange }: Props) {
                   />
                 </Field>
               </div>
+            )}
+            {!existing && (
+              <FieldSet>
+                <FieldLegend variant="label">Start with</FieldLegend>
+                <RadioGroup
+                  value={preset}
+                  onValueChange={(value) => setPreset(value as PresetId)}
+                  className="gap-2"
+                >
+                  {PRESET_IDS.map((id) => (
+                    <FieldLabel key={id} htmlFor={`ws-preset-${id}`}>
+                      <Field orientation="horizontal" className="py-2.5!">
+                        <FieldContent>
+                          <FieldTitle>{PRESETS[id].name}</FieldTitle>
+                          <FieldDescription>{PRESETS[id].description}</FieldDescription>
+                        </FieldContent>
+                        <RadioGroupItem value={id} id={`ws-preset-${id}`} />
+                      </Field>
+                    </FieldLabel>
+                  ))}
+                </RadioGroup>
+              </FieldSet>
             )}
           </FieldGroup>
           <DialogFooter>

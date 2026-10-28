@@ -1,6 +1,12 @@
 import type { WorkspaceSnapshot } from "@octodo/contract";
 import { Link, useMatchRoute } from "@tanstack/react-router";
-import { ChevronLeftIcon, PaletteIcon, PlugIcon, SlidersHorizontalIcon } from "lucide-react";
+import {
+  BlocksIcon,
+  ChevronLeftIcon,
+  PaletteIcon,
+  PlugIcon,
+  SlidersHorizontalIcon,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { Avatar } from "@/components/app-sidebar";
 import { SyncIndicator } from "@/components/sync-indicator";
@@ -31,6 +37,7 @@ export const SETTINGS_PAGES = [
     label: "Statuses",
     icon: <StatusIcon category="started" className="text-current" />,
   },
+  { to: "/w/$workspace/settings/plugins", label: "Plugins", icon: <BlocksIcon /> },
 ] as const satisfies ReadonlyArray<{ to: string; label: string; icon: ReactNode }>;
 
 /** Settings for the whole app rather than one workspace. */

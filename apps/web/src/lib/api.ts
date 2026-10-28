@@ -10,6 +10,7 @@ import type {
   WorkspaceSnapshot,
 } from "@octodo/contract";
 import { createClient } from "@octodo/contract/client";
+import type { PresetId } from "@octodo/contract/presets";
 import { sortStatuses } from "@octodo/contract/rules";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -66,7 +67,7 @@ const onError = (error: Error) => toast.error(error.message);
 export const useAddWorkspace = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { root: string; name?: string; key?: string }) =>
+    mutationFn: (input: { root: string; name?: string; key?: string; preset?: PresetId }) =>
       api.request("POST /api/workspaces", { payload: input }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.workspaces }),
   });
@@ -204,6 +205,30 @@ export const useFixAllDiagnostics = (ws: string) =>
     api
       .request("POST /api/workspaces/:workspace/diagnostics/fix-all", { params: { workspace: ws } })
       .then(reportFixes),
+  );
+
+/** The plugins octodo has; the snapshot's `plugins` says which ones a workspace enables. */
+export const pluginsQuery = queryOptions({
+  queryKey: ["plugins"] as const,
+  queryFn: () => api.request("GET /api/plugins", {}),
+  staleTime: Infinity,
+});
+
+/** Enables or disables a plugin; its tasks change kind once the snapshot is read again. */
+export const useSetPlugin = (ws: string) =>
+  useSnapshotMutation(
+    ws,
+    ({ plugin, enabled }: { plugin: string; enabled: boolean }) =>
+      api.request(
+        enabled
+          ? "PUT /api/workspaces/:workspace/plugins/:plugin"
+          : "DELETE /api/workspaces/:workspace/plugins/:plugin",
+        { params: { workspace: ws, plugin } },
+      ),
+    (snapshot, { plugin, enabled }) => {
+      const others = (snapshot.plugins ?? []).filter((id) => id !== plugin);
+      return { ...snapshot, plugins: enabled ? [...others, plugin] : others };
+    },
   );
 
 /** Saves the order of every status; the server keeps categories in their fixed order. */

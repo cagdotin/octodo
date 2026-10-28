@@ -663,7 +663,7 @@ describe("workspace", () => {
     ]);
   });
 
-  it("never recreates a container another process removed", async () => {
+  it("never recreates a container removed by hand, and fails the write instead", async () => {
     const root = fresh();
     const result = await run(
       Effect.gen(function* () {
@@ -678,7 +678,10 @@ describe("workspace", () => {
         ];
       }),
     );
-    expect(result.map((error) => error._tag)).toEqual(["InvalidRequest", "InvalidRequest"]);
+    expect(
+      result.map((error) => error._tag),
+      "the first write fails on the stale read, and the read after it no longer has the list",
+    ).toEqual(["StorageError", "InvalidRequest"]);
     expect(existsSync(join(root, ".octodo/home"))).toBe(false);
     expect(files(root)).toEqual(["HM-1-stay/task.md"]);
   });

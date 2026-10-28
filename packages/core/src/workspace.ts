@@ -35,7 +35,6 @@ import {
 import {
   createFolder as createFolderIn,
   freeName as freeNameIn,
-  isNotFound,
   writeFileAtomic,
 } from "./files.ts";
 import {
@@ -439,19 +438,6 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       ),
     );
 
-  /**
-   * `write`, run once more on a fresh read when it finds a path gone: another process moved or
-   * renamed a folder since the cache was filled.
-   */
-  const writeFresh = <A, E>(effect: Effect.Effect<A, E | StorageError>) =>
-    write(
-      Effect.catchIf(
-        effect,
-        (error) => error instanceof StorageError && isNotFound(error.cause),
-        () => Effect.andThen(forgetAll, effect),
-      ),
-    );
-
   const readBack = storage("Could not read the workspace back after writing it");
 
   const reread = (taskId: string) =>
@@ -498,7 +484,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   };
 
   const updateTask = (taskId: string, given: UpdateTaskInput) =>
-    writeFresh(
+    write(
       Effect.gen(function* () {
         const { snapshot, dirs } = yield* state;
         const task = yield* findTask(snapshot, taskId);
@@ -519,7 +505,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     );
 
   const moveTask = (taskId: string, input: MoveTaskInput) =>
-    writeFresh(
+    write(
       Effect.gen(function* () {
         const scan = yield* state;
         const { snapshot } = scan;
@@ -550,7 +536,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     );
 
   const deleteTask = (taskId: string) =>
-    writeFresh(
+    write(
       Effect.gen(function* () {
         const { snapshot, dirs } = yield* state;
         yield* findTask(snapshot, taskId);

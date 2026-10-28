@@ -29,6 +29,14 @@ blocked_by: [OCT-48, OCT-49]
 - Fix the wrong comment at `layout.ts` ~200 ("A new kind is one entry here plus its two `Task` fields"; it touches about 10 files). Link kinds stay non-generic.
 - Decide, in `statuses/`: the snapshot's `statuses` include made-up entries for task statuses missing from `config.json` (e.g. `in-review` as unstarted), and `reorderStatuses` writes the whole list, so reordering silently adds them to the config. That contradicts the health rule that an unknown status is added only when asked (found in OCT-45). Reorder should write only configured statuses, or refuse while unknown ones exist.
 
+## From OCT-49
+
+- The storage API (decision 0012): `makeStorage(root, { watch, lockWait })` returns `{ root, tasksDir, read, version, forget, readText, exists, staysInside, write, changes }`. `scanWorkspace(id, root, read)` is already a pure function. Domain functions take `storage` and, inside `storage.write((files, ids) => ...)`, `files` and `ids`.
+- "Never open a file": domain code still calls `storage.readText` before it rewrites a file (update, move, delete's link cleanup, `ensureOrdered`, `giveIds`, every fix). Take the text from the scan instead (`taskTexts` is already there for served tasks; duplicates, loose markdown and `list.md` need a path-to-text lookup over the tree) and drop `readText` from `Storage`. Under the owner lock and the cache this is the same text; only an outside edit since the scan differs, which 0001 puts outside the contract.
+- `storage.exists` serves `createList`'s and `moveList`'s "already a folder" checks and the attachment subtask check. Both could come from the tree's folder names if the tree kept non-markdown entry names; otherwise keep `exists`.
+- The in-process `Semaphore` in `workspace.ts` guards the kept scan, not the disk; it stays with whatever holds the scan memo.
+- `giveIds` runs through `storage.write`, so without a watcher it forgets the whole cache afterwards (it did not before). Output is the same; a CLI read of hand-made files rescans once in full.
+
 ## Done when
 
 - Domain folders never list a folder or open a file.

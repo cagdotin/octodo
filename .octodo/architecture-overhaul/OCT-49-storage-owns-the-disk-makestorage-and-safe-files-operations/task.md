@@ -1,7 +1,7 @@
 ---
 id: OCT-49
 title: "Storage owns the disk: makeStorage and safe Files operations"
-status: todo
+status: done
 priority: medium
 tags:
   - core

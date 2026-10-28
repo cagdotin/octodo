@@ -341,6 +341,36 @@ describe("workspace", () => {
     expect(created.id).toBe("HM-14");
   });
 
+  it("gives new tasks ids past a task.md it cannot read: its subtasks' ids and its folder's id", async () => {
+    const created = await Promise.all(
+      [
+        {
+          "HM-1-locked/task.md": "---\nid: HM-1\n---\n",
+          "HM-1-locked/HM-7-sub/task.md": "---\nid: HM-7\n---\n",
+        },
+        { "HM-1-a/task.md": "---\nid: HM-1\n---\n", "HM-9-locked/task.md": "---\nid: HM-9\n---\n" },
+      ].map(async (tree) => {
+        const root = fresh();
+        await run(initWorkspace(root));
+        for (const [file, content] of Object.entries(tree)) write(root, file, content);
+        const locked = join(
+          root,
+          ".octodo",
+          Object.keys(tree).find((file) => file.includes("locked"))!,
+        );
+        chmodSync(locked, 0o000);
+        try {
+          return await run(
+            Effect.flatMap(makeWorkspace("test", root), (ws) => ws.createTask({ title: "New" })),
+          );
+        } finally {
+          chmodSync(locked, 0o644);
+        }
+      }),
+    );
+    expect(created.map((task) => task.id)).toEqual(["HM-8", "HM-10"]);
+  });
+
   it("removes temporary files a crashed write left behind once it holds the owner lock, however fresh", async () => {
     const root = fresh();
     await run(initWorkspace(root));

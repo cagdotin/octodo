@@ -1,6 +1,13 @@
 import { Effect, PlatformError, Result } from "effect";
 import { join, relative } from "node:path";
-import { CONFIG_FILE, LIST_FILE, TASK_FILE, TASKS_DIR, idNumber } from "./layout.ts";
+import {
+  CONFIG_FILE,
+  LIST_FILE,
+  TASK_FILE,
+  TASKS_DIR,
+  folderIdNumber,
+  idNumber,
+} from "./layout.ts";
 import {
   DEFAULT_STATUSES,
   type Diagnostic,
@@ -142,6 +149,14 @@ export const scanWorkspace = (
   const takeIds = (texts: ReadonlyArray<string>) => {
     for (const text of texts) takeId(frontmatterId(text));
   };
+  /**
+   * The ids in a task folder whose `task.md` is not read: those its markdown files have, and as a
+   * floor for new ids, the one its `<id>-<slug>` name gives, in case `task.md` holds it.
+   */
+  const takeUnreadTask = (folder: TaskFolder) => {
+    takeIds(markdownIn(folder));
+    highestId = Math.max(highestId, folderIdNumber(folder.name, config.key) ?? 0);
+  };
 
   /**
    * A markdown file that is not a task. One that matches the task its id names byte for byte is
@@ -180,7 +195,10 @@ export const scanWorkspace = (
       folder.file,
       `Could not read it; this task and its subtasks are not read`,
     );
-    if (text === null) return;
+    if (text === null) {
+      takeUnreadTask(folder);
+      return;
+    }
     const read = parseTask(folder.file, text, {
       list,
       parent,
@@ -193,7 +211,7 @@ export const scanWorkspace = (
     if (read._tag === "Invalid") {
       const { kind, field, detail } = read.problem;
       report(kind, file, `${detail}; this task and its subtasks are not read`, { field });
-      takeIds(markdownIn(folder));
+      takeUnreadTask(folder);
       return;
     }
     waiting.push({ folder, text, list, read });

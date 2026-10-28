@@ -2,7 +2,9 @@
  * The on-disk grammar of a workspace. A folder with `task.md` is a task, and the task folders
  * inside it are its subtasks. A folder with `list.md` is a list. `.octodo/` is the root. Folder
  * names mean nothing to the scanner: a task folder is named `<id>-<slug>` and a list folder is its
- * slug for people reading the tree, and a list's id is its folder names joined by `/`.
+ * slug for people reading the tree, and a list's id is its folder names joined by `/`. The one
+ * exception: the id a task folder's name starts with raises the next new id when its `task.md` is
+ * not read.
  */
 import {
   LINK_KINDS,
@@ -50,6 +52,12 @@ export const taskIdsIn = (
 /** The number in a task id such as `HM-42`, or null when the id is not in the workspace's format. */
 export const idNumber = (id: string, key: string): number | null => {
   const match = new RegExp(`^${escapeRegExp(key)}-(\\d+)$`).exec(id);
+  return match === null ? null : Number(match[1]);
+};
+
+/** The number of the id a task folder's `<id>-<slug>` name starts with, when it has key `key`. */
+export const folderIdNumber = (name: string, key: string): number | null => {
+  const match = new RegExp(`^${escapeRegExp(key)}-(\\d+)(?:-|$)`).exec(name);
   return match === null ? null : Number(match[1]);
 };
 

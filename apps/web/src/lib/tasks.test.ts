@@ -132,6 +132,12 @@ describe("subtasks in views", () => {
     });
   });
 
+  it("leaves the snapshot as it is for a move the server refuses", () => {
+    const before = snapshot(TASKS);
+    expect(applyMove(before, "HM-5", { list: "nowhere" })).toBe(before);
+    expect(applyMove(before, "HM-5", { parent: "HM-9" })).toBe(before);
+  });
+
   it("keeps a task's place on a status-only move, as core keeps its order", () => {
     const ids = (moved: WorkspaceSnapshot) => moved.tasks.map((entry) => entry.id);
     const order = TASKS.map((entry) => entry.id);

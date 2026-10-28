@@ -6,6 +6,7 @@ import {
   Workspaces,
   defaultHome,
   isClosedCategory,
+  isProblem,
   taskSubtree,
   type Diagnostic,
   type Task,
@@ -64,8 +65,6 @@ const target = Effect.map(octo, (root) => Option.getOrElse(root.workspace, () =>
 
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
-const isNote = (diagnostic: Diagnostic) => diagnostic.kind === "note";
-
 /**
  * The workspace named by `--workspace`, or the one containing the current directory. Prints what
  * its files have wrong on stderr, notes aside, and points at `octo doctor` when some of it can be
@@ -73,7 +72,7 @@ const isNote = (diagnostic: Diagnostic) => diagnostic.kind === "note";
  */
 const workspace = Effect.gen(function* () {
   const ws = yield* (yield* Workspaces).open(yield* target);
-  const problems = (yield* ws.snapshot).diagnostics.filter((diagnostic) => !isNote(diagnostic));
+  const problems = (yield* ws.snapshot).diagnostics.filter(isProblem);
   for (const diagnostic of problems)
     yield* Console.error(`warning: ${diagnostic.path}: ${diagnostic.message}`);
   if (problems.some((diagnostic) => diagnostic.fix?.inFixAll === true))
@@ -397,7 +396,7 @@ const doctorCommand = Command.make(
       : options.fix
         ? yield* ws.fixAll
         : { fixed: [], failed: [], diagnostics: (yield* ws.snapshot).diagnostics };
-    const problems = result.diagnostics.filter((diagnostic) => !isNote(diagnostic));
+    const problems = result.diagnostics.filter(isProblem);
     if (problems.length > 0) process.exitCode = 1;
     if (options.json) return yield* Console.log(JSON.stringify(result, null, 2));
     for (const fixed of result.fixed)

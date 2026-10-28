@@ -1,5 +1,5 @@
 import type { WorkspaceSnapshot } from "@octodo/core";
-import { isClosedCategory } from "@octodo/core/layout";
+import { isClosedCategory, isProblem } from "@octodo/core/layout";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -320,7 +320,7 @@ export function Avatar({ label }: { label: string }) {
 
 function DiagnosticsButton({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   const [open, setOpen] = useState(false);
-  const count = snapshot.diagnostics.filter((diagnostic) => diagnostic.kind !== "note").length;
+  const count = snapshot.diagnostics.filter(isProblem).length;
   return (
     <>
       <Tooltip>

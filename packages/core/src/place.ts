@@ -1,40 +1,7 @@
-/**
- * Where a task or list goes among its siblings and in which container: plain functions with no
- * Effect code and no file system, like `layout.ts`.
- */
+/** Where a task or list goes among its siblings: plain functions with no Effect code. */
 import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
-import type { List, Task } from "./domain.ts";
+import type { Task } from "./domain.ts";
 import { idNumber } from "./layout.ts";
-
-/** Where a task sits: in a list (or `.octodo/` for null), or under a parent task in that list. */
-export interface Container {
-  readonly list: string | null;
-  readonly parent: string | null;
-}
-
-export const TOP: Container = { list: null, parent: null };
-
-/**
- * The container a create or move puts a task in, or why it cannot go there. `parent` wins the
- * list from its task; `list` alone takes the task to the top of that list; neither keeps `from`.
- */
-export const destination = (
-  { tasks, lists }: { readonly tasks: ReadonlyArray<Task>; readonly lists: ReadonlyArray<List> },
-  input: { readonly list?: string | null; readonly parent?: string | null },
-  from: Container,
-): Container | string => {
-  if (input.parent !== undefined && input.parent !== null) {
-    if (input.list !== undefined) return "Give a list or a parent task, not both";
-    const parent = tasks.find((task) => task.id === input.parent);
-    return parent === undefined
-      ? `Unknown parent task "${input.parent}"`
-      : { list: parent.list, parent: parent.id };
-  }
-  const list = input.list === undefined ? from.list : input.list;
-  if (list !== null && !lists.some((known) => known.id === list)) return `Unknown list "${list}"`;
-  const keepParent = input.list === undefined && input.parent === undefined;
-  return { list, parent: keepParent ? from.parent : null };
-};
 
 /** An order key between the neighbours `before` or `after` names, or after the last sibling. */
 export const orderBetween = (

@@ -1,8 +1,8 @@
 import { Effect } from "effect";
 import { join } from "node:path";
 import { patchFrontmatter } from "./frontmatter.ts";
-import { LIST_FILE } from "./layout.ts";
-import { renumbered, type Container } from "./place.ts";
+import { LIST_FILE, type Container } from "./layout.ts";
+import { renumbered } from "./place.ts";
 import { fileText, type Scan } from "./scan.ts";
 import type { Files } from "./storage/files.ts";
 

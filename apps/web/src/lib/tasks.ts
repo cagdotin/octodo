@@ -8,7 +8,14 @@ import type {
   Task,
   WorkspaceSnapshot,
 } from "@octodo/core";
-import { inSubtree, isClosedCategory, movedListId, readiness } from "@octodo/core/layout";
+import {
+  destination,
+  inSubtree,
+  isClosedCategory,
+  movedListId,
+  readiness,
+  taskSubtree,
+} from "@octodo/core/layout";
 import {
   addDays,
   format,
@@ -306,20 +313,6 @@ export const listLabel = (lists: ReadonlyArray<List>, id: string | null) => {
   return names.length > 0 ? names.join(" / ") : id;
 };
 
-/** Where a move puts a task: under a parent (in its list), in a list, or where it was. */
-const movedContainer = (
-  tasks: ReadonlyArray<Task>,
-  task: Task,
-  move: MoveTaskInput,
-): Pick<Task, "list" | "parent"> => {
-  if (move.parent !== undefined && move.parent !== null) {
-    const parent = tasks.find((entry) => entry.id === move.parent);
-    return { list: parent?.list ?? task.list, parent: move.parent };
-  }
-  if (move.list === undefined && move.parent === undefined) return task;
-  return { list: move.list === undefined ? task.list : move.list, parent: null };
-};
-
 /**
  * Mirrors a move in a cached snapshot, whose task array is the order views render in. As in core,
  * the task keeps its place unless the move names a neighbour or changes its list or parent; then it
@@ -332,7 +325,9 @@ export const applyMove = (
 ): WorkspaceSnapshot => {
   const task = snapshot.tasks.find((entry) => entry.id === id);
   if (!task) return snapshot;
-  const { list, parent } = movedContainer(snapshot.tasks, task, move);
+  const container = destination(snapshot, move, task);
+  if (typeof container === "string") return snapshot;
+  const { list, parent } = container;
   const moved: Task = { ...task, status: move.status ?? task.status, list, parent };
   const placed = move.before !== undefined || move.after !== undefined;
   if (!placed && list === task.list && parent === task.parent)
@@ -379,32 +374,13 @@ export const neighbours = (
 export const subtasksOf = (tasks: ReadonlyArray<Task>, parent: string) =>
   tasks.filter((task) => task.parent === parent);
 
-/** The ids of `id` and its subtasks at any depth. */
-const subtreeIds = (tasks: ReadonlyArray<Task>, id: string): ReadonlySet<string> => {
-  const children = new Map<string, Array<string>>();
-  for (const task of tasks) {
-    if (task.parent === null) continue;
-    const siblings = children.get(task.parent);
-    if (siblings) siblings.push(task.id);
-    else children.set(task.parent, [task.id]);
-  }
-  const ids = new Set<string>();
-  const pending = [id];
-  for (let current = pending.pop(); current !== undefined; current = pending.pop()) {
-    if (ids.has(current)) continue;
-    ids.add(current);
-    pending.push(...(children.get(current) ?? []));
-  }
-  return ids;
-};
-
 /** How many tasks go with `id` when it is deleted: its subtasks at any depth. */
 export const descendantCount = (tasks: ReadonlyArray<Task>, id: string) =>
-  subtreeIds(tasks, id).size - 1;
+  taskSubtree(tasks, id).size - 1;
 
 /** Removes a task and its subtasks at any depth, as deleting its folder does. */
 export const withoutSubtree = (tasks: ReadonlyArray<Task>, id: string) => {
-  const ids = subtreeIds(tasks, id);
+  const ids = taskSubtree(tasks, id);
   return tasks.filter((task) => !ids.has(task.id));
 };
 

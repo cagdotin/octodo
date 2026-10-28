@@ -9,8 +9,16 @@ import {
   type WorkspaceSnapshot,
 } from "../domain.ts";
 import { patchFrontmatter } from "../frontmatter.ts";
-import { LINK_KINDS, TASK_FILE, defaultStatus, taskFolderName, taskSubtree } from "../layout.ts";
-import { TOP, destination, orderBetween } from "../place.ts";
+import {
+  LINK_KINDS,
+  TASK_FILE,
+  TOP,
+  defaultStatus,
+  destination,
+  taskFolderName,
+  taskSubtree,
+} from "../layout.ts";
+import { orderBetween } from "../place.ts";
 import { fileText } from "../scan.ts";
 import { containerDir, orderedTasks } from "../siblings.ts";
 import { invalid, nextId, readBack, storageError, type State } from "../state.ts";

@@ -1,7 +1,7 @@
 ---
 id: OCT-61
 title: "Verify the overhaul: benchmark and CLI end to end"
-status: todo
+status: done
 priority: medium
 tags:
   - perf

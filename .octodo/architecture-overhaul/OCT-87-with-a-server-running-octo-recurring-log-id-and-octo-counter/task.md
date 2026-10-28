@@ -1,7 +1,7 @@
 ---
 id: OCT-87
 title: With a server running, `octo recurring log <id>` and `octo counter reset <id>` fail with "Expected object"
-status: todo
+status: done
 priority: high
 tags:
   - cli

@@ -1,7 +1,7 @@
 ---
 id: OCT-85
 title: CLI without a server rescans the workspace on every read inside one command
-status: todo
+status: done
 priority: high
 tags:
   - perf

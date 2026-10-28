@@ -66,11 +66,12 @@ const fresh = async () => {
 };
 
 const write = (root: string, file: string, content: string) => {
-  mkdirSync(dirname(join(root, ".octodo", file)), { recursive: true });
-  writeFileSync(join(root, ".octodo", file), content);
+  mkdirSync(dirname(join(root, ".octodo/tasks", file)), { recursive: true });
+  writeFileSync(join(root, ".octodo/tasks", file), content);
 };
 
-const read = (root: string, file: string) => readFileSync(join(root, ".octodo", file), "utf8");
+const read = (root: string, file: string) =>
+  readFileSync(join(root, ".octodo/tasks", file), "utf8");
 
 /** A workspace that stays open across calls, as the app keeps one with its cache. */
 const openApp = async (root: string) => {
@@ -111,7 +112,9 @@ describe("task ids across processes", () => {
     expect(created.toSorted()).toEqual(numbered(30));
     expect(await ids(root)).toEqual({ ids: numbered(30), diagnostics: [] });
     for (const id of created) {
-      const folder = readdirSync(join(root, ".octodo")).find((name) => name.startsWith(`${id}-`));
+      const folder = readdirSync(join(root, ".octodo/tasks")).find((name) =>
+        name.startsWith(`${id}-`),
+      );
       expect(read(root, `${folder}/task.md`)).toContain(`id: ${id}\n`);
     }
   });

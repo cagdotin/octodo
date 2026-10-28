@@ -9,14 +9,16 @@ import {
   type Task,
   type UpdateTaskInput,
 } from "@octodo/contract";
-import { findMentions, humanize, type LinkField } from "@octodo/contract/rules";
+import { findMentions, type LinkField } from "@octodo/contract/rules";
 import {
   absent,
+  folderTitle,
   invalidFrontmatter,
   type InvalidFrontmatter,
   newFrontmatter,
   patchFrontmatter,
   readFrontmatter,
+  readId,
   readOrder,
   stringOrNull,
 } from "../frontmatter.ts";
@@ -155,9 +157,6 @@ const editChanges = (input: UpdateTaskInput): Record<string, unknown> => {
   return changes;
 };
 
-const folderTitle = (folder: string, id: string) =>
-  humanize(folder.startsWith(id) ? folder.slice(id.length) : folder) || id;
-
 /** Whether `readTaskFile` would read the file as a task missing its id: it parses, without one. */
 export const needsId = (text: string): boolean => {
   const read = readFrontmatter(text);
@@ -168,18 +167,8 @@ export const readTaskFile = (text: string, place: TaskPlace): TaskFileRead => {
   const read = readFrontmatter(text);
   if ("error" in read) return invalidFrontmatter(read.error);
   const { data, body } = read;
-  const rawId = data["id"];
-  if (absent(rawId)) return { _tag: "MissingId" };
-  if (typeof rawId !== "string" || !isTaskId(rawId, place.key))
-    return {
-      _tag: "Invalid",
-      problem: {
-        kind: "malformed-id",
-        field: "id",
-        detail: `The id ${JSON.stringify(rawId)} is not a task id such as HM-1`,
-      },
-    };
-  const id = rawId;
+  const id = readId(data, place.key);
+  if (typeof id !== "string") return id;
   const problems: Array<Problem> = [];
   return {
     _tag: "Read",

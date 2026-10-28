@@ -40,7 +40,7 @@ const readRule = (repeat: unknown): { readonly rule: Rule | null; readonly probl
 };
 
 export const recurring = definePlugin(recurringShared, {
-  read: ({ task, keys, files }) => {
+  read: ({ entry, keys, files }) => {
     const { rule, problem } = readRule(keys["repeat"]);
     const log = readLog(files.get(LOG) ?? "");
     const problems: Array<Problem> = [
@@ -48,7 +48,7 @@ export const recurring = definePlugin(recurringShared, {
       ...badLines(log),
     ];
     const last = log.occurrences.at(-1) ?? null;
-    const start = task.created === null ? null : localDay(task.created);
+    const start = entry.created === null ? null : localDay(entry.created);
     const fields: RecurringFields = {
       repeat: typeof keys["repeat"] === "string" ? keys["repeat"] : null,
       next: rule === null ? null : nextDue(rule, log.occurrences.flatMap(dayOf), start),

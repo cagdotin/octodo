@@ -10,12 +10,12 @@ const IGNORED = [`${OWNER_LOCK_FILE}*`, ".new-*", ".*.tmp"];
 
 /** Adds the bookkeeping patterns `.octodo/.gitignore` lacks, keeping the lines it has. */
 export const ignoreBookkeeping = (
-  tasksDir: string,
+  dir: string,
 ): Effect.Effect<void, PlatformError.PlatformError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const file = path.join(tasksDir, ".gitignore");
+    const file = path.join(dir, ".gitignore");
     const text = (yield* Effect.option(fs.readFileString(file))).pipe(Option.getOrElse(() => ""));
     const lines = new Set(text.split(/\r?\n/).map((line) => line.trim()));
     const missing = IGNORED.filter((pattern) => !lines.has(pattern));

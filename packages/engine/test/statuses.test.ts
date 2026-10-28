@@ -16,9 +16,9 @@ const withUnknownStatus = async () => {
   const root = join(mkdtempSync(join(tmpdir(), "octodo-")), "house-move");
   mkdirSync(root);
   await run(initWorkspace(root, { key: "HM" }));
-  mkdirSync(join(root, ".octodo/HM-1-review"));
+  mkdirSync(join(root, ".octodo/tasks/HM-1-review"));
   writeFileSync(
-    join(root, ".octodo/HM-1-review/task.md"),
+    join(root, ".octodo/tasks/HM-1-review/task.md"),
     "---\nid: HM-1\ntitle: Review\nstatus: in-review\n---\n",
   );
   return root;

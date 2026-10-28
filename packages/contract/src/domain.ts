@@ -72,12 +72,12 @@ export const DEFAULT_STATUSES: ReadonlyArray<StatusDefinition> = PRESETS[DEFAULT
  * a tree can be built by walking the array once.
  */
 export const List = Schema.Struct({
-  /** The folder names from `.octodo/` down to the list: `garden/seeds`. */
+  /** The folder names from `.octodo/tasks/` down to the list: `garden/seeds`. */
   id: Schema.String,
   /** From `list.md`, or the humanized folder name when it has none. */
   name: Schema.String,
   parent: Schema.NullOr(Schema.String),
-  /** Path of the folder relative to `.octodo/`, e.g. `garden/seeds`. */
+  /** Path of the folder relative to `.octodo/tasks/`, e.g. `garden/seeds`. */
   folder: Schema.String,
 });
 export type List = typeof List.Type;
@@ -98,7 +98,7 @@ export const Task = Schema.Struct({
   status: Schema.String,
   /** The nearest list folder above the task; a subtask is in its parent's list. */
   list: Schema.NullOr(Schema.String),
-  /** The task whose folder holds this one, or null for a task directly in a list or `.octodo/`. */
+  /** The task whose folder holds this one, or null for a task directly in a list or `.octodo/tasks/`. */
   parent: Schema.NullOr(Schema.String),
   priority: Priority,
   tags: Tags,
@@ -128,6 +128,33 @@ export const Task = Schema.Struct({
   kind: Schema.optionalKey(TaskKind),
 });
 export type Task = typeof Task.Type;
+
+/**
+ * An entry of a plugin's section: a folder in `.octodo/<section>/` holding the section's marker
+ * file, whose frontmatter has `id`, `title`, `created` and `order` (decision 0027).
+ */
+export const Entry = Schema.Struct({
+  id: Schema.String,
+  /** The section it is in: the id of the plugin that adds it. */
+  section: Schema.String,
+  title: Schema.String,
+  created: Schema.NullOr(Schema.String),
+  /** When its marker file last changed on disk. */
+  updated: Schema.NullOr(Schema.String),
+  order: Schema.String,
+  body: Schema.String,
+  /** Path of its marker file relative to the workspace root. */
+  path: Schema.String,
+  /** Frontmatter keys neither the entry nor its plugin reads, passed through untouched. */
+  extra: Schema.Record(Schema.String, Schema.Unknown),
+  /** The ids the body mentions as `[[HM-3]]`, in order, each once. */
+  mentions: Schema.Array(Schema.String),
+  /** The tasks and entries whose body mentions this one. Never stored. */
+  mentionedIn: Schema.Array(Schema.String),
+  /** What its plugin computes from its keys and files. */
+  fields: Schema.Record(Schema.String, Schema.Unknown),
+});
+export type Entry = typeof Entry.Type;
 
 /** What `list_tasks` gives for each task: no body, no frontmatter beyond the attributes. */
 export const TaskSummary = Schema.Struct({
@@ -212,6 +239,7 @@ export const CoreDiagnosticKind = Schema.Literals([
   "unreadable",
   "symlink",
   "unknown-kind",
+  "misplaced",
 ]);
 export type CoreDiagnosticKind = typeof CoreDiagnosticKind.Type;
 
@@ -306,6 +334,8 @@ export const WorkspaceSnapshot = Schema.Struct({
   statuses: Schema.Array(StatusDefinition),
   lists: Schema.Array(List),
   tasks: Schema.Array(Task),
+  /** The entries of the sections enabled plugins add; absent when there are none. */
+  entries: Schema.optionalKey(Schema.Array(Entry)),
   diagnostics: Schema.Array(Diagnostic),
   plugins: EnabledPlugins,
 });

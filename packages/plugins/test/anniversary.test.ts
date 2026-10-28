@@ -91,8 +91,9 @@ const fresh = async (enabled = true) => {
         ),
       ),
     );
-  const file = (path: string) => readFileSync(join(root, ".octodo", path), "utf8");
-  const write = (path: string, text: string) => writeFileSync(join(root, ".octodo", path), text);
+  const file = (path: string) => readFileSync(join(root, ".octodo/tasks", path), "utf8");
+  const write = (path: string, text: string) =>
+    writeFileSync(join(root, ".octodo/tasks", path), text);
   return { call, file, write };
 };
 
@@ -143,13 +144,13 @@ describe("an anniversary in a workspace", () => {
     expect(value.map((d: any) => [d.kind, d.path, d.field, d.message])).toEqual([
       [
         "anniversary/bad-date",
-        ".octodo/HM-1-wedding/task.md",
+        ".octodo/tasks/HM-1-wedding/task.md",
         "date",
         "The date 2015-09-31 is not a day the calendar has. Until it is fixed the task has no next occurrence; set one with set_anniversary_date.",
       ],
       [
         "anniversary/bad-date",
-        ".octodo/HM-2-dog/task.md",
+        ".octodo/tasks/HM-2-dog/task.md",
         "date",
         "The task has no date. Until it is fixed the task has no next occurrence; set one with set_anniversary_date.",
       ],

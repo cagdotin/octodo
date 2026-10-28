@@ -1,6 +1,27 @@
 import type { Problem } from "@octodo/contract";
+import type { EntryFile } from "../entries/entry-file.ts";
 import type { TaskFile } from "../tasks/task-file.ts";
 import { plainTask, type KindProblem, type Plugin } from "./plugin.ts";
+
+/**
+ * What `plugin` reads from one of its tasks or entries: its keys, which leave `extra`, and its
+ * files give its fields and problems.
+ */
+export const readOwn = (
+  plugin: Plugin,
+  entry: EntryFile,
+  frontmatter: Readonly<Record<string, unknown>>,
+  files: ReadonlyMap<string, string>,
+) => {
+  const own = Object.keys(plugin.shared.keys.fields);
+  const keys = Object.fromEntries(
+    own.filter((key) => key in frontmatter).map((key) => [key, frontmatter[key]]),
+  );
+  return {
+    extra: Object.fromEntries(Object.entries(entry.extra).filter(([key]) => !own.includes(key))),
+    ...plugin.read({ entry, keys, files }),
+  };
+};
 
 /** The installed plugins config.json's `plugins` names, in its order, and the names it has none for. */
 export const enabledPlugins = (
@@ -58,18 +79,10 @@ export const applyKind = (
         ? `The type ${type} is a plugin this workspace does not enable`
         : `The type ${JSON.stringify(type)} is not a kind octodo has`,
     );
-  const own = Object.keys(plugin.shared.keys.fields);
-  const keys = Object.fromEntries(
-    own.filter((key) => key in frontmatter).map((key) => [key, frontmatter[key]]),
-  );
   const texts = files(plugin);
-  const { fields, problems } = plugin.read({ task, keys, files: texts });
+  const { extra, fields, problems } = readOwn(plugin, task, frontmatter, texts);
   return {
-    task: {
-      ...task,
-      extra: Object.fromEntries(Object.entries(task.extra).filter(([key]) => !own.includes(key))),
-      kind: { id: plugin.shared.id, fields },
-    },
+    task: { ...task, extra, kind: { id: plugin.shared.id, fields } },
     plugin,
     problems: [],
     files: texts,

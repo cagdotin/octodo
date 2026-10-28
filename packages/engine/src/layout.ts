@@ -1,6 +1,8 @@
 /**
- * The on-disk grammar of a workspace. A folder with `task.md` is a task, and the task folders
- * inside it are its subtasks. A folder with `list.md` is a list. `.octodo/` is the root. Folder
+ * The on-disk grammar of a workspace. `.octodo/` holds config.json and a folder per section:
+ * `tasks/`, the root list, and one per enabled plugin that adds a section (decision 0027). A
+ * folder with `task.md` is a task, and the task folders inside it are its subtasks. A folder with
+ * `list.md` is a list. Folder
  * names mean nothing to the scanner: a task folder is named `<id>-<slug>` and a list folder is its
  * slug for people reading the tree, and a list's id is its folder names joined by `/`. The one
  * exception: the id a task folder's name starts with raises the next new id when its `task.md` is
@@ -14,7 +16,9 @@ import {
   type LinkField,
 } from "@octodo/contract/rules";
 
-export const TASKS_DIR = ".octodo";
+export const OCTODO_DIR = ".octodo";
+/** The built-in section's folder in `.octodo/`, which is the root list. */
+export const TASKS_SECTION = "tasks";
 export const CONFIG_FILE = "config.json";
 export const TASK_FILE = "task.md";
 export const LIST_FILE = "list.md";

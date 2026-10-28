@@ -42,7 +42,7 @@ description: Read and manage this project's tasks, stored as markdown files unde
 
 # octodo
 
-This project's tasks live in \`.octodo/\`, one folder per task with a \`task.md\` inside. The files
+This project's tasks live in \`.octodo/tasks/\`, one folder per task with a \`task.md\` inside. The files
 are the source of truth; the octodo app, CLI and MCP server read and write them.
 
 ## Layout
@@ -56,7 +56,7 @@ are the source of truth; the octodo app, CLI and MCP server read and write them.
 - A task folder inside another task folder is a subtask. Any other file in a task folder, such as
   \`images/plan.png\`, is an attachment of that task.
 - A folder with \`list.md\` is a list, nested up to three levels. List ids are the folder names
-  joined by \`/\` (\`garden/seeds\`). Tasks directly in \`.octodo/\` are in no list.
+  joined by \`/\` (\`garden/seeds\`). Tasks directly in \`.octodo/tasks/\` are in no list.
 - Folder names are only for people. Each task has a stable \`id\` (\`CT-42\`): refer to tasks by id,
   never by path.
 

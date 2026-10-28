@@ -75,7 +75,7 @@ export function NewListDialog({
           <DialogHeader>
             <DialogTitle>New list</DialogTitle>
             <DialogDescription>
-              Lists are folders under .octodo/ and nest up to {MAX_LIST_DEPTH} levels deep.
+              Lists are folders under .octodo/tasks/ and nest up to {MAX_LIST_DEPTH} levels deep.
             </DialogDescription>
           </DialogHeader>
           <FieldGroup>

@@ -15,7 +15,7 @@ const assigned = (id: string) => id as AssignedId;
 const place = {
   list: "garden",
   parent: "GA-9",
-  path: ".octodo/garden/GA-9-fence/GA-1-fix-the-gate/task.md",
+  path: ".octodo/tasks/garden/GA-9-fence/GA-1-fix-the-gate/task.md",
   folder: "GA-1-fix-the-gate",
   defaultStatus: "todo",
   updated: "2026-10-26T13:00:00.000Z",

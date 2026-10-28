@@ -1,5 +1,5 @@
 import { Effect, FileSystem, Path, PlatformError, Schema } from "effect";
-import { CONFIG_FILE, TASKS_DIR, isWorkspaceKey } from "../layout.ts";
+import { CONFIG_FILE, OCTODO_DIR, isWorkspaceKey } from "../layout.ts";
 import { WorkspaceConfig, type Problem } from "@octodo/contract";
 import { deriveKey, humanize } from "@octodo/contract/rules";
 
@@ -19,7 +19,7 @@ export interface ConfigRead {
 }
 
 export const configFile = (path: Path.Path, root: string): string =>
-  path.join(root, TASKS_DIR, CONFIG_FILE);
+  path.join(root, OCTODO_DIR, CONFIG_FILE);
 
 export const configText = (document: object): string => `${JSON.stringify(document, null, 2)}\n`;
 

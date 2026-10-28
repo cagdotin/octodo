@@ -1,7 +1,7 @@
 ---
 id: OCT-59
 title: Anniversary plugin
-status: todo
+status: done
 priority: low
 tags:
   - plugins

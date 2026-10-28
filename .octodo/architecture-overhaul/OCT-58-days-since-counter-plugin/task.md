@@ -1,7 +1,7 @@
 ---
 id: OCT-58
 title: Days-since counter plugin
-status: todo
+status: done
 priority: medium
 tags:
   - plugins

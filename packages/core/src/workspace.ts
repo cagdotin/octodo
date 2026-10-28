@@ -41,7 +41,7 @@ import { patchFrontmatter } from "./frontmatter.ts";
 import { applyFix } from "./health/fixes.ts";
 import { newListFile } from "./lists/list-file.ts";
 import { editTaskFile, keepLinks, needsId, newTaskFile } from "./tasks/task-file.ts";
-import { scanWorkspace, type Scan } from "./scan.ts";
+import { fileText, scanWorkspace, type Scan } from "./scan.ts";
 import { isHidden } from "./storage/bookkeeping.ts";
 import { hasConfig } from "./storage/config.ts";
 import type { Files } from "./storage/files.ts";
@@ -195,7 +195,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         const file = path.join(dir, TASK_FILE);
         const taskId = nextId(ids, scan);
         yield* Effect.gen(function* () {
-          const text = yield* storage.readText(file);
+          const text = yield* fileText(scan, file);
           if (!needsId(text)) return;
           yield* files.writeFile(file, patchFrontmatter(text, { id: taskId }));
           yield* Effect.logInfo(`Assigned ${taskId} to ${path.relative(root, file)}`);
@@ -274,6 +274,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
    */
   const ensureOrdered = <A extends { readonly order: string }>(
     files: Files,
+    scan: Scan,
     items: ReadonlyArray<A>,
     file: (item: A) => string,
   ) =>
@@ -287,42 +288,31 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       for (const [index, item] of items.entries()) {
         const order = keys[index]!;
         const target = file(item);
-        yield* files.writeFile(
-          target,
-          patchFrontmatter(yield* storage.readText(target), { order }),
-        );
+        yield* files.writeFile(target, patchFrontmatter(yield* fileText(scan, target), { order }));
         ordered.push({ ...item, order });
       }
       return ordered;
     });
 
   /** The tasks in `container`, whatever their status, with their order keys. */
-  const orderedTasks = (
-    files: Files,
-    snapshot: WorkspaceSnapshot,
-    { list, parent }: Container,
-    except?: string,
-  ) =>
+  const orderedTasks = (files: Files, scan: Scan, { list, parent }: Container, except?: string) =>
     ensureOrdered(
       files,
-      snapshot.tasks.filter(
+      scan,
+      scan.snapshot.tasks.filter(
         (task) => task.list === list && task.parent === parent && task.id !== except,
       ),
       (task) => path.join(root, task.path),
     );
 
   /** Sibling lists under `parent` with their order keys, which the snapshot leaves out. */
-  const orderedLists = (
-    files: Files,
-    { snapshot, dirs }: Scan,
-    parent: string | null,
-    except?: string,
-  ) =>
+  const orderedLists = (files: Files, scan: Scan, parent: string | null, except?: string) =>
     ensureOrdered(
       files,
-      snapshot.lists
+      scan,
+      scan.snapshot.lists
         .filter((list) => list.parent === parent && list.id !== except)
-        .map((list) => ({ id: list.id, ...dirs.lists.get(list.id)! })),
+        .map((list) => ({ id: list.id, ...scan.dirs.lists.get(list.id)! })),
       (list) => path.join(list.dir, LIST_FILE),
     );
 
@@ -346,7 +336,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         const container = yield* destination(snapshot, input, TOP);
         const taskId = nextId(ids, scan);
         yield* Effect.gen(function* () {
-          const siblings = yield* orderedTasks(files, snapshot, container);
+          const siblings = yield* orderedTasks(files, scan, container);
           const content = newTaskFile(input, {
             id: taskId,
             status,
@@ -378,13 +368,15 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   const updateTask = (taskId: string, given: UpdateTaskInput) =>
     write((files) =>
       Effect.gen(function* () {
-        const { snapshot, dirs } = yield* state;
+        const scan = yield* state;
+        const { snapshot, dirs } = scan;
         const task = yield* findTask(snapshot, taskId);
         const input =
           given.blocked_by === undefined
             ? given
             : { ...given, blocked_by: yield* checkLinks(snapshot, task, given.blocked_by) };
         yield* Effect.gen(function* () {
+          const text = yield* fileText(scan, path.join(root, task.path));
           const dir =
             input.title === undefined
               ? dirs.tasks.get(taskId)!
@@ -392,8 +384,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
                   dirs.tasks.get(taskId)!,
                   taskFolderName(taskId, input.title),
                 );
-          const file = path.join(dir, TASK_FILE);
-          yield* files.writeFile(file, editTaskFile(yield* storage.readText(file), input));
+          yield* files.writeFile(path.join(dir, TASK_FILE), editTaskFile(text, input));
         }).pipe(storageError("Could not write the task"));
         return yield* reread(taskId).pipe(readBack);
       }),
@@ -416,15 +407,15 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           const placed = input.before !== undefined || input.after !== undefined;
           if (placed || container.list !== task.list || container.parent !== task.parent)
             changes["order"] = orderBetween(
-              yield* orderedTasks(files, snapshot, container, taskId),
+              yield* orderedTasks(files, scan, container, taskId),
               input,
             );
+          const text = yield* fileText(scan, path.join(root, task.path));
           const dir = yield* files.moveFolder(
             scan.dirs.tasks.get(taskId)!,
             containerDir(scan, container),
           );
-          const file = path.join(dir, TASK_FILE);
-          yield* files.writeFile(file, patchFrontmatter(yield* storage.readText(file), changes));
+          yield* files.writeFile(path.join(dir, TASK_FILE), patchFrontmatter(text, changes));
         }).pipe(storageError("Could not move the task"));
         return yield* reread(taskId).pipe(readBack);
       }),
@@ -433,7 +424,8 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   const deleteTask = (taskId: string) =>
     write((files) =>
       Effect.gen(function* () {
-        const { snapshot, dirs } = yield* state;
+        const scan = yield* state;
+        const { snapshot, dirs } = scan;
         yield* findTask(snapshot, taskId);
         const removed = taskSubtree(snapshot.tasks, taskId);
         const isRemoved = (id: string) => removed.has(id);
@@ -444,7 +436,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         yield* Effect.gen(function* () {
           for (const task of linking) {
             const file = path.join(root, task.path);
-            const original = yield* storage.readText(file);
+            const original = yield* fileText(scan, file);
             const text = LINK_KINDS.reduce(
               (text, kind) =>
                 keepLinks(text, kind.field, (id) => !isRemoved(id), snapshot.workspace.key) ?? text,
@@ -515,7 +507,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         yield* Effect.gen(function* () {
           const order = orderBetween(yield* orderedLists(files, scan, parent, listId), input);
           const file = path.join(dir, LIST_FILE);
-          yield* files.writeFile(file, patchFrontmatter(yield* storage.readText(file), { order }));
+          yield* files.writeFile(file, patchFrontmatter(yield* fileText(scan, file), { order }));
           if (parent !== list.parent) yield* files.moveFolder(dir, container);
         }).pipe(storageError("Could not move the list"));
         return yield* rereadList(movedListId(listId, parent)).pipe(readBack);
@@ -617,9 +609,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
           );
           if (next === undefined) return { fixed, failed, diagnostics: scan.snapshot.diagnostics };
           tried.add(key(next));
-          const exit = yield* Effect.exit(
-            applyFix(storage, files, scan, next, () => nextId(ids, scan)),
-          );
+          const exit = yield* Effect.exit(applyFix(files, scan, next, () => nextId(ids, scan)));
           if (exit._tag === "Success") fixed.push(next);
           else failed.push({ diagnostic: next, error: String(Cause.squash(exit.cause)) });
         }

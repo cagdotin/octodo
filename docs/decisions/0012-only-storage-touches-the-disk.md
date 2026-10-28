@@ -18,7 +18,7 @@ of a write only because the workspace wrapped `FileSystem` in a reporting copy.
   (`no-restricted-imports` in `.oxlintrc.json`) fails any other module in `packages/core/src` that
   does.
 - `makeStorage(root)` returns a `Storage`, passed as a plain argument rather than an Effect
-  service. Reads (`read`, `readText`, `exists`, `staysInside`) need no lock. `read` returns
+  service. Reads (`read`, `exists`, `staysInside`) need no lock. `read` returns
   `{ config, tree }` through the cache, and an unchanged file keeps its text object, which the
   scan's parse cache is keyed by.
 - `storage.write((files, ids) => ...)` is the only way to change a file. It holds the owner lock,
@@ -41,5 +41,6 @@ of a write only because the workspace wrapped `FileSystem` in a reporting copy.
 - A new write operation cannot skip the lock, the atomic write or the cache report without
   changing `storage/`, which is where a reviewer looks for that.
 - `octo init` creates `.octodo/.owner-lock` at once instead of at the first write.
-- Domain code still reads a file it is about to change with `storage.readText`. Taking that text
-  from the scan instead is left to the move of operations into domain folders (OCT-50).
+- Domain code never opens a file: a write edits the text the scan read (`fileText` in `scan.ts`),
+  which under the owner lock and the cache is what is on disk (OCT-50). Only an outside edit since
+  the scan differs, which [0001](0001-octodo-is-the-only-writer.md) puts outside the contract.

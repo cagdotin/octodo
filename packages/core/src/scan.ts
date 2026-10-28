@@ -1,4 +1,4 @@
-import { PlatformError, Result } from "effect";
+import { Effect, PlatformError, Result } from "effect";
 import { join, relative } from "node:path";
 import {
   DEFAULT_STATUSES,
@@ -31,7 +31,7 @@ import {
   type TaskPlace,
 } from "./tasks/task-file.ts";
 import type { StorageRead } from "./storage/storage.ts";
-import type { ListFolder, TaskFolder, Tree } from "./storage/tree.ts";
+import { markdownTexts, type ListFolder, type TaskFolder, type Tree } from "./storage/tree.ts";
 
 /** A snapshot plus where its lists and tasks are on disk, which is nobody else's business. */
 export interface Scan {
@@ -342,4 +342,12 @@ export const scanWorkspace = (
     missingId,
     tree,
   };
+};
+
+/** The text the scan read of the markdown file `file`, so a write edits what was read. */
+export const fileText = (scan: Scan, file: string): Effect.Effect<string, Error> => {
+  const text = markdownTexts(scan.tree).get(file);
+  return text === undefined
+    ? Effect.fail(new Error(`${relative(scan.snapshot.workspace.root, file)} was not read`))
+    : Effect.succeed(text);
 };

@@ -3,15 +3,14 @@ import { basename, dirname, join } from "node:path";
 import { DEFAULT_STATUSES, type Diagnostic, type FixAction } from "../domain.ts";
 import { frontmatterId, patchFrontmatter, readFrontmatter } from "../frontmatter.ts";
 import { TASK_FILE, humanize, idNumber, isLinkField, taskFolderName } from "../layout.ts";
-import type { Scan } from "../scan.ts";
+import { fileText, type Scan } from "../scan.ts";
 import type { Files } from "../storage/files.ts";
-import type { AssignedId, Storage } from "../storage/storage.ts";
+import type { AssignedId } from "../storage/storage.ts";
 import { taskFoldersFrom } from "../storage/tree.ts";
 import { keepLinks } from "../tasks/task-file.ts";
 
 /** What a fix knows: a scan taken just before, which found the problem, and the write it runs in. */
 interface FixContext {
-  readonly storage: Storage;
   readonly files: Files;
   readonly scan: Scan;
   /** Where the diagnostic points, as an absolute path. */
@@ -27,12 +26,12 @@ type Handler = (context: FixContext) => Effect.Effect<void, unknown>;
  * then renames their folders to match. Ids go in before any folder is renamed, deepest folders
  * first, so every path stays valid until it is used.
  */
-const renumberCopy = (dir: string, { storage, files, scan, newId }: FixContext) =>
+const renumberCopy = (dir: string, { files, scan, newId }: FixContext) =>
   Effect.gen(function* () {
     const renames: Array<{ dir: string; old: string | null; id: string }> = [];
     for (const folder of taskFoldersFrom(scan.tree, dir)) {
       const file = join(folder, TASK_FILE);
-      const text = yield* storage.readText(file);
+      const text = yield* fileText(scan, file);
       const old = frontmatterId(text);
       if (folder !== dir && (old === null || !scan.dirs.tasks.has(old))) continue;
       const id = newId();
@@ -55,9 +54,9 @@ const withId = (text: string, id: AssignedId) => ({ id, content: patchFrontmatte
  * Turns a markdown file into a task folder in `container`. The file gets its id in place first,
  * so a run cut short leaves a copy of a known task, which the next scan offers to delete.
  */
-const adopt = (file: string, container: string, { storage, files, scan, newId }: FixContext) =>
+const adopt = (file: string, container: string, { files, scan, newId }: FixContext) =>
   Effect.gen(function* () {
-    const text = yield* storage.readText(file);
+    const text = yield* fileText(scan, file);
     const read = readFrontmatter(text);
     if ("error" in read) return yield* Effect.fail(new Error(read.error));
     const own = frontmatterId(text);
@@ -80,11 +79,11 @@ const keepLinksWhere =
       task: { readonly own: string | null; readonly known: ReadonlySet<string> },
     ) => boolean,
   ): Handler =>
-  ({ storage, files, target, diagnostic, scan }) =>
+  ({ files, target, diagnostic, scan }) =>
     Effect.gen(function* () {
       const { field } = diagnostic;
       if (field === null || !isLinkField(field)) return;
-      const text = yield* storage.readText(target);
+      const text = yield* fileText(scan, target);
       const task = {
         own: frontmatterId(text),
         known: scan.idsOnDisk,
@@ -115,13 +114,12 @@ const FIXES: Record<FixAction, Handler> = {
 
 /** Applies the fix a fresh scan found for `diagnostic`; nothing when it has none. */
 export const applyFix = (
-  storage: Storage,
   files: Files,
   scan: Scan,
   diagnostic: Diagnostic,
   newId: () => AssignedId,
 ): Effect.Effect<void, unknown> => {
   if (diagnostic.fix === null) return Effect.void;
-  const target = join(storage.root, diagnostic.path);
-  return FIXES[diagnostic.fix.action]({ storage, files, scan, target, diagnostic, newId });
+  const target = join(scan.snapshot.workspace.root, diagnostic.path);
+  return FIXES[diagnostic.fix.action]({ files, scan, target, diagnostic, newId });
 };

@@ -326,6 +326,30 @@ export const makeTreeReader = (): TreeReader => {
   };
 };
 
+const textsByTree = new WeakMap<Tree, ReadonlyMap<string, string>>();
+
+/** The text of every `task.md`, `list.md` and other markdown file the tree read, by absolute path. */
+export const markdownTexts = (tree: Tree): ReadonlyMap<string, string> => {
+  const kept = textsByTree.get(tree);
+  if (kept !== undefined) return kept;
+  const texts = new Map<string, string>();
+  const add = (file: string, text: Read<string>) => {
+    if (Result.isSuccess(text)) texts.set(file, text.success);
+  };
+  const visit = (children: Tree["children"]) => {
+    for (const child of Result.isSuccess(children) ? children.success : []) {
+      if (child.type === "markdown") add(child.path, child.text);
+      else if (child.type === "task" || child.type === "list") {
+        add(`${child.path}${sep}${child.type === "task" ? TASK_FILE : LIST_FILE}`, child.file);
+        visit(child.children);
+      }
+    }
+  };
+  visit(tree.children);
+  textsByTree.set(tree, texts);
+  return texts;
+};
+
 /** The task folders from `dir` down, parents before their subtasks; none when `dir` is not one. */
 export const taskFoldersFrom = (tree: Tree, dir: string): Array<string> => {
   const find = (children: Tree["children"]): TaskFolder | undefined => {

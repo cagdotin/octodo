@@ -47,7 +47,6 @@ export interface Storage {
   /** Counts the changes so far: what a caller made from a read holds while this stays the same. */
   readonly version: () => number;
   readonly forget: Effect.Effect<void>;
-  readonly readText: (file: string) => Effect.Effect<string, PlatformError.PlatformError>;
   readonly exists: (path: string) => Effect.Effect<boolean, PlatformError.PlatformError>;
   /**
    * Whether the deepest existing part of `dir/segments` resolves, symlinks and all, to a place
@@ -182,7 +181,6 @@ export const makeStorage = (
       read: withPlatform(Effect.all({ config: readConfig(root), tree: reads.read(tasksDir) })),
       version: reads.version,
       forget,
-      readText: (file) => fs.readFileString(file),
       exists: (at) => fs.exists(at),
       staysInside,
       write,

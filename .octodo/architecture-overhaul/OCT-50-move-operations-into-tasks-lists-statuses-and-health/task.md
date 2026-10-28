@@ -13,7 +13,7 @@ blocked_by: [OCT-48, OCT-49]
 
 ## Goal
 
-`workspace.ts` (~760 lines) holds every operation plus the helpers in the `makeWorkspace` closure (~197-360). Move the operations into domain folders so `workspace.ts` is wiring only (about 60-100 lines).
+`workspace.ts` holds every operation plus the helpers in the `makeWorkspace` closure. Move the operations into domain folders so `workspace.ts` is wiring only (about 60-100 lines).
 
 ## Scope
 
@@ -21,6 +21,8 @@ blocked_by: [OCT-48, OCT-49]
 - `lists/`: create, move; `list-file.ts`.
 - `statuses/`: reorder.
 - `health/`: fix, fixAll; `problems.ts` (the `PROBLEMS` table); `fixes.ts`.
+- `scan.ts` is, after OCT-47, only the parsing step over `storage`'s tree; `tasks/`, `lists/` and `health/` take it over.
+- The `Problem` type (storage imports it from `diagnostics.ts` since OCT-47) moves to the shared domain types, so `storage/` never depends on `health/`.
 - Placement and ordering helpers (`destination`, `containerDir`, `orderedTasks`, `ensureOrdered`, `orderBetween`) go in a small `place.ts`: they need task parents and `order`, which storage must not know.
 - `workspace.ts` builds the snapshot (duplicate ids, links, `blocked`, `mentionedIn`, subtask nesting, cross-domain diagnostics) and maps `Workspace` methods to domain functions.
 - Fix the wrong comment at `layout.ts` ~200 ("A new kind is one entry here plus its two `Task` fields"; it touches about 10 files). Link kinds stay non-generic.

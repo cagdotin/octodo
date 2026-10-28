@@ -12,6 +12,7 @@
   "dependencies": {
     "@octodo/contract": "workspace:*",
     "@octodo/engine": "workspace:*",
+    "@octodo/ui": "workspace:*",
     "effect": "^4.0.6",
     "lucide-react": "^1.61.0",
     "react": "^19.3.1"

@@ -1,31 +1,17 @@
+import type { ServedApi } from "@octodo/contract/api";
+import { createClient } from "@octodo/contract/client";
+import { Button } from "@octodo/ui/components/button";
+import { Field, FieldError } from "@octodo/ui/components/field";
+import { InputGroup, InputGroupInput } from "@octodo/ui/components/input-group";
+import { Popover, PopoverContent, PopoverTrigger } from "@octodo/ui/components/popover";
+import { dueInfo, formatTimestamp } from "@octodo/ui/lib/dates";
+import { cn } from "@octodo/ui/lib/utils";
 import { RepeatIcon } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { Button } from "@/components/ui/button";
-import { Field, FieldError } from "@/components/ui/field";
-import { InputGroup, InputGroupInput } from "@/components/ui/input-group";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
-import { dueInfo, formatTimestamp } from "@/lib/tasks";
 import type { KindProps, PluginWeb, TaskOf } from "../web.ts";
-import type { RecurringFields } from "./shared.ts";
+import type { RecurringFields, recurringShared } from "./shared.ts";
 
-/**
- * Runs `set_repeat` at its catalog path. The app's typed client knows only the core catalog, so
- * this is the one place the web half calls its operation.
- */
-const setRepeat = async (workspace: string, id: string, repeat: string): Promise<void> => {
-  const response = await fetch(
-    `/api/workspaces/${encodeURIComponent(workspace)}/recurring/${encodeURIComponent(id)}`,
-    {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ repeat }),
-    },
-  );
-  if (response.ok) return;
-  const body = (await response.json().catch(() => null)) as { message?: unknown } | null;
-  throw new Error(typeof body?.message === "string" ? body.message : "Could not save the rule");
-};
+const api = createClient<ServedApi<typeof recurringShared.operations>>("");
 
 const ruleText = (repeat: string | null) => repeat ?? "No rule";
 
@@ -70,7 +56,10 @@ function RepeatEditor({ workspace, task }: KindProps<RecurringFields>) {
     event.preventDefault();
     setSaving(true);
     try {
-      await setRepeat(workspace, task.id, draft);
+      await api.request("PATCH /api/workspaces/:workspace/recurring/:id", {
+        params: { workspace, id: task.id },
+        payload: { repeat: draft },
+      });
       setError(null);
       setOpen(false);
     } catch (cause) {

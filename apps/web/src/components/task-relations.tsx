@@ -6,19 +6,19 @@ import { useMemo, useState, type ReactNode } from "react";
 import type { MentionTarget } from "@/components/markdown-editor/mentions";
 import { StatusIcon } from "@/components/task-bits";
 import { TaskLink } from "@/components/task-subtasks";
-import { Button } from "@/components/ui/button";
+import { Button } from "@octodo/ui/components/button";
 import {
   Command,
   CommandEmpty,
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
+} from "@octodo/ui/components/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@octodo/ui/components/popover";
+import { ScrollArea } from "@octodo/ui/components/scroll-area";
 import { useUpdateTask } from "@/lib/api";
 import { statusMap } from "@/lib/tasks";
-import { cn } from "@/lib/utils";
+import { cn } from "@octodo/ui/lib/utils";
 
 const [BLOCKED_BY] = LINK_KINDS;
 

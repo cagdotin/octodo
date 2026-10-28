@@ -71,7 +71,8 @@ it is built on. Three questions were left open:
 - A web half renders with the app's UI kit (`@/components/ui`, `@/lib`), resolved by the app's
   bundler and the root tsconfig, and Tailwind scans `packages/plugins/src`. It calls only its own
   plugin's operations, through one small function each, since the typed client knows the core
-  catalog only.
+  catalog only. Superseded by [0017](0017-the-ui-kit-is-a-package-plugins-type-their-own-client.md):
+  the kit is `@octodo/ui`, and the web half calls its operations through a client typed from them.
 
 ## Why
 

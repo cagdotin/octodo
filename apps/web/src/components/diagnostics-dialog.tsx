@@ -1,6 +1,6 @@
 import type { Diagnostic } from "@octodo/contract";
 import { CircleCheckIcon, WrenchIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@octodo/ui/components/button";
 import {
   Dialog,
   DialogContent,
@@ -8,10 +8,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Spinner } from "@/components/ui/spinner";
+} from "@octodo/ui/components/dialog";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@octodo/ui/components/empty";
+import { ScrollArea } from "@octodo/ui/components/scroll-area";
+import { Spinner } from "@octodo/ui/components/spinner";
 import { useFixAllDiagnostics, useFixDiagnostic } from "@/lib/api";
 
 export function DiagnosticsDialog({

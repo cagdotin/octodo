@@ -23,17 +23,21 @@ import {
 import { TaskComposer } from "@/components/task-composer";
 import { BlockedChip } from "@/components/task-relations";
 import { ParentChip, SubtaskCount } from "@/components/task-subtasks";
-import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Button } from "@octodo/ui/components/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@octodo/ui/components/collapsible";
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@/components/ui/empty";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
+} from "@octodo/ui/components/empty";
+import { ScrollArea } from "@octodo/ui/components/scroll-area";
+import { cn } from "@octodo/ui/lib/utils";
 import { listViewOrder, subtaskProgress, type Progress } from "@/lib/tasks";
 
 interface Props {

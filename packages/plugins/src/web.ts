@@ -14,7 +14,8 @@ export interface KindProps<Fields> {
 
 /**
  * A plugin's `web` half: what the app shows for a task of its kind (decision 0016). It renders
- * with the web app's UI kit and calls only its own plugin's operations.
+ * with `@octodo/ui` and calls only its own plugin's operations, through a client typed from them
+ * (decision 0017).
  */
 export interface PluginWeb<Fields> {
   /** Shown in a task row's date slot, in place of the due or created date. */

@@ -1,7 +1,7 @@
 import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@octodo/ui/components/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@octodo/ui/components/tooltip";
 
 const NEXT = { system: "light", light: "dark", dark: "system" } as const;
 const LABEL = { system: "Theme: system", light: "Theme: light", dark: "Theme: dark" } as const;

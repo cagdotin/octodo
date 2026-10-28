@@ -23,10 +23,10 @@ import {
 import { TaskComposer } from "@/components/task-composer";
 import { BlockedChip } from "@/components/task-relations";
 import { ParentChip, SubtaskCount } from "@/components/task-subtasks";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@octodo/ui/components/button";
+import { ScrollArea } from "@octodo/ui/components/scroll-area";
 import { subtaskProgress, type Progress } from "@/lib/tasks";
-import { cn } from "@/lib/utils";
+import { cn } from "@octodo/ui/lib/utils";
 
 interface Props {
   workspace: string;

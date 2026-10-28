@@ -102,7 +102,8 @@ engine's `Workspace`.
   `optionalKey`: absent when there is nothing to report.
 - The server serves `makeApi(registry.operations)`, so a plugin's operations are endpoints at their
   `http` paths, and `PluginNotEnabled` is a 409. Clients are typed from `Api`, the catalog alone; a
-  plugin's web half calls its own operations through the same client.
+  plugin's web half calls its own operations through the same client, typed from them
+  ([0017](0017-the-ui-kit-is-a-package-plugins-type-their-own-client.md)).
 - Days-since counters and recurring tasks cannot both own `log.jsonl` as two plugins while file
   claims are global. [0016](0016-recurring-tasks-complete-in-place.md) keeps them two plugins and
   has OCT-58 make file claims per kind.

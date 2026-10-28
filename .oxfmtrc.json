@@ -6,7 +6,7 @@
     "dist/**",
     "coverage/**",
     "apps/web/src/routeTree.gen.ts",
-    "apps/web/src/components/ui/**",
+    "packages/ui/src/components/**",
     ".agents/skills/shadcn/**",
     ".claude/**"
   ]

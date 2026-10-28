@@ -23,8 +23,12 @@ import { ITEM, SidebarLists } from "@/components/sidebar-lists";
 import { SyncIndicator } from "@/components/sync-indicator";
 import { ViewIcon } from "@/components/task-bits";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Button } from "@octodo/ui/components/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@octodo/ui/components/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,7 +38,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@octodo/ui/components/dropdown-menu";
 import {
   Sidebar,
   SidebarContent,
@@ -48,11 +52,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
-} from "@/components/ui/sidebar";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+} from "@octodo/ui/components/sidebar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@octodo/ui/components/tooltip";
 import { workspacesQuery } from "@/lib/api";
 import { desktop } from "@/lib/desktop";
-import { cn } from "@/lib/utils";
+import { cn } from "@octodo/ui/lib/utils";
 import { filterTasks, listCounts, SMART, statusMap } from "@/lib/tasks";
 
 export function AppSidebar({

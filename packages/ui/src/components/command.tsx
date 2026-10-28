@@ -3,7 +3,7 @@
 import * as React from "react"
 import { Command as CommandPrimitive } from "cmdk"
 import { cn } from "cn"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { ScrollArea } from "@octodo/ui/components/scroll-area"
 
 import {
   Dialog,
@@ -11,7 +11,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from "@octodo/ui/components/dialog"
 import { SearchIcon, CheckIcon } from "lucide-react"
 
 function Command({

@@ -29,7 +29,7 @@
   ],
   "overrides": [
     {
-      "files": ["apps/web/src/components/ui/**"],
+      "files": ["packages/ui/src/components/**"],
       "rules": {
         "jsx-a11y/prefer-tag-over-role": "off",
         "jsx-a11y/click-events-have-key-events": "off",
@@ -126,13 +126,34 @@
       }
     },
     {
-      "files": [
-        "apps/web/src/**",
-        "apps/desktop/src/preload.ts",
-        "packages/plugins/src/web.ts",
-        "packages/plugins/src/*/web.ts",
-        "packages/plugins/src/*/web.tsx"
-      ],
+      "files": ["packages/ui/src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@/**",
+                  "**/apps/**",
+                  "@octodo/*",
+                  "@octodo/*/**",
+                  "!@octodo/ui/**",
+                  "node:*"
+                ],
+                "message": "@octodo/ui is the UI kit the app and the plugins' web halves share: it imports no octodo package and no app (decision 0017)."
+              },
+              {
+                "group": ["effect", "effect/*"],
+                "message": "The browser bundle holds no Effect runtime (decision 0006)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["apps/web/src/**", "apps/desktop/src/preload.ts"],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -177,12 +198,32 @@
       }
     },
     {
+      "files": ["packages/plugins/src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/**", "**/apps/web/**", "@octodo/web", "@octodo/web/*"],
+                "message": "A plugin is a package the app imports, never the other way round: take the UI kit from @octodo/ui and call your operations through @octodo/contract/client (decision 0017)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["packages/plugins/src/*/shared.ts"],
       "rules": {
         "no-restricted-imports": [
           "error",
           {
             "patterns": [
+              {
+                "group": ["@/**", "**/apps/web/**", "@octodo/web", "@octodo/web/*"],
+                "message": "A plugin is a package the app imports, never the other way round: take the UI kit from @octodo/ui and call your operations through @octodo/contract/client (decision 0017)."
+              },
               {
                 "group": [
                   "node:*",
@@ -193,6 +234,59 @@
                   "./engine.ts"
                 ],
                 "message": "A plugin's shared entry runs in every client: no Node modules and no engine (decision 0014)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/plugins/src/web.ts",
+        "packages/plugins/src/*/web.ts",
+        "packages/plugins/src/*/web.tsx"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@octodo/contract",
+                "allowTypeImports": true,
+                "message": "@octodo/contract is Effect Schema code: import only its types here, values from @octodo/contract/rules and the server client from @octodo/contract/client."
+              },
+              {
+                "name": "@octodo/contract/api",
+                "allowTypeImports": true,
+                "message": "The API definition is Effect code: import only its types here, and call the server through @octodo/contract/client (decision 0006)."
+              },
+              {
+                "name": "@octodo/contract/catalog",
+                "allowTypeImports": true,
+                "message": "The catalog is Effect Schema code: import only its types here (decision 0005)."
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["@/**", "**/apps/web/**", "@octodo/web", "@octodo/web/*"],
+                "message": "A plugin is a package the app imports, never the other way round: take the UI kit from @octodo/ui and call your operations through @octodo/contract/client (decision 0017)."
+              },
+              {
+                "group": [
+                  "@octodo/engine",
+                  "@octodo/engine/*",
+                  "@octodo/plugins",
+                  "@octodo/plugins/*/engine",
+                  "./engine",
+                  "./engine.ts"
+                ],
+                "message": "The browser bundle may not hold engine code; talk to the server, and import rules from @octodo/contract/rules and a plugin's own shared and web entries (decision 0004)."
+              },
+              {
+                "group": ["effect", "effect/*"],
+                "allowTypeImports": true,
+                "message": "The browser bundle holds no Effect runtime (decision 0006); import Effect types only."
               }
             ]
           }

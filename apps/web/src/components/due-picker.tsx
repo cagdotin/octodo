@@ -11,12 +11,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Separator } from "@/components/ui/separator";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@octodo/ui/components/button";
+import { Calendar } from "@octodo/ui/components/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@octodo/ui/components/popover";
+import { Separator } from "@octodo/ui/components/separator";
+import { ToggleGroup, ToggleGroupItem } from "@octodo/ui/components/toggle-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@octodo/ui/components/tooltip";
 
 const dayKey = (date: Date) => format(date, "yyyy-MM-dd");
 

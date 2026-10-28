@@ -1,10 +1,10 @@
 import { type Task, type WorkspaceSnapshot, DEFAULT_STATUSES } from "@octodo/contract";
 import { readiness } from "@octodo/contract/rules";
+import { dueInfo } from "@octodo/ui/lib/dates";
 import { describe, expect, it } from "vitest";
 import {
   applyMove,
   descendantCount,
-  dueInfo,
   filterTasks,
   listCounts,
   SMART,

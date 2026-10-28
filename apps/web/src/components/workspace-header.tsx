@@ -10,7 +10,7 @@ import {
 import type { ReactNode } from "react";
 import { PageToolbar } from "@/components/app-frame";
 import { ListGlyph, PriorityIcon, ViewIcon } from "@/components/task-bits";
-import { Button } from "@/components/ui/button";
+import { Button } from "@octodo/ui/components/button";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -23,8 +23,8 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
+} from "@octodo/ui/components/dropdown-menu";
+import { cn } from "@octodo/ui/lib/utils";
 import {
   allTags,
   type DisplayOptions,

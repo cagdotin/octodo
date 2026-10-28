@@ -1,8 +1,8 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import { CalendarIcon, type LucideIcon, SettingsIcon, SquareCheckBigIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+import { Button } from "@octodo/ui/components/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@octodo/ui/components/tooltip";
+import { cn } from "@octodo/ui/lib/utils";
 
 type Destination =
   | { label: string; icon: LucideIcon; to: "/w/$workspace" }

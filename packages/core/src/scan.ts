@@ -9,7 +9,7 @@ import {
   type Task,
   type WorkspaceSnapshot,
 } from "./domain.ts";
-import { isNotFound } from "./files.ts";
+import { isNotFound } from "./storage/files.ts";
 import {
   CONFIG_FILE,
   LIST_FILE,

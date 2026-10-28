@@ -36,7 +36,7 @@ import {
   createFolder as createFolderIn,
   freeName as freeNameIn,
   writeFileAtomic,
-} from "./files.ts";
+} from "./storage/files.ts";
 import {
   LINK_KINDS,
   LIST_FILE,

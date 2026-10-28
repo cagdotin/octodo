@@ -1,7 +1,7 @@
 import { Effect, FileSystem, Path, PlatformError, Schema } from "effect";
 import type { Problem } from "../diagnostics.ts";
 import { WorkspaceConfig } from "../domain.ts";
-import { writeFileAtomic } from "../files.ts";
+import { writeFileAtomic } from "./files.ts";
 import { CONFIG_FILE, TASKS_DIR, deriveKey, humanize, isWorkspaceKey } from "../layout.ts";
 
 const decodeDocument = Schema.decodeUnknownEffect(

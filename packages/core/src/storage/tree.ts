@@ -1,7 +1,7 @@
 import { Effect, FileSystem, Option, Path, PlatformError, Result, Semaphore } from "effect";
 import { sep } from "node:path";
 import type { Problem } from "../diagnostics.ts";
-import { isNotFound } from "../files.ts";
+import { isNotFound } from "./files.ts";
 import { LIST_FILE, MAX_LIST_DEPTH, TASK_FILE } from "../layout.ts";
 import { isHidden } from "./bookkeeping.ts";
 import { makeCache, type Cache } from "./cache.ts";

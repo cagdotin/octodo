@@ -1,5 +1,5 @@
 import { Effect, FileSystem, Option, Path, PlatformError } from "effect";
-import { isLeftover, writeFileAtomic } from "../files.ts";
+import { isLeftover, writeFileAtomic } from "./files.ts";
 import { OWNER_LOCK_FILE } from "./owner-lock.ts";
 
 /** Dot names are octodo's bookkeeping (the owner lock, temporary files), which scans never read. */

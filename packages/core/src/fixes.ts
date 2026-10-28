@@ -1,6 +1,6 @@
 import { Effect, FileSystem, Path } from "effect";
 import { DEFAULT_STATUSES, type Diagnostic, type FixAction } from "./domain.ts";
-import { createFolder, freeName, writeFileAtomic } from "./files.ts";
+import { createFolder, freeName, writeFileAtomic } from "./storage/files.ts";
 import { TASK_FILE, humanize, idNumber, isLinkField, taskFolderName } from "./layout.ts";
 import { frontmatterId, keepLinks, patchFrontmatter, readFrontmatter } from "./markdown.ts";
 import type { Scan } from "./scan.ts";

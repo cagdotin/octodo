@@ -17,8 +17,9 @@ JSON Schema from that declaration, with a test that they agree.
   fields are path parameters.
 - Three generators read the catalog: HTTP endpoints, MCP tools (`Tool.make` takes the flat input)
   and `effect/cli` commands. The Schema-to-flags generator is octodo code, since effect has none.
-- HTTP-only endpoints (connection info, folders, the change feed, attachment upload and download)
-  stay hand-written in their own group.
+- HTTP-only endpoints (connection info, folders, the change feed, attachment upload) stay
+  hand-written in their own group. Attachment download is the catalog operation `read_attachment`,
+  whose success is a file ([0011](0011-attachments-are-one-operation-plugin-files-are-private.md)).
 - One contract test table runs every operation against every surface.
 - The bundled agent skill (`packages/cli/src/skill.ts`) is generated from the catalog.
 

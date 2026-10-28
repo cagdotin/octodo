@@ -38,10 +38,11 @@ carry the same fields.
 
 ## Files are endpoints too
 
-Attachment download is a declared HttpApi endpoint, hand-written as
-[0005](0005-one-operation-catalog.md) says, not a raw `HttpRouter` route. A handler may return an
-`HttpServerResponse`, so it needs no raw route to send file bytes. The server has no authentication
-([0010](0010-no-authentication-for-now.md)), so there is no auth middleware and no pairing endpoint.
+Attachment download is a declared HttpApi endpoint, generated from the `read_attachment` catalog
+operation ([0011](0011-attachments-are-one-operation-plugin-files-are-private.md)), not a raw
+`HttpRouter` route. A handler may return an `HttpServerResponse`, so it needs no raw route to send
+file bytes. The server has no authentication ([0010](0010-no-authentication-for-now.md)), so there
+is no auth middleware and no pairing endpoint.
 
 - `GET /api/workspaces/:ws/tasks/:id/files/:path`: the success schema is `HttpApiSchema.StreamUint8Array()`, so OpenAPI lists the route
   as binary with its typed 404 errors. The handler serves the file through `HttpStaticServer`,

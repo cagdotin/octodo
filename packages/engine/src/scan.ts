@@ -4,14 +4,16 @@ import { CONFIG_FILE, LIST_FILE, TASK_FILE, TASKS_DIR, idNumber } from "./layout
 import {
   DEFAULT_STATUSES,
   type Diagnostic,
-  type DiagnosticKind,
+  type CoreDiagnosticKind,
   type List,
   type WorkspaceSnapshot,
 } from "@octodo/contract";
 import { defaultStatus, humanize } from "@octodo/contract/rules";
 import { isNotFound } from "./storage/files.ts";
 import { frontmatterId, hasFrontmatter, readFrontmatter } from "./frontmatter.ts";
-import { diagnostic, type DiagnosticOptions } from "./health/problems.ts";
+import { diagnostic, kindDiagnostic, type DiagnosticOptions } from "./health/problems.ts";
+import { applyKind, enabledPlugins } from "./plugins/kinds.ts";
+import type { Plugin } from "./plugins/plugin.ts";
 import { readListFile } from "./lists/list-file.ts";
 import { compareOrder, compareTasks } from "./place.ts";
 import { shownStatuses } from "./statuses/statuses.ts";
@@ -42,6 +44,8 @@ export interface Scan {
   readonly missingId: ReadonlyArray<string>;
   /** What the scan read, as the folder grammar has it. */
   readonly tree: Tree;
+  /** The text of each plugin file of each task of a plugin's kind, by task id and file name. */
+  readonly kindFiles: ReadonlyMap<string, ReadonlyMap<string, string>>;
 }
 
 type Read<A> = Result.Result<A, PlatformError.PlatformError>;
@@ -83,11 +87,12 @@ export const scanWorkspace = (
   id: string,
   root: string,
   { config: { config, fallback, problems: configProblems }, tree }: StorageRead,
+  installed: ReadonlyArray<Plugin> = [],
 ): Scan => {
   const tasksDir = join(root, TASKS_DIR);
   const rel = (absolute: string) => relative(root, absolute);
   const diagnostics: Array<Diagnostic> = [];
-  const report = <K extends DiagnosticKind>(
+  const report = <K extends CoreDiagnosticKind>(
     kind: K,
     absolute: string,
     detail: string,
@@ -109,9 +114,18 @@ export const scanWorkspace = (
     report(kind, join(tasksDir, CONFIG_FILE), detail, { field });
   const configured = config.statuses ?? DEFAULT_STATUSES;
   const fallbackStatus = defaultStatus(configured)?.id ?? "todo";
+  const { enabled, unknown: unknownPlugins } = enabledPlugins(installed, config.plugins);
+  for (const plugin of unknownPlugins)
+    report(
+      "invalid-config",
+      join(tasksDir, CONFIG_FILE),
+      `The plugin ${JSON.stringify(plugin)} is not one octodo has, so it is ignored`,
+      { field: "plugins" },
+    );
 
   const lists: Array<List> = [];
   const taskFiles: Array<TaskFile> = [];
+  const kindFiles = new Map<string, ReadonlyMap<string, string>>();
   const listDirs = new Map<string, { dir: string; order: string }>();
   const taskDirs = new Map<string, string>();
   const taskTexts = new Map<string, string>();
@@ -206,8 +220,30 @@ export const scanWorkspace = (
       takeId(id);
       taskDirs.set(id, folder.path);
       taskTexts.set(id, text);
-      taskFiles.push(read.value);
-      for (const problem of read.problems) report(problem.kind, file, problem.detail, problem);
+      const ownFiles = (plugin: Plugin) => {
+        const texts = new Map<string, string>();
+        for (const [name, read] of folder.owned) {
+          if (!plugin.shared.files.includes(name)) continue;
+          const content = readAhead(join(folder.path, name), read);
+          if (content !== null) texts.set(name, content);
+        }
+        return texts;
+      };
+      const kind = applyKind(read.value, read.frontmatter, ownFiles, { installed, enabled });
+      taskFiles.push(kind.task);
+      for (const problem of [...read.problems, ...kind.problems])
+        report(problem.kind, file, problem.detail, problem);
+      if (kind.plugin !== null) {
+        kindFiles.set(id, kind.files);
+        for (const problem of kind.kindProblems)
+          diagnostics.push(
+            kindDiagnostic(
+              kind.plugin.shared,
+              problem,
+              rel(problem.file === undefined ? file : join(folder.path, problem.file)),
+            ),
+          );
+      }
       if (idNumber(id, config.key) === null)
         report("foreign-id", file, `The id ${id} does not use the workspace key ${config.key}`, {
           field: "id",
@@ -295,12 +331,14 @@ export const scanWorkspace = (
       lists,
       tasks,
       diagnostics,
+      ...(enabled.length === 0 ? {} : { plugins: enabled.map((plugin) => plugin.shared.id) }),
     },
     dirs: { lists: listDirs, tasks: taskDirs },
     idsOnDisk,
     nextIdNumber: highestId + 1,
     missingId,
     tree,
+    kindFiles,
   };
 };
 

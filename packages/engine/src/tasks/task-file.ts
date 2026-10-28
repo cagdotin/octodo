@@ -9,7 +9,7 @@ import {
   type Task,
   type UpdateTaskInput,
 } from "@octodo/contract";
-import { LINK_KINDS, findMentions, humanize, type LinkField } from "@octodo/contract/rules";
+import { findMentions, humanize, type LinkField } from "@octodo/contract/rules";
 import {
   absent,
   invalidFrontmatter,
@@ -18,6 +18,7 @@ import {
   readOrder,
   stringOrNull,
 } from "../frontmatter.ts";
+import { plainTask } from "../plugins/plugin.ts";
 import type { AssignedId } from "../storage/storage.ts";
 
 /** What the folder tree says about a task, which `task.md` itself does not. */
@@ -48,23 +49,14 @@ export type TaskFileRead =
       readonly _tag: "Read";
       readonly value: TaskFile;
       readonly problems: ReadonlyArray<Problem>;
+      /** The whole frontmatter, where a kind finds its own keys. */
+      readonly frontmatter: Readonly<Record<string, unknown>>;
     }
   | { readonly _tag: "Invalid"; readonly problem: Problem }
   | { readonly _tag: "MissingId" };
 
-/** Keys the app reads into a task's fields; `updated` is no longer written but older files have it. */
-const MANAGED = new Set([
-  "id",
-  "title",
-  "status",
-  "priority",
-  "tags",
-  "due",
-  "created",
-  "order",
-  "updated",
-  ...LINK_KINDS.map((kind) => kind.field),
-]);
+/** Keys the plain task reads into a task's fields; the rest are `extra` until a kind claims them. */
+const MANAGED: ReadonlySet<string> = new Set(Object.keys(plainTask.keys.fields));
 
 type EditableKey = Exclude<keyof UpdateTaskInput, "body">;
 
@@ -190,6 +182,7 @@ export const readTaskFile = (text: string, place: TaskPlace): TaskFileRead => {
   return {
     _tag: "Read",
     problems,
+    frontmatter: data,
     value: {
       id,
       title: stringOrNull(data["title"]) ?? folderTitle(place.folder, id),
@@ -248,18 +241,35 @@ export const newTaskFile = (
     status,
     order,
     now,
+    kind,
   }: {
     readonly id: AssignedId;
     readonly status: string;
     readonly order: string;
     readonly now: string;
+    /** A plugin's kind, written as `type` and that plugin's keys. */
+    readonly kind?: NewKind | undefined;
   },
 ): string =>
   patchFrontmatter(
     null,
-    { id, title: input.title, status, ...editChanges(input), created: now, order },
+    {
+      id,
+      title: input.title,
+      ...(kind === undefined ? {} : { type: kind.id, ...kind.keys }),
+      status,
+      ...editChanges(input),
+      created: now,
+      order,
+    },
     input.body ?? "",
   );
+
+/** The kind a new task is of, with its plugin's keys. */
+export interface NewKind {
+  readonly id: string;
+  readonly keys: Readonly<Record<string, unknown>>;
+}
 
 export const editTaskFile = (text: string, input: UpdateTaskInput): string =>
   patchFrontmatter(text, editChanges(input), input.body);

@@ -1,4 +1,17 @@
 export * from "./workspace.ts";
 export * from "./workspaces.ts";
 export { mediaType } from "./tasks/media-type.ts";
+export type { TaskFile } from "./tasks/task-file.ts";
 export * from "./operations.ts";
+export {
+  definePlugin,
+  plainTask,
+  type KindChange,
+  type KindInput,
+  type KindProblem,
+  type KindRead,
+  type Plugin,
+  type PluginHandler,
+  type PluginWorkspace,
+} from "./plugins/plugin.ts";
+export { makeRegistry, type Registry } from "./plugins/registry.ts";

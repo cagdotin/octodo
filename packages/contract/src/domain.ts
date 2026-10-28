@@ -58,6 +58,8 @@ export const WorkspaceConfig = Schema.Struct({
   name: Schema.String,
   key: Schema.String,
   statuses: Schema.optionalKey(Schema.Array(StatusDefinition)),
+  /** The plugins the workspace enables, by id; none when absent. */
+  plugins: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 export type WorkspaceConfig = typeof WorkspaceConfig.Type;
 
@@ -83,6 +85,16 @@ export const List = Schema.Struct({
   folder: Schema.String,
 });
 export type List = typeof List.Type;
+
+/**
+ * The plugin a task's `type` names, when the workspace enables it, and what that plugin computed
+ * from the task's keys and files. The plugin's `shared` entry has the schema of `fields`.
+ */
+export const TaskKind = Schema.Struct({
+  id: Schema.String,
+  fields: Schema.Record(Schema.String, Schema.Unknown),
+});
+export type TaskKind = typeof TaskKind.Type;
 
 export const Task = Schema.Struct({
   id: Schema.String,
@@ -116,6 +128,8 @@ export const Task = Schema.Struct({
   mentions: Schema.Array(Schema.String),
   /** The tasks whose body mentions this one. Never stored. */
   mentionedIn: Schema.Array(Schema.String),
+  /** Absent for a plain task. */
+  kind: Schema.optional(TaskKind),
 });
 export type Task = typeof Task.Type;
 
@@ -172,8 +186,8 @@ export const TaskDetail = Schema.Struct({
 });
 export type TaskDetail = typeof TaskDetail.Type;
 
-/** Every problem a file under `.octodo/` can have; the engine's `PROBLEMS` table says what each means. */
-export const DiagnosticKind = Schema.Literals([
+/** Every problem the engine itself finds; the engine's `PROBLEMS` table says what each means. */
+export const CoreDiagnosticKind = Schema.Literals([
   "invalid-config",
   "invalid-frontmatter",
   "missing-id",
@@ -195,7 +209,15 @@ export const DiagnosticKind = Schema.Literals([
   "list-too-deep",
   "unreadable",
   "symlink",
+  "unknown-kind",
 ]);
+export type CoreDiagnosticKind = typeof CoreDiagnosticKind.Type;
+
+/** A problem a plugin's validator finds, named `<plugin>/<problem>`: `recurring/bad-repeat`. */
+export const PluginDiagnosticKind = Schema.TemplateLiteral([Schema.String, "/", Schema.String]);
+
+/** Every problem a file under `.octodo/` can have. */
+export const DiagnosticKind = Schema.Union([CoreDiagnosticKind, PluginDiagnosticKind]);
 export type DiagnosticKind = typeof DiagnosticKind.Type;
 
 /** A mechanical repair octodo can make for a diagnostic, never on its own: only when asked. */
@@ -230,7 +252,7 @@ export type Diagnostic = typeof Diagnostic.Type;
 
 /** What is wrong with a file, before the reader says where. */
 export interface Problem {
-  readonly kind: DiagnosticKind;
+  readonly kind: CoreDiagnosticKind;
   readonly field: string | null;
   readonly detail: string;
   /** Null when the kind's fix does not apply to this case. */
@@ -265,12 +287,16 @@ export const WorkspaceInfo = Schema.Struct({
 });
 export type WorkspaceInfo = typeof WorkspaceInfo.Type;
 
+/** The plugins a workspace enables that octodo has, in config.json's order; absent for none. */
+const EnabledPlugins = Schema.optional(Schema.Array(Schema.String));
+
 export const WorkspaceSnapshot = Schema.Struct({
   workspace: WorkspaceInfo,
   statuses: Schema.Array(StatusDefinition),
   lists: Schema.Array(List),
   tasks: Schema.Array(Task),
   diagnostics: Schema.Array(Diagnostic),
+  plugins: EnabledPlugins,
 });
 export type WorkspaceSnapshot = typeof WorkspaceSnapshot.Type;
 
@@ -280,6 +306,7 @@ export const WorkspaceOverview = Schema.Struct({
   statuses: Schema.Array(Schema.Struct({ ...StatusDefinition.fields, count: Schema.Number })),
   lists: Schema.Array(Schema.Struct({ ...List.fields, count: Schema.Number })),
   diagnostics: Schema.Array(Diagnostic),
+  plugins: EnabledPlugins,
 });
 export type WorkspaceOverview = typeof WorkspaceOverview.Type;
 
@@ -398,6 +425,16 @@ export class AttachmentTooLarge extends Schema.TaggedError<AttachmentTooLarge>()
 ) {
   override get message(): string {
     return `${this.path} is ${megabytes(this.size)} MB; octodo reads attachments up to ${megabytes(MAX_ATTACHMENT_BYTES)} MB`;
+  }
+}
+
+/** An operation of a plugin that the workspace does not enable in its config.json. */
+export class PluginNotEnabled extends Schema.TaggedError<PluginNotEnabled>()("PluginNotEnabled", {
+  plugin: Schema.String,
+  workspace: Schema.String,
+}) {
+  override get message(): string {
+    return `The ${this.plugin} plugin is not enabled in ${this.workspace}; add "${this.plugin}" to "plugins" in its .octodo/config.json`;
   }
 }
 

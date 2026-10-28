@@ -36,7 +36,16 @@ import {
   readAttachment,
   writeAttachment,
 } from "./tasks/attachments.ts";
-import { createTask, deleteTask, getTask, moveTask, updateTask } from "./tasks/operations.ts";
+import type { KindChange, Plugin } from "./plugins/plugin.ts";
+import {
+  createTask,
+  deleteTask,
+  editKind,
+  getTask,
+  moveTask,
+  updateTask,
+} from "./tasks/operations.ts";
+import type { NewKind } from "./tasks/task-file.ts";
 
 /** One workspace on disk: a folder with a `.octodo/` directory. The files are the source of truth. */
 export interface Workspace {
@@ -44,9 +53,20 @@ export interface Workspace {
   readonly root: string;
   readonly snapshot: Effect.Effect<WorkspaceSnapshot, StorageError>;
   readonly getTask: (id: string) => Effect.Effect<Task, TaskNotFound | StorageError>;
+  /** `kind` makes it a task of an enabled plugin's kind, with that plugin's keys. */
   readonly createTask: (
     input: CreateTaskInput,
+    kind?: NewKind,
   ) => Effect.Effect<Task, InvalidRequest | StorageError>;
+  /**
+   * Writes the plugin `plugin`'s keys and files of a task of its kind, refusing any other task,
+   * key or file. Its plugin's handlers reach it as `editOfKind`.
+   */
+  readonly editKind: (
+    plugin: string,
+    taskId: string,
+    change: KindChange,
+  ) => Effect.Effect<Task, TaskNotFound | InvalidRequest | StorageError>;
   /**
    * Refuses links to the task itself and to unknown tasks, except unknown ones its field already
    * lists, so a dangling blocker never stops an edit of the others.
@@ -148,6 +168,8 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     readonly watch?: boolean;
     /** How long a write waits for another process to release the owner lock. */
     readonly lockWait?: Duration.Input;
+    /** The plugins octodo has; the workspace's config.json picks which of them apply. */
+    readonly plugins?: ReadonlyArray<Plugin>;
   } = {},
 ) {
   const state = yield* makeState(id, root, options);
@@ -156,7 +178,8 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     root,
     snapshot: state.read(Effect.map(state.scan, (scan) => scan.snapshot)),
     getTask: (taskId) => getTask(state, taskId),
-    createTask: (input) => createTask(state, input),
+    createTask: (input, kind?: NewKind) => createTask(state, input, kind),
+    editKind: (plugin, taskId, change) => editKind(state, plugin, taskId, change),
     updateTask: (taskId, input) => updateTask(state, taskId, input),
     moveTask: (taskId, input) => moveTask(state, taskId, input),
     deleteTask: (taskId) => deleteTask(state, taskId),

@@ -75,6 +75,7 @@ const overview = (snapshot: WorkspaceSnapshot): WorkspaceOverview => {
       count: count((task) => task.list === list.id),
     })),
     diagnostics: snapshot.diagnostics,
+    ...(snapshot.plugins === undefined ? {} : { plugins: snapshot.plugins }),
   };
 };
 

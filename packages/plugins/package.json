@@ -1,0 +1,14 @@
+{
+  "name": "@octodo/plugins",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@octodo/contract": "workspace:*",
+    "@octodo/engine": "workspace:*",
+    "effect": "^4.0.6"
+  }
+}

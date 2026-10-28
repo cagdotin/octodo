@@ -24,6 +24,8 @@ export interface TaskFolder {
   readonly updated: Date | null;
   /** In name order. */
   readonly children: Read<ReadonlyArray<TaskChild>>;
+  /** The text of each file it has that a plugin owns, by name. */
+  readonly owned: ReadonlyMap<string, Read<string>>;
 }
 
 /** A folder with `list.md`. */
@@ -118,7 +120,11 @@ const unread = (path: string, problem: Problem, markdown: ReadonlyArray<string> 
   markdown,
 });
 
-const readWith = (tasksDir: string, cache: Cache): Effect.Effect<Tree, never, Platform> =>
+const readWith = (
+  tasksDir: string,
+  cache: Cache,
+  owned: ReadonlyArray<string>,
+): Effect.Effect<Tree, never, Platform> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -161,11 +167,24 @@ const readWith = (tasksDir: string, cache: Cache): Effect.Effect<Tree, never, Pl
 
     const nodeAt = (at: string) => cache.read(at, "node", readNode(at), settled);
 
-    const markdownText = (file: string) =>
+    const textAt = (file: string) =>
       Effect.result(cache.read(file, "text", call(fs.readFileString(file))));
 
     const visible = (names: ReadonlyArray<string>) =>
       names.filter((name) => !isHidden(name)).toSorted();
+
+    /** The text of each file a plugin owns in the task folder `at`; a link is not one. */
+    const ownedIn = (at: string, names: Read<ReadonlyArray<string>>) =>
+      Effect.gen(function* () {
+        const found = new Map<string, Read<string>>();
+        if (Result.isFailure(names)) return found;
+        for (const name of owned.filter((file) => names.success.includes(file))) {
+          const file = path.join(at, name);
+          const node = yield* Effect.orElseSucceed(nodeAt(file), () => null);
+          if (node?.type === "file") found.set(name, yield* textAt(file));
+        }
+        return found;
+      });
 
     /** The text of every markdown file in and under the folder `node` at `at`, links aside. */
     const markdownUnder = (at: string, node: Node | null): Effect.Effect<Array<string>> =>
@@ -183,7 +202,7 @@ const readWith = (tasksDir: string, cache: Cache): Effect.Effect<Tree, never, Pl
               if (found?.type === "folder") return yield* markdownUnder(child, found);
               if (found?.type !== "file" || !name.endsWith(".md") || MARKERS.includes(name))
                 return [];
-              const text = yield* markdownText(child);
+              const text = yield* textAt(child);
               return Result.isSuccess(text) ? [text.success] : [];
             }).pipe(Effect.orElseSucceed((): Array<string> => [])),
           { concurrency: ENTRIES_AT_ONCE },
@@ -230,7 +249,7 @@ const readWith = (tasksDir: string, cache: Cache): Effect.Effect<Tree, never, Pl
           });
         if (node.type === "file") {
           if (!name.endsWith(".md")) return null;
-          return { type: "markdown" as const, name, path: at, text: yield* markdownText(at) };
+          return { type: "markdown" as const, name, path: at, text: yield* textAt(at) };
         }
         const { task, list } = node;
         if (task !== null && list !== null)
@@ -251,6 +270,7 @@ const readWith = (tasksDir: string, cache: Cache): Effect.Effect<Tree, never, Pl
             file: task.text,
             updated: task.mtime,
             children: Result.map(children, (found) => found.filter(isTaskChild)),
+            owned: yield* ownedIn(at, node.names),
           };
         }
         if (container.kind === "task")
@@ -317,10 +337,11 @@ const readWith = (tasksDir: string, cache: Cache): Effect.Effect<Tree, never, Pl
     return { path: tasksDir, children };
   });
 
-export const makeTreeReader = (): TreeReader => {
+/** `owned` names the files at the top of a task folder that plugins own, which it reads too. */
+export const makeTreeReader = (owned: ReadonlyArray<string> = []): TreeReader => {
   const cache = makeCache();
   return {
-    read: (tasksDir) => readWith(tasksDir, cache),
+    read: (tasksDir) => readWith(tasksDir, cache, owned),
     changed: cache.changed,
     clear: cache.clear,
     version: cache.version,
@@ -380,11 +401,12 @@ export interface AttachmentFile {
 /**
  * The attachments in the task folder `dir`, in name order, by their path inside it joined with
  * `/`. Hidden names, `task.md` and `list.md` (in any case), folders holding one of them (a subtask)
- * and symlinks, which are never followed, are not attachments. An entry that cannot be read is
- * left out.
+ * and symlinks, which are never followed, are not attachments, and neither are the names in
+ * `owned` at the top of the folder: a plugin's files. An entry that cannot be read is left out.
  */
 export const readAttachments = (
   dir: string,
+  owned: ReadonlyArray<string> = [],
 ): Effect.Effect<Array<AttachmentFile>, PlatformError.PlatformError, Platform> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -416,5 +438,10 @@ export const readAttachments = (
         (found) => found.flat(),
       );
 
-    return yield* inFolder(dir, [], yield* call(fs.readDirectory(dir)));
+    const names = yield* call(fs.readDirectory(dir));
+    return yield* inFolder(
+      dir,
+      [],
+      names.filter((name) => !owned.includes(name)),
+    );
   });

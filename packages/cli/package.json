@@ -11,6 +11,7 @@
     "@octodo/contract": "workspace:*",
     "@octodo/engine": "workspace:*",
     "@octodo/mcp": "workspace:*",
+    "@octodo/plugins": "workspace:*",
     "@octodo/server": "workspace:*",
     "effect": "^4.0.6"
   }

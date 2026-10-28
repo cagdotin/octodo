@@ -1,7 +1,7 @@
 ---
 id: OCT-74
 title: "Plugin web halves: typed calls and no imports from apps/web"
-status: todo
+status: done
 priority: medium
 tags:
   - architecture

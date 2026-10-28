@@ -1,7 +1,7 @@
 ---
 id: OCT-57
 title: Recurring tasks plugin
-status: todo
+status: done
 priority: medium
 tags:
   - plugins

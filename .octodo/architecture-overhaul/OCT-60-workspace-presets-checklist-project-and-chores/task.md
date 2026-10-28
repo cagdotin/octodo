@@ -33,3 +33,10 @@ Decision `docs/decisions/0008-statuses-per-workspace-presets-as-data.md`.
 - An `enable-plugin` fix for `unknown-kind`, like `add-status` for `unknown-status`, would fit; it isn't built.
 - No API lists the plugins octodo has (the engine has `Workspaces.plugins`), so the settings page needs one.
 - Add and remove workspace, reorder statuses and fix-all are still hand-declared HTTP endpoints (0015); presets touch add-workspace, so moving it into the catalog here is natural.
+
+## From OCT-57
+
+- Chores enables `recurring`.
+- The app cannot create a recurring task yet: the composer and the new-task dialog make plain tasks only. Add a repeat field there (it calls `create_recurring`), or a "make it repeat" conversion, a new operation that writes `type` on an existing task.
+- Enabling a plugin still means editing `config.json` by hand; the settings page should do it.
+- A plugin web half builds on `@octodo/ui` and a client typed from its own operations (0017).

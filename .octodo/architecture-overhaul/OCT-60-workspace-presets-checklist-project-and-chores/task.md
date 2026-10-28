@@ -1,7 +1,7 @@
 ---
 id: OCT-60
 title: "Workspace presets: Checklist, Project and Chores"
-status: todo
+status: done
 priority: medium
 tags:
   - plugins

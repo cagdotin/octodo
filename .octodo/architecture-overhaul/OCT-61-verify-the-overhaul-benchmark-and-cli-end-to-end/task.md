@@ -8,7 +8,7 @@ tags:
   - architecture
 created: 2026-10-28T07:40:28.941Z
 order: aH
-blocked_by: [OCT-55, OCT-60]
+blocked_by: [OCT-55, OCT-60, OCT-76, OCT-77, OCT-78]
 ---
 
 ## Goal

@@ -71,6 +71,10 @@ done, and an anniversary's does not move to next year (OCT-76).
   date is the one date a person sees and sets. No flag on `PluginWeb`: every kind has a `Row`.
 - A task of a kind that already has a `due` (set over the CLI, MCP or before this change) still shows
   the control, so a person can see and clear it.
+- With a kind picked, the dialog's title reads no dates: "Water the plants tomorrow" keeps
+  "tomorrow" as title text, unhighlighted, rather than reading it as a due the kind would drop
+  without a word. Picking Task again reads it as a due once more. A kind's own date comes from its
+  chips.
 - The counter follows the same rule. Its slot shows the days counted, so a `due` on it was already
   invisible in the row.
 - `update_task` still accepts `due` on any task, and it keeps its meaning there (0016). This is a

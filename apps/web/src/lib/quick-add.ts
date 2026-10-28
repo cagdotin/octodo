@@ -37,6 +37,8 @@ export interface QuickAddContext {
   now: Date;
   /** Token texts (lowercase) the user turned back into plain title text by clicking their chip. */
   plain?: ReadonlySet<string>;
+  /** Whether dates are tokens; false leaves them in the title, for a task that takes no due. */
+  dates?: boolean;
 }
 
 export const PRIORITY_WORDS: Readonly<Record<string, Priority>> = {
@@ -179,9 +181,10 @@ export const parseQuickAdd = (text: string, context: QuickAddContext): QuickAdd 
     const word = match[0];
     if (context.plain?.has(word.toLowerCase())) continue;
     const token = wordToken(word, context);
-    if (token) ranges.push({ from: match.index, to: match.index + word.length, token });
+    if (token && (token.kind !== "due" || context.dates !== false))
+      ranges.push({ from: match.index, to: match.index + word.length, token });
   }
-  if (!ranges.some((range) => range.token.kind === "due")) {
+  if (context.dates !== false && !ranges.some((range) => range.token.kind === "due")) {
     const natural = naturalDue(text, ranges, context);
     if (natural) ranges.push(natural);
     ranges.sort((a, b) => a.from - b.from);

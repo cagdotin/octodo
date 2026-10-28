@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Schema, SchemaAST, SchemaTransformation } from "effect";
 import { MAX_ATTACHMENT_BYTES, STATUS_CATEGORIES, WORKSPACE_KEY } from "./rules.ts";
 
 export const Priority = Schema.Literals(["none", "low", "medium", "high", "urgent"]);
@@ -151,10 +151,14 @@ export const Attachment = Schema.Struct({
 });
 export type Attachment = typeof Attachment.Type;
 
-/** An attachment with its bytes and where it is on disk, as `read_attachment` gives it. */
-export interface AttachmentContent extends Attachment {
+/** An attachment and where it is on disk. */
+export interface AttachmentFile extends Attachment {
   /** The absolute path of the file. */
   readonly file: string;
+}
+
+/** An attachment with its bytes, as `read_attachment` gives it. */
+export interface AttachmentContent extends AttachmentFile {
   readonly bytes: Uint8Array;
 }
 
@@ -336,6 +340,10 @@ export const FolderListing = Schema.Struct({
 });
 export type FolderListing = typeof FolderListing.Type;
 
+/** What the change feed sends after files in an open workspace change, whoever changed them. */
+export const WorkspaceChange = Schema.Struct({ workspace: Schema.String });
+export type WorkspaceChange = typeof WorkspaceChange.Type;
+
 export const CreateListInput = Schema.Struct({
   name: Schema.NonEmptyString,
   parent: Schema.optionalKey(Schema.NullOr(Schema.String)),
@@ -366,15 +374,18 @@ export type ReorderStatusesInput = typeof ReorderStatusesInput.Type;
 export class WorkspaceNotFound extends Schema.TaggedError<WorkspaceNotFound>()(
   "WorkspaceNotFound",
   { workspace: Schema.String },
+  { httpApiStatus: 404 },
 ) {
   override get message(): string {
     return `No workspace found for ${this.workspace}`;
   }
 }
 
-export class TaskNotFound extends Schema.TaggedError<TaskNotFound>()("TaskNotFound", {
-  id: Schema.String,
-}) {
+export class TaskNotFound extends Schema.TaggedError<TaskNotFound>()(
+  "TaskNotFound",
+  { id: Schema.String },
+  { httpApiStatus: 404 },
+) {
   override get message(): string {
     return `No task with id ${this.id}`;
   }
@@ -386,6 +397,7 @@ const megabytes = (bytes: number) => Math.ceil(bytes / 1024 / 1024);
 export class AttachmentNotFound extends Schema.TaggedError<AttachmentNotFound>()(
   "AttachmentNotFound",
   { task: Schema.String, path: Schema.String },
+  { httpApiStatus: 404 },
 ) {
   override get message(): string {
     return `Task ${this.task} has no attachment ${this.path}`;
@@ -395,17 +407,71 @@ export class AttachmentNotFound extends Schema.TaggedError<AttachmentNotFound>()
 export class AttachmentTooLarge extends Schema.TaggedError<AttachmentTooLarge>()(
   "AttachmentTooLarge",
   { path: Schema.String, size: Schema.Number },
+  { httpApiStatus: 413 },
 ) {
   override get message(): string {
-    return `${this.path} is ${megabytes(this.size)} MB; octodo reads attachments up to ${megabytes(MAX_ATTACHMENT_BYTES)} MB`;
+    return `${this.path} is ${megabytes(this.size)} MB; attachments are limited to ${megabytes(MAX_ATTACHMENT_BYTES)} MB`;
   }
 }
 
-export class InvalidRequest extends Schema.TaggedError<InvalidRequest>()("InvalidRequest", {
-  message: Schema.String,
-}) {}
+export class InvalidRequest extends Schema.TaggedError<InvalidRequest>()(
+  "InvalidRequest",
+  { message: Schema.String },
+  { httpApiStatus: 400 },
+) {}
 
-export class StorageError extends Schema.TaggedError<StorageError>()("StorageError", {
-  message: Schema.String,
-  cause: Schema.Defect(),
-}) {}
+export class StorageError extends Schema.TaggedError<StorageError>()(
+  "StorageError",
+  { message: Schema.String, cause: Schema.Defect() },
+  { httpApiStatus: 500 },
+) {}
+
+interface TaggedErrorClass extends Schema.Top {
+  readonly fields: Schema.Struct.Fields;
+  new (fields: never): { readonly message: string };
+}
+
+/** A tagged error on the wire: its encoded fields and its message. */
+export type WireError<E extends Schema.Top> = Schema.Codec<
+  E["Type"],
+  E["Encoded"] & { readonly message: string }
+>;
+
+const wireErrors = new WeakMap<Schema.Top, Schema.Top>();
+
+/**
+ * A tagged error as clients receive it: its tag, every field and its message, which a getter
+ * computes and a plain encode would drop (decision 0006). It keeps the error's HTTP status.
+ */
+export const wireError = <E extends Schema.Top>(error: E): WireError<E> => {
+  const known = wireErrors.get(error);
+  if (known !== undefined) return known as WireError<E>;
+  const { fields } = error as unknown as TaggedErrorClass;
+  const encoded = Object.fromEntries(
+    Object.entries(fields).map(([key, field]) => [key, Schema.toEncoded(field)]),
+  );
+  const ownMessage = "message" in fields;
+  const codec = Schema.Struct({ ...encoded, message: Schema.String })
+    .pipe(
+      Schema.decodeTo(
+        Schema.toCodecJson(error),
+        SchemaTransformation.transform<object, { readonly message: string }>({
+          decode: ({ message, ...rest }) => (ownMessage ? { ...rest, message } : rest),
+          encode: (rest) => {
+            const { _tag, ...values } = rest as { readonly _tag: string };
+            const instance = new (error as unknown as TaggedErrorClass)(values as never);
+            return { ...rest, message: instance.message };
+          },
+        }) as never,
+      ),
+    )
+    .annotate({ httpApiStatus: SchemaAST.resolve(error.ast)?.["httpApiStatus"] as number });
+  wireErrors.set(error, codec);
+  return codec as unknown as WireError<E>;
+};
+
+/** The members of an error schema, a tagged error or a union of them, each as `wireError` gives it. */
+export const wireErrorsOf = (error: Schema.Top): Array<Schema.Top> =>
+  "members" in error
+    ? (error.members as ReadonlyArray<Schema.Top>).map((member) => wireError(member))
+    : [wireError(error)];

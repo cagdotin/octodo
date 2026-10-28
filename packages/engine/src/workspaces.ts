@@ -4,6 +4,7 @@ import {
   StorageError,
   WorkspaceNotFound,
   type FolderListing,
+  type WorkspaceChange,
   type WorkspaceInfo,
 } from "@octodo/contract";
 import { slugify } from "@octodo/contract/rules";
@@ -11,10 +12,6 @@ import { hasConfig, readConfig } from "./storage/config.ts";
 import { browseFolders, readRegistry as readRegistryIn, writeRegistry } from "./storage/home.ts";
 import type { Platform } from "./storage/storage.ts";
 import { initWorkspace, makeWorkspace, type Workspace } from "./workspace.ts";
-
-export interface WorkspaceChange {
-  readonly workspace: string;
-}
 
 /**
  * The workspaces this machine knows about, kept in `<home>/workspaces.json` (like Obsidian's vault

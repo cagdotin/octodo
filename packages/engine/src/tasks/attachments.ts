@@ -3,6 +3,7 @@ import {
   AttachmentTooLarge,
   type Attachment,
   type AttachmentContent,
+  type AttachmentFile,
 } from "@octodo/contract";
 import { MAX_ATTACHMENT_BYTES } from "@octodo/contract/rules";
 import { Effect } from "effect";
@@ -42,13 +43,6 @@ const attachmentTarget = ({ storage, scan }: State, taskId: string, relativePath
     return { dir, segments };
   });
 
-export const attachmentPath = (state: State, taskId: string, relativePath: string) =>
-  state.read(
-    Effect.map(attachmentTarget(state, taskId, relativePath), ({ dir, segments }) =>
-      join(dir, ...segments),
-    ),
-  );
-
 const listed = ({ storage }: State, dir: string) =>
   Effect.map(
     storageError("Could not read the task folder")(storage.attachments(dir)),
@@ -65,20 +59,28 @@ export const listAttachments = (state: State, taskId: string) =>
     }),
   );
 
+const findAttachment = (state: State, taskId: string, relativePath: string) =>
+  Effect.gen(function* () {
+    const { dir, segments } = yield* attachmentTarget(state, taskId, relativePath);
+    const path = segments.join("/");
+    const attachment = (yield* listed(state, dir)).find((file) => file.path === path);
+    if (attachment === undefined) return yield* new AttachmentNotFound({ task: taskId, path });
+    return { ...attachment, file: join(dir, ...segments) } satisfies AttachmentFile;
+  });
+
+export const getAttachment = (state: State, taskId: string, relativePath: string) =>
+  state.read(findAttachment(state, taskId, relativePath));
+
 export const readAttachment = (state: State, taskId: string, relativePath: string) =>
   state.read(
     Effect.gen(function* () {
-      const { dir, segments } = yield* attachmentTarget(state, taskId, relativePath);
-      const path = segments.join("/");
-      const attachment = (yield* listed(state, dir)).find((file) => file.path === path);
-      if (attachment === undefined) return yield* new AttachmentNotFound({ task: taskId, path });
+      const attachment = yield* findAttachment(state, taskId, relativePath);
       if (attachment.size > MAX_ATTACHMENT_BYTES)
-        return yield* new AttachmentTooLarge({ path, size: attachment.size });
-      const file = join(dir, ...segments);
+        return yield* new AttachmentTooLarge({ path: attachment.path, size: attachment.size });
       const bytes = yield* storageError("Could not read the attachment")(
-        state.storage.readBytes(file),
+        state.storage.readBytes(attachment.file),
       );
-      return { ...attachment, file, bytes } satisfies AttachmentContent;
+      return { ...attachment, bytes } satisfies AttachmentContent;
     }),
   );
 

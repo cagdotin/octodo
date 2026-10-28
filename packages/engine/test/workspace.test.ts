@@ -840,8 +840,8 @@ describe("attachments", () => {
         const first = yield* ws.writeAttachment(task.id, "images/floor plan.png", bytes);
         const second = yield* ws.writeAttachment(task.id, "images/floor plan.png", bytes);
         const top = yield* ws.writeAttachment(task.id, "quote", bytes);
-        const absolute = yield* ws.attachmentPath(task.id, "images/floor plan.png");
-        const topFile = yield* ws.attachmentPath(task.id, "quote");
+        const absolute = (yield* ws.attachment(task.id, "images/floor plan.png")).file;
+        const topFile = (yield* ws.attachment(task.id, "quote")).file;
         return { first, second, top, absolute, topFile, snapshot: yield* ws.snapshot };
       }),
     );
@@ -884,9 +884,7 @@ describe("attachments", () => {
           ...(yield* Effect.forEach(paths, (path) =>
             Effect.flip(ws.writeAttachment(task.id, path, bytes)),
           )),
-          ...(yield* Effect.forEach(paths, (path) =>
-            Effect.flip(ws.attachmentPath(task.id, path)),
-          )),
+          ...(yield* Effect.forEach(paths, (path) => Effect.flip(ws.attachment(task.id, path)))),
           yield* Effect.flip(ws.writeAttachment("HM-99", "x.png", bytes)),
         ];
       }),
@@ -911,9 +909,7 @@ describe("attachments", () => {
           ...(yield* Effect.forEach(paths, (path) =>
             Effect.flip(ws.writeAttachment(task.id, path, bytes)),
           )),
-          ...(yield* Effect.forEach(paths, (path) =>
-            Effect.flip(ws.attachmentPath(task.id, path)),
-          )),
+          ...(yield* Effect.forEach(paths, (path) => Effect.flip(ws.attachment(task.id, path)))),
         ];
         return { refused, snapshot: yield* (yield* makeWorkspace("again", root)).snapshot };
       }),
@@ -942,17 +938,21 @@ describe("attachments", () => {
         symlinkSync(join(dir, "notes"), join(dir, "inside"));
         const refused = [
           ...(yield* Effect.forEach(["images/secret.txt", "images/new.png", "secret.txt"], (path) =>
-            Effect.flip(ws.attachmentPath(task.id, path)),
+            Effect.flip(ws.attachment(task.id, path)),
           )),
           yield* Effect.flip(ws.writeAttachment(task.id, "images/new.png", bytes)),
-          yield* Effect.flip(ws.attachmentPath(task.id, "notes/link.txt")),
+          yield* Effect.flip(ws.attachment(task.id, "notes/link.txt")),
         ];
-        const allowed = yield* ws.attachmentPath(task.id, "inside/a.txt");
-        return { refused, allowed };
+        const throughLink = yield* Effect.flip(ws.attachment(task.id, "inside/a.txt"));
+        const allowed = yield* ws.attachment(task.id, "notes/a.txt");
+        return { refused, throughLink, allowed };
       }),
     );
     expect(result.refused.map((error) => error._tag)).toEqual(Array(5).fill("InvalidRequest"));
-    expect(result.allowed).toBe(join(root, ".octodo/HM-1-plan/inside/a.txt"));
+    expect(result.throughLink._tag, "the listing does not follow the link").toBe(
+      "AttachmentNotFound",
+    );
+    expect(result.allowed.file).toBe(join(root, ".octodo/HM-1-plan/notes/a.txt"));
     expect(readdirSync(outside)).toEqual(["secret.txt"]);
   });
 
@@ -1023,7 +1023,7 @@ describe("attachments", () => {
       }),
     );
     expect(error).toMatchObject({ _tag: "AttachmentTooLarge", path: "film.mp4" });
-    expect(error.message).toBe("film.mp4 is 21 MB; octodo reads attachments up to 20 MB");
+    expect(error.message).toBe("film.mp4 is 21 MB; attachments are limited to 20 MB");
   });
 
   it("does not recreate a task folder another process removed", async () => {

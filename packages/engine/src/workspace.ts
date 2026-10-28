@@ -5,6 +5,7 @@ import {
   InvalidRequest,
   type Attachment,
   type AttachmentContent,
+  type AttachmentFile,
   type AttachmentNotFound,
   type AttachmentTooLarge,
   StorageError,
@@ -31,7 +32,7 @@ import { reorderStatuses } from "./statuses/operations.ts";
 import { hasConfig } from "./storage/config.ts";
 import { createWorkspace, type Platform } from "./storage/storage.ts";
 import {
-  attachmentPath,
+  getAttachment,
   listAttachments,
   readAttachment,
   writeAttachment,
@@ -74,23 +75,23 @@ export interface Workspace {
   readonly reorderStatuses: (
     input: ReorderStatusesInput,
   ) => Effect.Effect<ReadonlyArray<StatusDefinition>, InvalidRequest | StorageError>;
-  /**
-   * The absolute path of a file in a task's folder, from a path relative to it. Refuses anything
-   * outside the folder, hidden names, paths into a subtask, and `task.md` or `list.md` at any
-   * depth and in any case.
-   */
-  readonly attachmentPath: (
-    taskId: string,
-    relativePath: string,
-  ) => Effect.Effect<string, TaskNotFound | InvalidRequest | StorageError>;
   /** The files in a task's folder that are its attachments, with their sizes and media types. */
   readonly attachments: (
     taskId: string,
   ) => Effect.Effect<ReadonlyArray<Attachment>, TaskNotFound | StorageError>;
   /**
-   * The bytes of one of a task's attachments, refusing a path `attachmentPath` refuses, one the
-   * folder does not list as an attachment, and a file larger than the upload limit.
+   * One of a task's attachments and where it is, without reading it. Refuses anything outside the
+   * folder, hidden names, paths into a subtask, `task.md` or `list.md` at any depth and in any case,
+   * and any file the folder does not list as an attachment.
    */
+  readonly attachment: (
+    taskId: string,
+    relativePath: string,
+  ) => Effect.Effect<
+    AttachmentFile,
+    TaskNotFound | InvalidRequest | AttachmentNotFound | StorageError
+  >;
+  /** The bytes of one of a task's attachments, as `attachment` finds it, up to the upload limit. */
   readonly readAttachment: (
     taskId: string,
     relativePath: string,
@@ -163,7 +164,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     createList: (input) => createList(state, input),
     moveList: (listId, input) => moveList(state, listId, input),
     reorderStatuses: (input) => reorderStatuses(state, input),
-    attachmentPath: (taskId, relativePath) => attachmentPath(state, taskId, relativePath),
+    attachment: (taskId, relativePath) => getAttachment(state, taskId, relativePath),
     attachments: (taskId) => listAttachments(state, taskId),
     readAttachment: (taskId, relativePath) => readAttachment(state, taskId, relativePath),
     writeAttachment: (taskId, relativePath, bytes) =>

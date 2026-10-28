@@ -541,7 +541,7 @@ describe("file health", () => {
     });
     expect(await diagnostics(root)).toEqual([one("empty", "unmarked-folder", null, null)]);
     const served = await inWorkspace(root, (ws) =>
-      Effect.flip(ws.attachmentPath("HM-1", ".task.md.tmp")),
+      Effect.flip(ws.attachment("HM-1", ".task.md.tmp")),
     );
     expect(served).toMatchObject({ _tag: "InvalidRequest" });
   });

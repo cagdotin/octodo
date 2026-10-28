@@ -1,4 +1,10 @@
-import type { AttachmentContent } from "@octodo/contract";
+import {
+  InvalidRequest,
+  wireErrorsOf,
+  type AttachmentContent,
+  type StorageError,
+  type WorkspaceNotFound,
+} from "@octodo/contract";
 import { catalog, FileSuccess, type Operation, type OperationName } from "@octodo/contract/catalog";
 import { runOperation, Workspaces, type Workspace } from "@octodo/engine";
 import { Context, Effect, Layer, Logger, Schema } from "effect";
@@ -17,9 +23,12 @@ export const INSTRUCTIONS = `octodo manages tasks stored as markdown files under
 - Files that octodo cannot read cleanly show up as diagnostics (list_diagnostics). Fix one with fix_diagnostic when it offers a fix; otherwise tell the user what its message says to do. Never edit the files to fix them.
 - The workspace parameter takes a registered workspace id or an absolute folder path; omit it to use the workspace containing the server's working directory.`;
 
-const ToolFailure = Schema.Struct({ error: Schema.String });
-
-const toFailure = (error: { readonly message: string }) => ({ error: error.message });
+/**
+ * A tool's errors as `{ _tag, ...fields, message }`, as HTTP sends them (decision 0006), plus the
+ * `InvalidRequest` of a call that names no workspace where the server has none to fall back on.
+ */
+const failureOf = (operation: Operation): Schema.Codec<unknown, unknown> =>
+  Schema.Union([...wireErrorsOf(operation.error), ...wireErrorsOf(InvalidRequest)]) as never;
 
 const entries = Object.entries(catalog) as Array<[OperationName, Operation]>;
 
@@ -41,7 +50,7 @@ const valueTools = entries.flatMap(([name, operation]) =>
               ? {}
               : { parameters: operation.input }),
             success: operation.success as Schema.Top,
-            failure: ToolFailure,
+            failure: failureOf(operation),
             failureMode: "return",
           }),
           operation,
@@ -57,25 +66,22 @@ export const TasksToolkit = Toolkit.make(...valueTools);
  */
 const opener =
   (workspaces: Workspaces["Service"], defaultDir: string | undefined) =>
-  (workspace: string | undefined): Effect.Effect<Workspace, { error: string }> => {
+  (
+    workspace: string | undefined,
+  ): Effect.Effect<Workspace, InvalidRequest | WorkspaceNotFound | StorageError> => {
     const target = workspace ?? defaultDir;
     if (target === undefined)
-      return Effect.fail({ error: "Pass a workspace: call list_workspaces to see them" });
-    return Effect.mapError(workspaces.open(target), toFailure);
+      return Effect.fail(
+        new InvalidRequest({ message: "Pass a workspace: call list_workspaces to see them" }),
+      );
+    return workspaces.open(target);
   };
 
 const run = (
   name: OperationName,
   input: unknown,
   open: ReturnType<typeof opener>,
-): Effect.Effect<unknown, { error: string }, Workspaces> =>
-  (
-    runOperation(name, input as never, open) as Effect.Effect<
-      unknown,
-      { readonly error: string } | { readonly message: string },
-      Workspaces
-    >
-  ).pipe(Effect.mapError((error) => ("error" in error ? error : toFailure(error))));
+): Effect.Effect<unknown, unknown, Workspaces> => runOperation(name, input as never, open);
 
 export const toolkitLayer = (options: { readonly defaultDir?: string | undefined }) =>
   TasksToolkit.toLayer(
@@ -111,10 +117,15 @@ const fileContent = (file: AttachmentContent): McpSchema.ContentBlock => {
   };
 };
 
-const failed = (error: { readonly error: string }) =>
+const failed = (operation: Operation, error: unknown) =>
   new McpSchema.CallToolResult({
     isError: true,
-    content: [{ type: "text", text: JSON.stringify(error) }],
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(Schema.encodeUnknownSync(failureOf(operation))(error)),
+      },
+    ],
   });
 
 /** Registers each operation whose success is a file, answering with `fileContent`. */
@@ -164,7 +175,7 @@ const fileTools = (options: { readonly defaultDir?: string | undefined }) =>
                         content: [fileContent(file as AttachmentContent)],
                       }),
                   ),
-                  Effect.catch((error) => Effect.succeed(failed(error))),
+                  Effect.catch((error) => Effect.succeed(failed(operation, error))),
                 ),
               ),
               Effect.provideService(Workspaces, workspaces),

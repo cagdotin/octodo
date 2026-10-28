@@ -1,6 +1,5 @@
 import { Effect, type FileSystem } from "effect";
 import { basename, dirname, sep } from "node:path";
-import { tempName } from "./files.ts";
 
 /**
  * What scans read from each path, kept between scans until a change at that path, under it or
@@ -27,13 +26,8 @@ export interface ScanCache {
   readonly version: () => number;
 }
 
-/** Dot names a scan reads: every other one (claims, temporary files) is invisible to it. */
-const SCANNED_DOT_NAMES = new Set([tempName.pendingId]);
-
-export const invisibleToScans = (path: string): boolean => {
-  const name = basename(path);
-  return name.startsWith(".") && !SCANNED_DOT_NAMES.has(name);
-};
+/** Dot names (temporary files, the owner lock) are octodo's bookkeeping, which scans never read. */
+export const invisibleToScans = (path: string): boolean => basename(path).startsWith(".");
 
 export const makeScanCache = (): ScanCache => {
   const byPath = new Map<string, Map<string, unknown>>();

@@ -43,10 +43,12 @@ const write = (root: string, file: string, content: string) => {
 
 const read = (root: string, file: string) => readFileSync(join(root, ".octodo", file), "utf8");
 
-/** Every file under `.octodo/` but its `.gitignore`, relative to it and sorted. */
+const ignored = new Set([".gitignore", ".owner-lock"]);
+
+/** Every file under `.octodo/` but its `.gitignore` and owner lock, relative to it and sorted. */
 const files = (root: string) =>
   readdirSync(join(root, ".octodo"), { recursive: true, encoding: "utf8" })
-    .filter((entry) => statSync(join(root, ".octodo", entry)).isFile() && entry !== ".gitignore")
+    .filter((entry) => statSync(join(root, ".octodo", entry)).isFile() && !ignored.has(entry))
     .toSorted();
 
 const inWorkspace = <A>(root: string, use: (ws: Workspace) => Effect.Effect<A, unknown>) =>
@@ -458,7 +460,6 @@ describe("file health", () => {
       "HM-1-paint 2/.colours": "blue\n",
       "HM-2-tile/task.md": "---\nid: HM-2\n---\n",
       "HM-2-tile 2/task.md": "---\nid: HM-2\n---\n",
-      "HM-2-tile 2/.pending-id": "HM-2\n",
     });
     expect(await diagnostics(root)).toEqual([
       one("HM-1-paint 2", "conflict-copy", null, "keep-copy"),
@@ -629,33 +630,23 @@ describe("file health", () => {
     expect(read(root, "HM-3-c/task.md")).toBe("---\nid: HM-3\nblocked_by: HM-2 after lunch\n---\n");
   });
 
-  it("never reports or serves octodo's own claim and pending-id files", async () => {
+  it("never reports or serves octodo's own dot files", async () => {
     const root = await fresh({
-      ".claim-HM-7": "",
+      ".owner-lock": "",
       "HM-1-a/task.md": "---\nid: HM-1\n---\n",
-      "HM-1-a/.pending-id": "HM-1\n",
+      "HM-1-a/.task.md.tmp": "x",
       "HM-1-a 2/task.md": "---\nid: HM-1\n---\n",
       "home/list.md": "",
-      "home/.claim-HM-8": "",
-      "empty/.pending-id": "HM-9\n",
+      "empty/.task.md.tmp": "x",
     });
     expect(await diagnostics(root)).toEqual([
-      one("HM-1-a 2", "conflict-copy", null, "remove-copy"),
+      one("HM-1-a 2", "conflict-copy", null, "keep-copy"),
       one("empty", "unmarked-folder", null, null),
     ]);
     const served = await inWorkspace(root, (ws) =>
-      Effect.flip(ws.attachmentPath("HM-1", ".pending-id")),
+      Effect.flip(ws.attachmentPath("HM-1", ".task.md.tmp")),
     );
     expect(served).toMatchObject({ _tag: "InvalidRequest" });
-  });
-
-  it("removes a pending-id marker beside a task that has its id, however fresh", async () => {
-    const root = await fresh({
-      "HM-1-a/task.md": "---\nid: HM-1\n---\n",
-      "HM-1-a/.pending-id": "HM-1\n",
-    });
-    expect(await diagnostics(root)).toEqual([]);
-    expect(existsSync(join(root, ".octodo/HM-1-a/.pending-id"))).toBe(false);
   });
 
   it("reports a symlink without following it, and no fix writes through it", async () => {

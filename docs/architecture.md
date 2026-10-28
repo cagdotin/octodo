@@ -16,8 +16,9 @@ Every surface opens `.octodo/` itself and runs its own copy of the engine and it
 - The desktop app runs the same server inside Electron's main process (`apps/desktop/src/main.ts`).
   When `octo serve` already holds port 4520, it starts a second server on a random port.
 
-Because several processes can write one workspace, every new id is claimed through
-`.octodo/.claim-<ID>`.
+Several processes can open one workspace, so each write holds the workspace's owner lock
+(`.octodo/.owner-lock`, [0003](decisions/0003-one-writer-per-workspace.md)) and the others wait for
+it. The holder assigns new ids from its own scan.
 
 ### Target
 

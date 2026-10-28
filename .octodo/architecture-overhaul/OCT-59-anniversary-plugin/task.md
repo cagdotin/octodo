@@ -7,7 +7,7 @@ tags:
   - plugins
 created: 2026-10-28T07:40:21.802Z
 order: aF
-blocked_by: [OCT-56]
+blocked_by: [OCT-56, OCT-74]
 ---
 
 ## Goal

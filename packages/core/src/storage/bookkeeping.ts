@@ -21,7 +21,7 @@ export const ignoreBookkeeping = (
     const missing = IGNORED.filter((pattern) => !lines.has(pattern));
     if (missing.length === 0) return;
     const kept = text.length === 0 || text.endsWith("\n") ? text : `${text}\n`;
-    yield* writeFileAtomic(file, `${kept}${missing.join("\n")}\n`);
+    yield* writeFileAtomic(fs, path, file, `${kept}${missing.join("\n")}\n`);
   });
 
 /**

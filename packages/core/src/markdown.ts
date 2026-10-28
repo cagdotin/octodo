@@ -10,6 +10,7 @@ import {
   type UpdateTaskInput,
 } from "./domain.ts";
 import type { Problem } from "./diagnostics.ts";
+import type { AssignedId } from "./storage/storage.ts";
 import {
   LINK_KINDS,
   findMentions,
@@ -218,13 +219,16 @@ const invalidFrontmatter = (error: string) => ({
   problem: { kind: "invalid-frontmatter" as const, field: null, detail: error },
 });
 
+/** New frontmatter values by key. An `id` is only ever one the owner-lock holder assigned. */
+type FrontmatterChanges = Readonly<Record<string, unknown>> & { readonly id?: AssignedId };
+
 /**
  * Edits the frontmatter through the YAML document rather than re-serialising plain data, so keys
  * the app does not know about, their order and their comments survive. `undefined` removes a key.
  */
 export const patchFrontmatter = (
   existing: string | null,
-  changes: Readonly<Record<string, unknown>>,
+  changes: FrontmatterChanges,
   body?: string,
 ): string => {
   const parts = existing === null ? { yaml: null, body: "" } : splitFrontmatter(existing);
@@ -339,7 +343,12 @@ export const newTaskFile = (
     status,
     order,
     now,
-  }: { readonly id: string; readonly status: string; readonly order: string; readonly now: string },
+  }: {
+    readonly id: AssignedId;
+    readonly status: string;
+    readonly order: string;
+    readonly now: string;
+  },
 ): string =>
   patchFrontmatter(
     null,

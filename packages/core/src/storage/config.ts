@@ -1,7 +1,6 @@
 import { Effect, FileSystem, Path, PlatformError, Schema } from "effect";
 import type { Problem } from "../diagnostics.ts";
 import { WorkspaceConfig } from "../domain.ts";
-import { writeFileAtomic } from "./files.ts";
 import { CONFIG_FILE, TASKS_DIR, deriveKey, humanize, isWorkspaceKey } from "../layout.ts";
 
 const decodeDocument = Schema.decodeUnknownEffect(
@@ -19,9 +18,11 @@ export interface ConfigRead {
   readonly problems: ReadonlyArray<Problem>;
 }
 
-const configFile = (path: Path.Path, root: string) => path.join(root, TASKS_DIR, CONFIG_FILE);
+export const configFile = (path: Path.Path, root: string): string =>
+  path.join(root, TASKS_DIR, CONFIG_FILE);
 
-const serialize = (document: object) => `${JSON.stringify(document, null, 2)}\n`;
+/** config.json's text for `document`. */
+export const configText = (document: object): string => `${JSON.stringify(document, null, 2)}\n`;
 
 /** The whole JSON object, unknown keys included, and the part of it octodo reads. */
 const readDocument = (root: string) =>
@@ -30,7 +31,7 @@ const readDocument = (root: string) =>
     const path = yield* Path.Path;
     const file = configFile(path, root);
     const document = yield* decodeDocument(yield* fs.readFileString(file));
-    return { file, document, config: yield* decodeConfig(document) };
+    return { document, config: yield* decodeConfig(document) };
   });
 
 /** A key that ids and mentions such as `[[HM-1]]` cannot be read with. */
@@ -76,23 +77,16 @@ export const hasConfig = (
     return yield* fs.exists(configFile(yield* Path.Path, root));
   });
 
-/** Writes a new workspace's config.json into its existing `.octodo/` folder. */
-export const createConfig = (root: string, config: WorkspaceConfig) =>
-  Effect.gen(function* () {
-    yield* writeFileAtomic(configFile(yield* Path.Path, root), serialize(config));
-  });
-
 /**
- * Sets the keys `edit` returns and keeps every other key, unknown ones included, in its place.
- * Fails on a config.json that does not read, so a broken file is reported, never rewritten.
- * Writes nothing when `edit` returns null.
+ * config.json's text with the keys `edit` returns set and every other key, unknown ones included,
+ * kept in its place; null when `edit` returns null. Fails on a config.json that does not read.
  */
-export const editConfig = (
+export const editedConfig = (
   root: string,
   edit: (config: WorkspaceConfig) => Partial<WorkspaceConfig> | null,
 ) =>
   Effect.gen(function* () {
-    const { file, document, config } = yield* readDocument(root);
+    const { document, config } = yield* readDocument(root);
     const changes = edit(config);
-    if (changes !== null) yield* writeFileAtomic(file, serialize({ ...document, ...changes }));
+    return changes === null ? null : configText({ ...document, ...changes });
   });

@@ -17,3 +17,4 @@ supersedes the old one and mark the old one's status.
 | [0009](0009-recurring-task-is-one-folder.md)                           | A recurring task is one folder with a log of occurrences                               | accepted |
 | [0010](0010-no-authentication-for-now.md)                              | No authentication while octodo runs on one computer                                    | accepted |
 | [0011](0011-attachments-are-one-operation-plugin-files-are-private.md) | Attachments are read through one operation, and plugin files only through their plugin | accepted |
+| [0012](0012-only-storage-touches-the-disk.md)                          | Only storage touches the disk, and writes go through `Files`                           | accepted |

@@ -66,7 +66,7 @@ const write = (root: string, file: string, content: string) => {
 const ISO = /^\d{4}-\d\d-\d\dT[\d:.]+Z$/;
 
 describe("workspace", () => {
-  it("initialises .octodo with a config and nothing else", async () => {
+  it("initialises .octodo with a config, written holding the owner lock, and nothing else", async () => {
     const root = fresh();
     const snapshot = await run(Effect.flatMap(open(root), (ws) => ws.snapshot));
     expect(snapshot.workspace).toMatchObject({ name: "House Move", key: "HM" });
@@ -77,7 +77,11 @@ describe("workspace", () => {
       "done",
       "archived",
     ]);
-    expect(readdirSync(join(root, ".octodo")).toSorted()).toEqual([".gitignore", "config.json"]);
+    expect(readdirSync(join(root, ".octodo")).toSorted()).toEqual([
+      ".gitignore",
+      ".owner-lock",
+      "config.json",
+    ]);
   });
 
   it("creates each task as a folder with task.md, in the default status, defaults left out", async () => {

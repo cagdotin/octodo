@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { CALLS_AT_ONCE, readTree } from "../src/storage/tree.ts";
+import { CALLS_AT_ONCE, makeTreeReader } from "../src/storage/tree.ts";
 
 /** A `.octodo/` with `count` tasks, half of them in a list, each with a subtask. */
 const workspace = (count: number) => {
@@ -52,7 +52,7 @@ const counting = () => {
   return { counts, layer };
 };
 
-describe("readTree", () => {
+describe("the tree reader", () => {
   it(
     `keeps at most ${CALLS_AT_ONCE} file system calls in flight, across reads of several workspaces`,
     { timeout: 30_000 },
@@ -60,9 +60,9 @@ describe("readTree", () => {
       const [a, b] = [workspace(150), workspace(150)];
       const { counts, layer } = counting();
       const [treeA, treeB] = await Effect.runPromise(
-        Effect.all([readTree(a), readTree(b)], { concurrency: "unbounded" }).pipe(
-          Effect.provide(layer),
-        ),
+        Effect.all([makeTreeReader().read(a), makeTreeReader().read(b)], {
+          concurrency: "unbounded",
+        }).pipe(Effect.provide(layer)),
       );
       expect(counts.most, "the reads fill the cap, so it is what limits them").toBe(CALLS_AT_ONCE);
       for (const tree of [treeA, treeB])

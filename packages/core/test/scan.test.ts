@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { scanWorkspace } from "../src/scan.ts";
+import { makeStorage } from "../src/storage/storage.ts";
 import { initWorkspace } from "../src/workspace.ts";
 
 const run = <A>(effect: Effect.Effect<A, unknown, any>, layer = NodeServices.layer) =>
@@ -27,6 +28,11 @@ const fresh = async (files: Record<string, string>) => {
   }
   return root;
 };
+
+const scan = (root: string) =>
+  Effect.flatMap(makeStorage(root), (storage) =>
+    Effect.map(storage.read, (read) => scanWorkspace("test", root, read)),
+  );
 
 /** A file system whose reads of a path finish after a delay that the path picks, not the call order. */
 const shuffledReads = Layer.effect(
@@ -71,8 +77,8 @@ describe("scanWorkspace", () => {
     });
     symlinkSync("/nonexistent", join(root, ".octodo/home/link"));
 
-    const inOrder = await run(scanWorkspace("test", root));
-    const shuffled = await run(scanWorkspace("test", root), shuffledReads);
+    const inOrder = await run(scan(root));
+    const shuffled = await run(scan(root), shuffledReads);
     expect(
       inOrder.snapshot.diagnostics.map((diagnostic) => [diagnostic.path, diagnostic.kind]),
       "the diagnostics come in the order the scan judges the tree",
@@ -106,16 +112,16 @@ describe("scanWorkspace", () => {
     symlinkSync(target("list.md"), join(root, ".octodo/garden/list.md"));
     writeFileSync(join(root, ".octodo/garden/HM-2-dig/task.md"), "---\nid: HM-2\n---\n");
 
-    const scan = await run(scanWorkspace("test", root));
-    expect(scan.snapshot.tasks).toEqual([]);
-    expect(scan.snapshot.lists).toEqual([]);
+    const scanned = await run(scan(root));
+    expect(scanned.snapshot.tasks).toEqual([]);
+    expect(scanned.snapshot.lists).toEqual([]);
     expect(
-      scan.snapshot.diagnostics.map((diagnostic) => [diagnostic.path, diagnostic.kind]),
+      scanned.snapshot.diagnostics.map((diagnostic) => [diagnostic.path, diagnostic.kind]),
     ).toEqual([
       [".octodo/HM-1-linked/task.md", "symlink"],
       [".octodo/garden/list.md", "symlink"],
     ]);
-    expect(scan.nextIdNumber, "the ids in the folders it does not read are still taken").toBe(3);
+    expect(scanned.nextIdNumber, "the ids in the folders it does not read are still taken").toBe(3);
   });
 
   it("reports a folder it can list but not enter as unreadable, in a list and in a task", async () => {
@@ -126,7 +132,7 @@ describe("scanWorkspace", () => {
       chmodSync(dir, 0o644);
     }
     try {
-      const { snapshot } = await run(scanWorkspace("test", root));
+      const { snapshot } = await run(scan(root));
       expect(snapshot.diagnostics.map((diagnostic) => [diagnostic.path, diagnostic.kind])).toEqual([
         [".octodo/noexec", "unreadable"],
         [".octodo/HM-1-a/images", "unreadable"],
@@ -157,7 +163,7 @@ describe("scanWorkspace", () => {
       }),
     ).pipe(Layer.provideMerge(NodeServices.layer));
 
-    const { snapshot, missingId } = await run(scanWorkspace("test", root), refuseWrites);
+    const { snapshot, missingId } = await run(scan(root), refuseWrites);
     expect(missingId).toEqual([dirname(file)]);
     expect(snapshot.diagnostics.map((diagnostic) => diagnostic.kind)).toEqual(["missing-id"]);
     expect(readFileSync(file, "utf8")).toBe("Pull the weeds\n");

@@ -117,20 +117,11 @@ const unread = (path: string, problem: Problem, markdown: ReadonlyArray<string> 
   markdown,
 });
 
-const readWith = (
-  tasksDir: string,
-  cache: Cache | undefined,
-): Effect.Effect<Tree, never, Platform> =>
+const readWith = (tasksDir: string, cache: Cache): Effect.Effect<Tree, never, Platform> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const call = calls.withPermits(1);
-    const kept = <A, E, R>(
-      at: string,
-      aspect: string,
-      read: Effect.Effect<A, E, R>,
-      keep?: (value: A) => boolean,
-    ) => (cache === undefined ? read : cache.read(at, aspect, read, keep));
 
     /** The marker file `file`, or null when the folder does not have it. */
     const readMarker = (names: Read<ReadonlyArray<string>>, file: string) =>
@@ -167,10 +158,10 @@ const readWith = (
         return { type: "folder" as const, names, task, list };
       });
 
-    const nodeAt = (at: string) => kept(at, "node", readNode(at), settled);
+    const nodeAt = (at: string) => cache.read(at, "node", readNode(at), settled);
 
     const markdownText = (file: string) =>
-      Effect.result(kept(file, "text", call(fs.readFileString(file))));
+      Effect.result(cache.read(file, "text", call(fs.readFileString(file))));
 
     const visible = (names: ReadonlyArray<string>) =>
       names.filter((name) => !isHidden(name)).toSorted();
@@ -318,14 +309,12 @@ const readWith = (
       }).pipe(Effect.map((found) => Result.succeed(found.filter((child) => child !== null))));
     };
 
-    const names = yield* Effect.result(kept(tasksDir, "names", call(fs.readDirectory(tasksDir))));
+    const names = yield* Effect.result(
+      cache.read(tasksDir, "names", call(fs.readDirectory(tasksDir))),
+    );
     const children = yield* childrenOf(tasksDir, names, { kind: "list", depth: 0 });
     return { path: tasksDir, children };
   });
-
-/** Reads `.octodo/` at `tasksDir` by its folder grammar, without parsing a file. */
-export const readTree = (tasksDir: string): Effect.Effect<Tree, never, Platform> =>
-  readWith(tasksDir, undefined);
 
 export const makeTreeReader = (): TreeReader => {
   const cache = makeCache();
@@ -355,41 +344,4 @@ export const taskFoldersFrom = (tree: Tree, dir: string): Array<string> => {
   ];
   const found = find(tree.children);
   return found === undefined ? [] : down(found);
-};
-
-/** `fs`, with every call that changes a path telling `reader` once the call is over. */
-export const reportingChanges = (
-  fs: FileSystem.FileSystem,
-  reader: Pick<TreeReader, "changed">,
-): FileSystem.FileSystem => {
-  const changing =
-    <Args extends ReadonlyArray<unknown>, A, E, R>(
-      call: (...args: Args) => Effect.Effect<A, E, R>,
-      changes: (...args: Args) => ReadonlyArray<string>,
-    ) =>
-    (...args: Args): Effect.Effect<A, E, R> =>
-      Effect.ensuring(
-        call(...args),
-        Effect.sync(() => {
-          for (const path of changes(...args)) reader.changed(path);
-        }),
-      );
-  const one = (path: string) => [path];
-  const both = (from: string, to: string) => [from, to];
-  return {
-    ...fs,
-    chmod: changing(fs.chmod, one),
-    chown: changing(fs.chown, one),
-    copy: changing(fs.copy, both),
-    copyFile: changing(fs.copyFile, both),
-    link: changing(fs.link, both),
-    makeDirectory: changing(fs.makeDirectory, one),
-    remove: changing(fs.remove, one),
-    rename: changing(fs.rename, both),
-    symlink: changing(fs.symlink, both),
-    truncate: changing(fs.truncate, one),
-    utimes: changing(fs.utimes, one),
-    writeFile: changing(fs.writeFile, one),
-    writeFileString: changing(fs.writeFileString, one),
-  };
 };

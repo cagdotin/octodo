@@ -7,6 +7,10 @@ import {
   readListFile,
   readTaskFile,
 } from "../src/markdown.ts";
+import type { AssignedId } from "../src/storage/storage.ts";
+
+/** Only storage mints an assigned id; these tests write fixed ones. */
+const assigned = (id: string) => id as AssignedId;
 
 const place = {
   list: "garden",
@@ -110,7 +114,7 @@ describe("writing task files", () => {
     expect(
       newTaskFile(
         { title: "Fix the gate", due: null, tags: [], priority: "none" },
-        { id: "GA-1", status: "todo", order: "a0", now },
+        { id: assigned("GA-1"), status: "todo", order: "a0", now },
       ),
     ).toBe(`---\nid: GA-1\ntitle: Fix the gate\nstatus: todo\ncreated: ${now}\norder: a0\n---\n`);
   });
@@ -119,7 +123,7 @@ describe("writing task files", () => {
     expect(
       newTaskFile(
         { title: "Gate", priority: "high", tags: ["x"], due: "2026-11-01", body: "Notes" },
-        { id: "GA-1", status: "todo", order: "a0", now },
+        { id: assigned("GA-1"), status: "todo", order: "a0", now },
       ),
     ).toBe(
       `---\nid: GA-1\ntitle: Gate\nstatus: todo\npriority: high\ntags:\n  - x\ndue: 2026-11-01\ncreated: ${now}\norder: a0\n---\n\nNotes\n`,
@@ -173,9 +177,15 @@ describe("writing task files", () => {
   });
 
   it("adds an id to a hand-written file without touching anything else", () => {
-    expect(patchFrontmatter("Just notes\n", { id: "GA-7" })).toBe(
+    expect(patchFrontmatter("Just notes\n", { id: assigned("GA-7") })).toBe(
       "---\nid: GA-7\n---\n\nJust notes\n",
     );
+  });
+
+  it("writes only an id the owner-lock holder assigned", () => {
+    // @ts-expect-error a plain string is not an assigned id
+    const written = patchFrontmatter(null, { id: "GA-7" });
+    expect(written, "the type refuses it, not the runtime").toBe("---\nid: GA-7\n---\n");
   });
 });
 

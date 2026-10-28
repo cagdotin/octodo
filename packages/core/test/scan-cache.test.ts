@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { scanWorkspace } from "../src/scan.ts";
+import { makeStorage } from "../src/storage/storage.ts";
 import { initWorkspace, makeWorkspace, type Workspace } from "../src/workspace.ts";
 
 const run = <A, E>(effect: Effect.Effect<A, E, any>) =>
@@ -24,7 +25,9 @@ const write = (root: string, file: string, content: string) => {
 };
 
 const fullScan = (root: string) =>
-  Effect.map(scanWorkspace("test", root), ({ snapshot }) => snapshot);
+  Effect.flatMap(makeStorage(root), (storage) =>
+    Effect.map(storage.read, (read) => scanWorkspace("test", root, read).snapshot),
+  );
 
 /** The workspace's snapshot once it equals a full scan, or the last one after `wait`. */
 const settled = (ws: Workspace, root: string, wait: number) =>

@@ -1,7 +1,7 @@
 ---
 id: OCT-68
 title: "Decide from first principles: attachment download and pairing as HttpApi endpoints or raw routes"
-status: todo
+status: done
 priority: medium
 tags:
   - architecture

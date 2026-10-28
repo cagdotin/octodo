@@ -89,7 +89,7 @@
       }
     },
     {
-      "files": ["packages/contract/src/rules.ts"],
+      "files": ["packages/contract/src/rules.ts", "packages/contract/src/presets.ts"],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -97,7 +97,7 @@
             "patterns": [
               {
                 "group": ["node:*", "@octodo/engine", "@octodo/engine/*", "effect", "effect/*"],
-                "message": "rules.ts is plain functions the browser imports: no Effect, no Node modules, no engine (decision 0004)."
+                "message": "rules.ts and presets.ts are plain code the browser imports: no Effect, no Node modules, no engine (decision 0004)."
               }
             ]
           }

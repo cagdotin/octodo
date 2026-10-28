@@ -22,8 +22,6 @@ import {
   StorageError,
   TaskNotFound,
   WorkspaceChange,
-  WorkspaceInfo,
-  WorkspaceKey,
   WorkspaceNotFound,
   WorkspaceSnapshot,
   wireError,
@@ -154,15 +152,6 @@ export const Health = Schema.Struct({
 });
 export type Health = typeof Health.Type;
 
-const AddWorkspaceInput = Schema.Struct({
-  // Relative paths would resolve against the server's own working directory.
-  root: Schema.String.pipe(
-    Schema.check(Schema.isPattern(/^\//, { message: "Use an absolute folder path" })),
-  ),
-  name: Schema.optionalKey(Schema.String),
-  key: Schema.optionalKey(WorkspaceKey),
-});
-
 const errors = <const List extends ReadonlyArray<Schema.Top>>(...list: List) =>
   list.map((error) => wireError(error)) as unknown as { [K in keyof List]: WireError<List[K]> };
 
@@ -189,11 +178,6 @@ export class AppGroup extends HttpApiGroup.make("app").add(
       }),
     },
     success: FolderListing,
-    error: errors(InvalidRequest, StorageError),
-  }),
-  HttpApiEndpoint.post("add_workspace", "/workspaces", {
-    payload: AddWorkspaceInput,
-    success: WorkspaceInfo,
     error: errors(InvalidRequest, StorageError),
   }),
   HttpApiEndpoint.delete("remove_workspace", "/workspaces/:workspace", {

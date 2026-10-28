@@ -14,7 +14,6 @@ export const embeddedBackend = (
         Effect.provideService(Workspaces, workspaces),
         Effect.mapError((error) => error as ClientError),
       ),
-  addWorkspace: (root, options) => workspaces.add(root, options),
   removeWorkspace: (id) => workspaces.remove(id),
   fixAll: (workspace) => Effect.flatMap(workspaces.open(workspace), (ws) => ws.fixAll),
 });

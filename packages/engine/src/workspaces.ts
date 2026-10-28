@@ -17,7 +17,12 @@ import {
 } from "./storage/home.ts";
 import { checkPlugins, type Plugin } from "./plugins/plugin.ts";
 import type { Platform } from "./storage/storage.ts";
-import { initWorkspace, makeWorkspace, type Workspace } from "./workspace.ts";
+import {
+  initWorkspace,
+  makeWorkspace,
+  type Workspace,
+  type WorkspaceOptions,
+} from "./workspace.ts";
 
 /**
  * The workspaces this machine knows about, kept in `<home>/workspaces.json` (like Obsidian's vault
@@ -32,7 +37,7 @@ export class Workspaces extends Context.Service<
     readonly list: Effect.Effect<ReadonlyArray<WorkspaceInfo>, StorageError>;
     readonly add: (
       root: string,
-      options?: { readonly name?: string | undefined; readonly key?: string | undefined },
+      options?: WorkspaceOptions,
     ) => Effect.Effect<WorkspaceInfo, InvalidRequest | StorageError>;
     readonly remove: (id: string) => Effect.Effect<void, WorkspaceNotFound | StorageError>;
     readonly get: (id: string) => Effect.Effect<Workspace, WorkspaceNotFound | StorageError>;
@@ -105,10 +110,7 @@ export class Workspaces extends Context.Service<
           return yield* Effect.forEach(registry.workspaces, info);
         });
 
-        const add = Effect.fnUntraced(function* (
-          root: string,
-          init: { readonly name?: string | undefined; readonly key?: string | undefined } = {},
-        ) {
+        const add = Effect.fnUntraced(function* (root: string, init: WorkspaceOptions = {}) {
           const absolute = path.resolve(root);
           yield* withPlatform(initWorkspace(absolute, init));
           return yield* lock.withPermits(1)(

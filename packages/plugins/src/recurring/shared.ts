@@ -51,6 +51,9 @@ const { title, due: _due, ...createFields } = CreateTaskInput.fields;
 /** A task that comes back: `type: recurring`, its rule in `repeat`, its history in `log.jsonl`. */
 export const recurringShared = {
   id: "recurring",
+  name: "Recurring tasks",
+  description:
+    "Tasks that come back on a schedule. Completing one logs it and keeps it open until it is due again.",
   keys: Schema.Struct({ repeat: Schema.String }),
   files: ["log.jsonl"],
   fields: RecurringFields,

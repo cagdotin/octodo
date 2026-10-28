@@ -4,8 +4,10 @@ import {
   InvalidRequest,
   type Diagnostic,
   type FixResult,
+  type WorkspaceInfo,
   type WorkspaceOverview,
 } from "@octodo/contract";
+import { DEFAULT_PRESET, PRESET_IDS, PRESETS } from "@octodo/contract/presets";
 import { inOneWorkspace } from "@octodo/contract/catalog";
 import { isProblem } from "@octodo/contract/rules";
 import { defaultHome, makeRegistry } from "@octodo/engine";
@@ -15,6 +17,7 @@ import { DEFAULT_PORT, startServer } from "@octodo/server";
 import { Console, Effect, FileSystem, Layer, Option, Path } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { homedir } from "node:os";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { json, operationCommands } from "./commands.ts";
 import { SKILL } from "./skill.ts";
@@ -159,14 +162,28 @@ const initCommand = Command.make(
   "init",
   {
     dir: Argument.String("dir").pipe(Argument.withDefault(".")),
-    name: Flag.String("name").pipe(Flag.optional),
+    name: Flag.String("name").pipe(
+      Flag.withDescription("Workspace name; the folder's name by default"),
+      Flag.optional,
+    ),
     key: Flag.String("key").pipe(Flag.withDescription("Id prefix, e.g. CT"), Flag.optional),
+    preset: Flag.Literals("preset", PRESET_IDS).pipe(
+      Flag.withDescription(
+        `What it starts with: ${PRESET_IDS.map((id) => `${id} (${PRESETS[id].name})`).join(", ")}; ${DEFAULT_PRESET} by default`,
+      ),
+      Flag.optional,
+    ),
+    json,
   },
-  Effect.fn(function* ({ dir, name, key }) {
-    const info = yield* (yield* Connection).addWorkspace(dir, {
-      name: Option.getOrUndefined(name),
-      key: Option.getOrUndefined(key),
-    });
+  Effect.fn(function* ({ dir, json: asJson, ...options }) {
+    const given = Object.entries(options).flatMap(([field, value]) =>
+      Option.isSome(value) ? [[field, value.value]] : [],
+    );
+    const info = (yield* (yield* Connection).run("add_workspace", {
+      root: resolve(dir),
+      ...Object.fromEntries(given),
+    })) as WorkspaceInfo;
+    if (asJson) return yield* Console.log(JSON.stringify(info, null, 2));
     yield* Console.log(
       `Workspace "${info.name}" (${info.key}) at ${info.root}, registered as ${info.id}`,
     );
@@ -191,6 +208,11 @@ const workspaceCommand = Command.make("workspace").pipe(
 const listsCommand = Command.make("lists").pipe(
   Command.withDescription("Manage lists"),
   Command.withSubcommands(commandsIn("lists")),
+);
+
+const pluginsCommand = Command.make("plugins").pipe(
+  Command.withDescription("List the plugins octodo has, and enable or disable them in a workspace"),
+  Command.withSubcommands(commandsIn("plugins")),
 );
 
 /** A group for each first word of a plugin's two-word commands: `octo recurring create`. */
@@ -295,6 +317,7 @@ export const octo = root.pipe(
     initCommand,
     workspaceCommand,
     listsCommand,
+    pluginsCommand,
     ...pluginGroups,
     serveCommand,
     mcpCommand,

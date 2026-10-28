@@ -1,7 +1,6 @@
 import { Duration, Effect, Path, Scope, Stream } from "effect";
 import { isWorkspaceKey } from "./layout.ts";
 import {
-  DEFAULT_STATUSES,
   InvalidRequest,
   type Attachment,
   type AttachmentContent,
@@ -24,10 +23,12 @@ import {
   type WorkspaceConfig,
   type WorkspaceSnapshot,
 } from "@octodo/contract";
+import { DEFAULT_PRESET, PRESETS, type PresetId } from "@octodo/contract/presets";
 import { deriveKey, humanize } from "@octodo/contract/rules";
 import { fixAll, fixDiagnostic } from "./health/operations.ts";
 import { createList, moveList } from "./lists/operations.ts";
 import { makeState, storageError } from "./state.ts";
+import { setPluginEnabled } from "./settings/plugins.ts";
 import { reorderStatuses } from "./statuses/operations.ts";
 import { hasConfig } from "./storage/config.ts";
 import { createWorkspace, type Platform } from "./storage/storage.ts";
@@ -101,6 +102,14 @@ export interface Workspace {
   readonly reorderStatuses: (
     input: ReorderStatusesInput,
   ) => Effect.Effect<ReadonlyArray<StatusDefinition>, InvalidRequest | StorageError>;
+  /**
+   * Adds the plugin to config.json's `plugins` or takes it out, and gives the plugins the
+   * workspace enables then. Enabling refuses a plugin octodo does not have.
+   */
+  readonly setPlugin: (
+    plugin: string,
+    enabled: boolean,
+  ) => Effect.Effect<ReadonlyArray<string>, InvalidRequest | StorageError>;
   /** The files in a task's folder that are its attachments, with their sizes and media types. */
   readonly attachments: (
     taskId: string,
@@ -148,10 +157,17 @@ export interface Workspace {
   readonly changes: Stream.Stream<void>;
 }
 
-/** Creates `.octodo/` with a config. Leaves an existing one alone. */
+export interface WorkspaceOptions {
+  readonly name?: string | undefined;
+  readonly key?: string | undefined;
+  /** The statuses and plugins it starts with; the default preset when omitted. */
+  readonly preset?: PresetId | undefined;
+}
+
+/** Creates `.octodo/` with a config copied from a preset. Leaves an existing one alone. */
 export const initWorkspace = Effect.fnUntraced(function* (
   root: string,
-  options: { readonly name?: string | undefined; readonly key?: string | undefined } = {},
+  options: WorkspaceOptions = {},
 ) {
   const path = yield* Path.Path;
   if (yield* storageError("Could not read the workspace")(hasConfig(root))) return;
@@ -160,10 +176,12 @@ export const initWorkspace = Effect.fnUntraced(function* (
       message: `The key ${JSON.stringify(options.key)} must be letters and digits, starting with a letter, such as HM`,
     });
   const name = options.name ?? humanize(path.basename(root));
+  const preset = PRESETS[options.preset ?? DEFAULT_PRESET];
   const config: WorkspaceConfig = {
     name,
     key: options.key ?? deriveKey(name),
-    statuses: DEFAULT_STATUSES,
+    statuses: preset.statuses,
+    ...(preset.plugins.length === 0 ? {} : { plugins: preset.plugins }),
   };
   yield* createWorkspace(root, config).pipe(storageError("Could not create the workspace"));
 });
@@ -194,6 +212,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     createList: (input) => createList(state, input),
     moveList: (listId, input) => moveList(state, listId, input),
     reorderStatuses: (input) => reorderStatuses(state, input),
+    setPlugin: (plugin, enabled) => setPluginEnabled(state, plugin, enabled),
     attachment: (taskId, relativePath) => getAttachment(state, taskId, relativePath),
     attachments: (taskId) => listAttachments(state, taskId),
     readAttachment: (taskId, relativePath) => readAttachment(state, taskId, relativePath),

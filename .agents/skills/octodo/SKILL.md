@@ -31,6 +31,7 @@ tool and, where it has one, an `octo` command with the same inputs as flags (`--
 clears a value; `octo <command> --help` lists them):
 
 - `list_workspaces`, `octo workspace list`: List the workspaces registered on this machine.
+- `add_workspace`, no command: Create a workspace in a folder and register it on this machine: octodo writes .octodo/config.json there with the statuses and plugins of a preset, project unless preset names another.
 - `get_workspace`, no command: Describe a workspace: its statuses (in order), lists, task counts and any files it could not read.
 - `list_tasks`, `octo list`: List tasks in board order (by status, then their order), optionally filtered.
 - `get_task`, `octo show <id>`: Read one task, including its markdown body, any extra frontmatter, its parent, its direct subtasks, the tasks it is blocked by and blocks, the tasks it mentions and is mentioned in, and its attachments (read one with read_attachment).
@@ -43,6 +44,9 @@ clears a value; `octo <command> --help` lists them):
 - `move_list`, `octo lists move <id>`: Reorder a list among its siblings (before/after another list id) and/or move it under another parent (null for the top level).
 - `list_diagnostics`, no command: List the problems with files in the workspace: each has a path, a kind, the frontmatter field at fault, a message saying what to do, and a fix when octodo can repair it.
 - `fix_diagnostic`, no command: Apply the fix of one diagnostic, given its path, kind and fix action from list_diagnostics.
+- `list_plugins`, `octo plugins list`: List the plugins octodo has, each a kind of task a workspace can enable: get_workspace says which ones it enables.
+- `enable_plugin`, `octo plugins enable <plugin>`: Enable a plugin in a workspace, adding it to config.json's plugins.
+- `disable_plugin`, `octo plugins disable <plugin>`: Disable a plugin in a workspace, removing it from config.json's plugins.
 - `create_recurring`, `octo recurring create <title>`: Create a recurring task, which comes back after it is done.
 - `set_repeat`, `octo recurring repeat <id> <repeat>`: Change a recurring task's rule.
 - `log_occurrence`, `octo recurring log <id>`: Record that a recurring task was done, now or at an earlier time, without changing its status.
@@ -67,6 +71,7 @@ octo update HM-4 --blocked-by HM-2,HM-3                           # HM-4 waits f
 octo update HM-4 --blocked-by ''                                  # HM-4 waits for nothing
 octo move HM-42 in-progress                                       # Change its status
 octo move HM-43 --parent HM-42                                    # Make it a subtask; --no-parent lifts it out
+octo plugins enable recurring                                     # Let tasks repeat
 octo recurring create "Water the plants" --repeat "every 3 days"  # A chore that comes back three days after each time
 octo recurring log HM-4 --at 2026-10-25                           # It was done on the 25th
 octo counter create "Days since I last smoked"                    # A counter that starts today

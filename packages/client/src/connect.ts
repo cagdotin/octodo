@@ -5,14 +5,13 @@ import {
   type FixResult,
   type ServerInfo,
   type StorageError,
-  type WorkspaceInfo,
 } from "@octodo/contract";
 import { VERSION } from "@octodo/contract/api";
 import { inOneWorkspace, type Operation } from "@octodo/contract/catalog";
 import { readServerInfo, Workspaces, type Registry } from "@octodo/engine";
 import { Context, Effect, Layer, Option, type FileSystem, type Path, type Scope } from "effect";
 import { resolve } from "node:path";
-import type { Backend, ClientError, WorkspaceOptions } from "./backend.ts";
+import type { Backend, ClientError } from "./backend.ts";
 import { embeddedBackend } from "./embedded.ts";
 import { remoteBackend } from "./remote.ts";
 
@@ -40,10 +39,6 @@ export class Connection extends Context.Service<
      * current directory (`.`, `../x`) is made absolute first, since the server has its own.
      */
     readonly run: (name: string, input: object) => Effect.Effect<unknown, ClientError>;
-    readonly addWorkspace: (
-      root: string,
-      options: WorkspaceOptions,
-    ) => Effect.Effect<WorkspaceInfo, ClientError>;
     readonly removeWorkspace: (id: string) => Effect.Effect<void, ClientError>;
     readonly fixAll: (workspace: string) => Effect.Effect<FixResult, ClientError>;
   }
@@ -185,8 +180,6 @@ export const connect = (
     return Connection.of({
       operations: registry.operations,
       run,
-      addWorkspace: (root, workspace) =>
-        Effect.flatMap(route, (backend) => backend.addWorkspace(resolve(root), workspace)),
       removeWorkspace: (id) => Effect.flatMap(route, (backend) => backend.removeWorkspace(id)),
       fixAll: (workspace) =>
         Effect.flatMap(route, (backend) => backend.fixAll(located(workspace) as string)),

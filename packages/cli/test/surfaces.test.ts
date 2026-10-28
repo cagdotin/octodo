@@ -33,6 +33,7 @@ interface Surface {
 
 interface Row {
   readonly name: OperationName;
+  /** `<root>` in a value stands for the surface's workspace folder. */
   readonly input: Record<string, unknown>;
   /** The same call as `octo` words, or none when the operation has no command. */
   readonly argv?: ReadonlyArray<string>;
@@ -141,8 +142,43 @@ const ROWS: ReadonlyArray<Row> = [
     input: { path: ".octodo/loose.md", kind: "loose-markdown", action: "wrap-as-task" },
   },
   { name: "delete_task", input: { id: "HM-3" }, argv: ["delete", "HM-3", "--json"] },
+  { name: "list_plugins", input: {}, argv: ["plugins", "list", "--json"] },
+  {
+    name: "enable_plugin",
+    input: { plugin: "recurring" },
+    argv: ["plugins", "enable", "recurring", "--json"],
+  },
+  { name: "enable_plugin", input: { plugin: "recurring" } },
+  { name: "enable_plugin", input: { plugin: "juggling" } },
+  {
+    name: "disable_plugin",
+    input: { plugin: "recurring" },
+    argv: ["plugins", "disable", "recurring", "--json"],
+  },
+  { name: "disable_plugin", input: { plugin: "juggling" } },
+  {
+    name: "add_workspace",
+    input: { root: "<root>/cabin", key: "CB", preset: "chores" },
+    argv: ["init", "<root>/cabin", "--key", "CB", "--preset", "chores", "--json"],
+  },
+  {
+    name: "add_workspace",
+    input: { root: "<root>/cabin", preset: "checklist" },
+    argv: ["init", "<root>/cabin", "--preset", "checklist", "--json"],
+  },
+  { name: "add_workspace", input: { root: "<root>/shed", preset: "barn" } },
+  { name: "add_workspace", input: { root: "cabin" } },
   { name: "list_workspaces", input: {}, argv: ["workspace", "list", "--json"] },
 ];
+
+/** The row with `<root>` in its input and its words made the folder `root`. */
+const at = (row: Row, root: string): Row => ({
+  ...row,
+  input: JSON.parse(JSON.stringify(row.input).replaceAll("<root>", root)),
+  ...(row.argv === undefined
+    ? {}
+    : { argv: row.argv.map((word) => word.replaceAll("<root>", root)) }),
+});
 
 const scratch = mkdtempSync(join(tmpdir(), "octodo-surfaces-"));
 
@@ -153,7 +189,7 @@ const workspaceFor = async (surface: string) => {
   mkdirSync(root, { recursive: true });
   await Effect.runPromise(
     Workspaces.use((workspaces) => workspaces.add(root, { key: "HM" })).pipe(
-      Effect.provide(Workspaces.layer({ home, watch: false })),
+      Effect.provide(Workspaces.layer({ home, watch: false, plugins: registry.plugins })),
       Effect.provide(NodeServices.layer),
     ),
   );
@@ -182,7 +218,7 @@ const engineSurface = async (): Promise<Surface> => {
               : { value },
           ),
           Effect.catch((error) => Effect.succeed<Outcome>({ error: error.message })),
-          Effect.provide(Workspaces.layer({ home, watch: false })),
+          Effect.provide(Workspaces.layer({ home, watch: false, plugins: registry.plugins })),
           Effect.provide(NodeServices.layer),
         ),
       ),
@@ -373,13 +409,14 @@ describe("every operation on every surface", () => {
         [keyof typeof seen, Surface]
       >) {
         row.before?.(root);
-        let outcome = await run(row);
+        const call = at(row, root);
+        let outcome = await run(call);
         // The server learns of a hand-made change from its file watcher, a moment later.
         const served = surface === "mcp" || surface === "http" || surface === "cli-served";
         for (let wait = 0; served && row.before !== undefined && wait < 20; wait++) {
           if (isDeepStrictEqual(comparable(outcome!, root), seen.engine.at(-1))) break;
           await new Promise((resolve) => setTimeout(resolve, 100));
-          outcome = await run(row);
+          outcome = await run(call);
         }
         seen[surface].push(outcome === null ? { step, none: surface } : comparable(outcome, root));
       }

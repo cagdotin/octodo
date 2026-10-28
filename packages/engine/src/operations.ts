@@ -121,6 +121,8 @@ const listTasks = (
 /** Every catalog operation's engine function, by name. */
 export const handlers: { readonly [K in OperationName]: Handler<K> } = {
   list_workspaces: () => Workspaces.use((workspaces) => workspaces.list),
+  add_workspace: ({ root, ...options }) =>
+    Workspaces.use((workspaces) => workspaces.add(root, options)),
   get_workspace: (ws) => Effect.map(ws.snapshot, overview),
   list_tasks: (ws, filters) => Effect.map(ws.snapshot, (snapshot) => listTasks(snapshot, filters)),
   get_task: (ws, { id }) => detail(ws, id),
@@ -133,6 +135,14 @@ export const handlers: { readonly [K in OperationName]: Handler<K> } = {
   move_list: (ws, { id, ...input }) => ws.moveList(id, input),
   list_diagnostics: (ws) => Effect.map(ws.snapshot, (snapshot) => snapshot.diagnostics),
   fix_diagnostic: (ws, request) => ws.fixDiagnostic(request),
+  list_plugins: () =>
+    Workspaces.use(({ plugins }) =>
+      Effect.succeed(
+        plugins.map(({ shared: { id, name, description } }) => ({ id, name, description })),
+      ),
+    ),
+  enable_plugin: (ws, { plugin }) => ws.setPlugin(plugin, true),
+  disable_plugin: (ws, { plugin }) => ws.setPlugin(plugin, false),
 };
 
 /**

@@ -21,7 +21,10 @@ instead of keeping the code because it exists.
 - `.octodo/config.json`: workspace `name`, id `key` (`HM` → ids `HM-1`, `HM-2`, ...) and `statuses`
   (id, display name, category). Categories have a fixed order (backlog, unstarted, started,
   completed, canceled, archived); the array only orders statuses within a category. Reordering
-  statuses changes only this file. `plugins` lists the plugins the workspace enables.
+  statuses changes only this file. `plugins` lists the plugins the workspace enables. A new
+  workspace copies its statuses and plugins from a preset (`PRESETS` in `contract/src/presets.ts`:
+  Checklist, Project, Chores); `enable_plugin` and `disable_plugin` change `plugins` later
+  ([0022](docs/decisions/0022-presets-in-the-contract-workspace-and-plugin-settings-are-operations.md)).
 - A folder with `task.md` is a task. Its frontmatter holds every attribute: `id`, `title`,
   `status`, `order` (fractional, among siblings), `priority`, `due`, `tags`, `created`. `updated`
   comes from the file's mtime; `list` and `parent` are never stored. Changing status is one write of
@@ -107,7 +110,7 @@ pinned to an exact version. Packages depend in one direction,
 and `ui` ← `plugins` ← `apps/web`: a plugin never imports the app
 ([0017](docs/decisions/0017-the-ui-kit-is-a-package-plugins-type-their-own-client.md)).
 The browser bundle (`apps/web`, the desktop preload) never imports `@octodo/engine` or Effect at
-runtime and imports only types from `@octodo/contract`; `@octodo/contract/rules` (plain functions),
+runtime and imports only types from `@octodo/contract`; `@octodo/contract/rules` (plain functions), `@octodo/contract/presets` (plain data),
 `@octodo/contract/client` (the `fetch` client, typed from `api.ts` through type-only imports) and
 `@octodo/ui` are the octodo runtime imports it may use. A plugin's web half types its client from its own operations,
 `createClient<ServedApi<typeof shared.operations>>`. Lint enforces it.

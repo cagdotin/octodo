@@ -124,16 +124,6 @@ export const remoteBackend = (url: string): Backend => {
         const value = yield* send(url, operation.error, () => client.request(key, request));
         return yield* decodeSuccess(url, operation.success as Schema.Top, value);
       }),
-    addWorkspace: (root, options) =>
-      send(url, APP_ERRORS, () =>
-        client.request("POST /api/workspaces", {
-          payload: {
-            root,
-            ...(options.name === undefined ? {} : { name: options.name }),
-            ...(options.key === undefined ? {} : { key: options.key }),
-          },
-        }),
-      ),
     removeWorkspace: (id) =>
       Effect.asVoid(
         send(url, APP_ERRORS, () =>

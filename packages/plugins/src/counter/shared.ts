@@ -55,6 +55,9 @@ const { title, due: _due, ...createFields } = CreateTaskInput.fields;
  */
 export const counterShared = {
   id: "counter",
+  name: "Days-since counters",
+  description:
+    "Count the days since something last happened. A reset logs it and starts the count again; completing one closes it.",
   keys: Schema.Struct({}),
   files: ["log.jsonl"],
   fields: CounterFields,

@@ -8,6 +8,10 @@ import type { Operation } from "./catalog.ts";
 export interface PluginShared {
   /** Its name in config.json's `plugins` and the `type` its tasks name: `recurring`. */
   readonly id: string;
+  /** What workspace settings call it: `Recurring tasks`. */
+  readonly name: string;
+  /** A sentence on what enabling it gives, for workspace settings and `list_plugins`. */
+  readonly description: string;
   /** The frontmatter keys a task of its kind holds, each with the schema its values decode with. */
   readonly keys: Schema.Struct<Schema.Struct.Fields>;
   /** Names at the top of its tasks' folders that hold its data: they are never attachments. */

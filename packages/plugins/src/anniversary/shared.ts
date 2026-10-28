@@ -38,6 +38,9 @@ const { title, due: _due, ...createFields } = CreateTaskInput.fields;
 /** A date that comes back every year: `type: anniversary` with the day it happened in `date`. */
 export const anniversaryShared = {
   id: "anniversary",
+  name: "Anniversaries",
+  description:
+    "Dates that come back every year, such as birthdays. Each shows its next occurrence and how many years it marks.",
   keys: Schema.Struct({ date: Schema.String }),
   files: [],
   fields: AnniversaryFields,

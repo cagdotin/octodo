@@ -71,8 +71,11 @@ and generates its API, CLI flags and JSON Schema from that declaration, with a t
 The operations MCP, the CLI and HTTP share, plus `read_attachment`. `operationsGroup` in
 `@octodo/contract/api` generates one HttpApi endpoint per entry (OCT-53), and
 `packages/cli/test/surfaces.test.ts` runs every call over HTTP too. The HTTP endpoints that are not
-operations, and the four of them (adding and removing a workspace, reordering statuses, fix-all)
-that are to become catalog entries, are listed in [0015](0015-http-endpoints-outside-the-catalog.md).
+operations, and the three of them (removing a workspace, reordering statuses, fix-all) that are to
+become catalog entries, are listed in [0015](0015-http-endpoints-outside-the-catalog.md). Adding a
+workspace and the plugin settings are entries
+([0022](0022-presets-in-the-contract-workspace-and-plugin-settings-are-operations.md)); `octo init`
+calls `add_workspace`.
 The CLI commands that are not operations (`init`, `workspace remove`, `doctor`, `serve`, `mcp`,
 `skills export`) stay CLI only.
 

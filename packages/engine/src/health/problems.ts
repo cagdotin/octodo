@@ -103,7 +103,7 @@ export const PROBLEMS = {
   },
   "unknown-kind": {
     remedy:
-      'It reads as a plain task until the plugin is added to "plugins" in config.json or the type line is removed',
+      "It reads as a plain task until the plugin is enabled in the workspace's settings (octo plugins enable, MCP enable_plugin) or the type line is removed",
     fixes: [],
   },
 } as const satisfies Record<CoreDiagnosticKind, Remedy>;

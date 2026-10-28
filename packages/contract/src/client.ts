@@ -86,9 +86,27 @@ export class ApiError<Body = unknown> extends Error {
   }
 }
 
-/** A query value as the server's schemas read it: `null` is `"null"`, a list repeats the key. */
+/**
+ * A query value as the server's schemas read it: `null` is empty, so it cannot be taken for the
+ * string `"null"`, and a list repeats the key.
+ */
 const queryValues = (value: unknown): Array<string> =>
-  value === undefined ? [] : Array.isArray(value) ? value.map(String) : [String(value)];
+  value === undefined
+    ? []
+    : value === null
+      ? [""]
+      : Array.isArray(value)
+        ? value.map(String)
+        : [String(value)];
+
+/**
+ * Why `value` cannot be the path parameter `name`, or undefined when it can. A URL drops an empty
+ * segment and resolves `.` and `..` (`%2e` too), so the request would reach another route.
+ */
+export const pathParamProblem = (name: string, value: string): string | undefined =>
+  value === "" || value === "." || value === ".."
+    ? `The ${name} cannot be ${JSON.stringify(value)}`
+    : undefined;
 
 const isBytes = (payload: unknown): payload is BodyInit =>
   payload instanceof Blob || payload instanceof ArrayBuffer || payload instanceof Uint8Array;
@@ -96,15 +114,22 @@ const isBytes = (payload: unknown): payload is BodyInit =>
 export const createClient = <A = typeof Api>(baseUrl: string) => {
   const base = baseUrl.replace(/\/$/, "");
 
-  /** The URL of a route; each path parameter is one percent-encoded segment. */
+  /**
+   * The URL of a route; each path parameter is one percent-encoded segment. Throws an `ApiError`
+   * with an `InvalidRequest` body for a parameter no URL can carry, as `pathParamProblem` says.
+   */
   const url = <K extends RouteKey<A>>(key: K, input: Input<K, A>): string => {
     const { params, query } = input as {
       readonly params?: Record<string, string>;
       readonly query?: Record<string, unknown>;
     };
-    const path = key
-      .slice(key.indexOf(" ") + 1)
-      .replace(/:(\w+)/g, (_, name: string) => encodeURIComponent(params![name]!));
+    const path = key.slice(key.indexOf(" ") + 1).replace(/:(\w+)/g, (_, name: string) => {
+      const value = params![name]!;
+      const problem = pathParamProblem(name, value);
+      if (problem !== undefined)
+        throw new ApiError(400, { _tag: "InvalidRequest", message: problem });
+      return encodeURIComponent(value);
+    });
     const search = new URLSearchParams();
     for (const [name, value] of Object.entries(query ?? {}))
       for (const each of queryValues(value)) search.append(name, each);

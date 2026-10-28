@@ -3,7 +3,7 @@
  * and the endpoints only the apps need, declared in `AppGroup`. The server implements it and the
  * browser's client is typed from it; neither path nor body is written twice.
  */
-import { Schema } from "effect";
+import { Schema, SchemaTransformation, type SchemaAST } from "effect";
 import {
   HttpApi,
   HttpApiEndpoint,
@@ -68,17 +68,43 @@ export type OperationEndpoint<
   WireError<Op["error"]>
 >;
 
-/** As MCP takes it; a relative path would resolve against the server's own working directory. */
+/** Why a server refuses a relative folder as a workspace: it would resolve against its own. */
+export const RELATIVE_WORKSPACE = "Use a workspace id or an absolute folder path";
+
+/** A `:workspace` path parameter, as MCP over HTTP takes `workspace` too. */
 const WorkspaceSelector = Schema.String.pipe(
-  Schema.check(
-    Schema.isPattern(/^[^.]/, { message: "Use a workspace id or an absolute folder path" }),
-  ),
+  Schema.check(Schema.isPattern(/^[^.]/, { message: RELATIVE_WORKSPACE })),
 ).annotate({
   description:
     "A registered workspace id, or an absolute folder path as one percent-encoded segment (the workspace containing it)",
 });
 
 const RegisteredWorkspace = Schema.String.annotate({ description: "Registered workspace id" });
+
+const isNullable = (ast: SchemaAST.AST) =>
+  ast._tag === "Union" && ast.types.some((member) => member._tag === "Null");
+
+/**
+ * A query field that takes null, with null as an empty value: a URL has no null, and the string
+ * `"null"` is a list id like any other (decision 0006). No field that takes null is ever empty.
+ */
+const nullAsEmpty = (field: Schema.Top): Schema.Top => {
+  if (!isNullable(field.ast)) return field;
+  const optional = field.ast.context?.isOptional === true;
+  const value = (
+    optional ? (field as unknown as { readonly schema: Schema.Top }).schema : field
+  ) as Schema.Codec<string | null, string | null>;
+  const query = Schema.String.pipe(
+    Schema.decodeTo(
+      value,
+      SchemaTransformation.transform({
+        decode: (text: string) => (text === "" ? null : text),
+        encode: (each: string | null) => each ?? "",
+      }),
+    ),
+  ).annotate(field.ast.annotations ?? {});
+  return optional ? Schema.optionalKey(query) : query;
+};
 
 /**
  * One operation as an endpoint: each `:name` in its path is the input field `name`, required here
@@ -94,7 +120,16 @@ const operationEndpoint = (name: string, operation: Operation) => {
     }),
   );
   const rest = Object.entries(operation.input.fields).filter(([key]) => !inPath.includes(key));
-  const fields = rest.length === 0 ? undefined : Schema.Struct(Object.fromEntries(rest));
+  const fields =
+    rest.length === 0
+      ? undefined
+      : Schema.Struct(
+          Object.fromEntries(
+            operation.http.method === "GET"
+              ? rest.map(([key, field]) => [key, nullAsEmpty(field as Schema.Top)])
+              : rest,
+          ),
+        );
   const make = HttpApiEndpoint.make(operation.http.method) as unknown as (
     name: string,
     path: string,

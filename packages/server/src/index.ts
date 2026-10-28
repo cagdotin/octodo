@@ -13,13 +13,22 @@ import {
 import { httpLayer } from "@octodo/mcp";
 import { plugins } from "@octodo/plugins";
 import { Cause, Effect, Exit, Layer, Scope } from "effect";
-import { HttpRouter, HttpServerRequest, HttpServerResponse, HttpStaticServer } from "effect/http";
+import {
+  HttpMethod,
+  HttpRouter,
+  HttpServerRequest,
+  HttpServerResponse,
+  HttpStaticServer,
+} from "effect/http";
 import { HttpApiBuilder, HttpApiMiddleware } from "effect/http-api";
 import { existsSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { appLive } from "./app.ts";
+import { claimHome } from "./home-claim.ts";
+
+export { HomeTaken } from "./home-claim.ts";
 import { operationsLive } from "./operations.ts";
 
 export interface ServerOptions {
@@ -62,16 +71,46 @@ const apiLive = (registry: Registry) => {
   );
 };
 
-/** An `/api` path no endpoint has is a JSON 404, never the web app. */
-const UnknownApiRoute = HttpRouter.add(
-  "*",
-  "/api/*",
-  Effect.map(HttpServerRequest.HttpServerRequest, (request) =>
-    HttpServerResponse.jsonUnsafe(
-      { _tag: "RouteNotFound", message: `No route ${request.method} ${request.url}` },
-      { status: 404 },
+/**
+ * An `/api` path no endpoint has is a JSON 404, never the web app. `HEAD` is left out, so the
+ * router answers it as the `GET` of the same path without the body.
+ */
+const UnknownApiRoute = HttpRouter.addAll(
+  [...HttpMethod.all]
+    .filter((method) => method !== "HEAD")
+    .map((method) =>
+      HttpRouter.route(
+        method,
+        "/api/*",
+        Effect.map(HttpServerRequest.HttpServerRequest, (request) =>
+          HttpServerResponse.jsonUnsafe(
+            { _tag: "RouteNotFound", message: `No route ${request.method} ${request.url}` },
+            { status: 404 },
+          ),
+        ),
+      ),
     ),
-  ),
+);
+
+/**
+ * HttpApi answers a body of a content type its route does not take with a plain-text 415; this
+ * sends it as the `{ _tag, message }` of every other error (decision 0006).
+ */
+const UnsupportedMediaTypeAsJson = HttpRouter.middleware(
+  (httpEffect) =>
+    Effect.gen(function* () {
+      const response = yield* httpEffect;
+      if (response.status !== 415) return response;
+      const request = yield* HttpServerRequest.HttpServerRequest;
+      return HttpServerResponse.jsonUnsafe(
+        {
+          _tag: "InvalidRequest",
+          message: `Unsupported content type ${request.headers["content-type"] ?? "(none)"}; send application/json`,
+        },
+        { status: 415 },
+      );
+    }),
+  { global: true },
 );
 
 /** The built web app, with every path that is not a file answered by its `index.html`. */
@@ -93,6 +132,7 @@ export const startServer = async (options: ServerOptions): Promise<RunningServer
     apiLive(makeRegistry(installed)),
     httpLayer({ path: "/mcp" }),
     UnknownApiRoute,
+    UnsupportedMediaTypeAsJson,
     webApp(options.webDir),
   );
   const server = HttpRouter.serve(routes, {
@@ -110,9 +150,13 @@ export const startServer = async (options: ServerOptions): Promise<RunningServer
       NodeHttpServer.layer(() => node, { host: LOOPBACK, port: options.port ?? DEFAULT_PORT }),
     ),
   );
+  const release = claimHome(options.home);
   const scope = Scope.makeUnsafe();
   const started = await Effect.runPromiseExit(Layer.buildWithScope(server, scope));
-  if (Exit.isFailure(started)) throw failure(started.cause);
+  if (Exit.isFailure(started)) {
+    release();
+    throw failure(started.cause);
+  }
 
   const { port } = node.address() as AddressInfo;
   const url = `http://${LOOPBACK}:${port}`;
@@ -124,6 +168,7 @@ export const startServer = async (options: ServerOptions): Promise<RunningServer
     node.close();
     node.closeAllConnections();
     await Effect.runPromise(Scope.close(scope, Exit.void));
+    release();
   };
   await onDisk(writeServerInfo(options.home, discovery)).catch(async (error: unknown) => {
     await stop();

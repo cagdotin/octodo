@@ -96,8 +96,12 @@ const field = (key: string, ast: SchemaAST.AST): Field => {
   };
 };
 
-/** The items of one `--tags a,b` occurrence; an empty value gives none, to clear the list. */
-const listItems = (text: string) => (text === "" ? [] : text.split(",").map((item) => item.trim()));
+/** The items of one `--tags a,b` occurrence, without empty ones; `--tags ""` clears the list. */
+const listItems = (text: string) =>
+  text
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item !== "");
 
 const scalarFlag = (
   name: string,

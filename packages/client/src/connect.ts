@@ -7,7 +7,8 @@ import {
   type StorageError,
 } from "@octodo/contract";
 import { VERSION } from "@octodo/contract/api";
-import { inOneWorkspace, type Operation } from "@octodo/contract/catalog";
+import { inOneWorkspace, pathParams, type Operation } from "@octodo/contract/catalog";
+import { pathParamProblem } from "@octodo/contract/client";
 import { readServerInfo, Workspaces, type Registry } from "@octodo/engine";
 import { Context, Effect, Layer, Option, type FileSystem, type Path, type Scope } from "effect";
 import { resolve } from "node:path";
@@ -127,6 +128,18 @@ export const findServer = (
 const located = (workspace: unknown) =>
   typeof workspace === "string" && workspace.startsWith(".") ? resolve(workspace) : workspace;
 
+/**
+ * Refuses a path parameter no URL can carry in both modes, so the engine in this process gives the
+ * error a server's route would.
+ */
+const routable = (params: Record<string, unknown>) =>
+  Effect.forEach(Object.entries(params), ([name, value]) => {
+    const problem = typeof value === "string" ? pathParamProblem(name, value) : undefined;
+    return problem === undefined
+      ? Effect.void
+      : Effect.fail(new InvalidRequest({ message: problem }));
+  });
+
 /** A `Connection`; nothing is read until the first call. */
 export const connect = (
   options: ConnectOptions,
@@ -169,19 +182,29 @@ export const connect = (
           return yield* new InvalidRequest({
             message: "Pass a workspace: call list_workspaces to see them",
           });
-        const backend = yield* route;
-        return yield* backend.run(
-          name,
-          operation,
-          workspace === undefined ? rest : { ...rest, workspace: located(workspace) },
+        const resolved: Record<string, unknown> =
+          workspace === undefined ? rest : { ...rest, workspace: located(workspace) };
+        yield* routable(
+          Object.fromEntries(pathParams(operation.http).map((key) => [key, resolved[key]])),
         );
+        const backend = yield* route;
+        return yield* backend.run(name, operation, resolved);
       });
 
     return Connection.of({
       operations: registry.operations,
       run,
-      removeWorkspace: (id) => Effect.flatMap(route, (backend) => backend.removeWorkspace(id)),
-      fixAll: (workspace) =>
-        Effect.flatMap(route, (backend) => backend.fixAll(located(workspace) as string)),
+      removeWorkspace: (id) =>
+        routable({ workspace: id }).pipe(
+          Effect.andThen(route),
+          Effect.flatMap((backend) => backend.removeWorkspace(id)),
+        ),
+      fixAll: (workspace) => {
+        const folder = located(workspace) as string;
+        return routable({ workspace: folder }).pipe(
+          Effect.andThen(route),
+          Effect.flatMap((backend) => backend.fixAll(folder)),
+        );
+      },
     });
   });

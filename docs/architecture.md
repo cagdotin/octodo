@@ -84,13 +84,13 @@ A plugin is one kind of task, named by its id in config.json's `plugins` and in 
 | `web`    | `<plugin>/web.tsx`   | A `PluginWeb`: `Row` in a task row's date slot, `Panel` in the task panel, `completesInPlace` for the optimistic move; the app's seam is `components/task-kind.tsx`. It renders with `@octodo/ui` and calls its operations through `createClient<ServedApi<typeof shared.operations>>`                  |
 
 - The plain task is `plainTask`, a `PluginShared` whose keys are the ones `task.md` has and whose
-  operations are the catalog. A plugin can claim none of them, nor another plugin's kind, key,
-  file or operation: `makeRegistry` and `Workspaces.layer` throw at startup.
+  operations are the catalog. A plugin can claim none of them, nor another plugin's kind, key
+  or operation: `makeRegistry` and `Workspaces.layer` throw at startup.
 - A task of an enabled kind has `kind: { id, fields }`, and its plugin's keys leave `extra`. Any
   other `type` is a plain task with an `unknown-kind` diagnostic. The snapshot and `get_workspace`
   give the enabled `plugins`.
 - A plugin's files, in tasks of its kind, are read by the tree for its reader and are never
-  attachments. Its problems are diagnostics of kind `<plugin>/<problem>`.
+  attachments. Two plugins may own one file name, since the task's kind picks its reader. Its problems are diagnostics of kind `<plugin>/<problem>`.
 - Every installed plugin's operations appear on MCP, the CLI (under a group named by their first
   word, `octo recurring ...`) and the skill; in a workspace that does not enable the plugin they
   fail with `PluginNotEnabled`. `list_tasks` gives each task's `kind`, and the CLI appends the

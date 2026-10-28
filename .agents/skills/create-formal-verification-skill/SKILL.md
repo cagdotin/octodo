@@ -12,7 +12,7 @@ A test checks the cases that someone thought to write. Formal verification check
 
 Answer from the codebase, and ask the user only what you cannot observe. If the user named an area or a bug, start there.
 
-A good target is a promise the code makes, where a break harms users and tests rarely reach the case that breaks it. Choose the strongest such target in the repo, not the one that is easiest to verify. In octodo, the likely candidates are where octodo's own processes meet one folder: two processes handing over the owner lock, status or list renumbering racing a watcher event, id assignment for files that arrive without one, and the temp-file-and-rename write.
+A good target is a promise the code makes, where a break harms users and tests rarely reach the case that breaks it. Choose the strongest such target in the repo, not the one that is easiest to verify. In octodo, the likely candidates are where octodo's own processes meet one folder: two processes handing over the owner lock, the incremental cache missing a watcher event, id assignment for files that arrive without one, and the temp-file-and-rename write.
 
 ## Let the question choose the tool
 

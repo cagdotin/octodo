@@ -28,8 +28,8 @@ instead of keeping the code because it exists.
   `task.md`.
 - A link is a frontmatter key holding a list of plain task ids, `blocked_by: [HM-3, HM-7]`;
   `LINK_KINDS` in `layout.ts` lists the keys. Only one end stores an edge: the reverse (`blocks`),
-  `mentionedIn` (from `[[HM-3]]` in a body, outside code) and `blocked` are computed when a
-  snapshot is read. A link field that is not a list of ids, a task's link to itself and an id no
+  `mentionedIn` (from `[[HM-3]]` in a body, outside code), `blocked` and `ready` (open and not
+  blocked) are computed when a snapshot is read. A link field that is not a list of ids, a task's link to itself and an id no
   file on disk has are diagnostics (a blocker that is not read still blocks); deleting a task removes its id from other
   tasks' links, and body mentions stay as text.
 - A task folder inside a task folder is a subtask, the same shape all the way down. Every other file

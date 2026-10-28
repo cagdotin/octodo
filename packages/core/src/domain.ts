@@ -110,6 +110,8 @@ export const Task = Schema.Struct({
   blocks: Schema.Array(Schema.String),
   /** Whether a task in `blockedBy` is still open or matches no task. Never stored. */
   blocked: Schema.Boolean,
+  /** Whether the task can start now: in no closed category, and not blocked. Never stored. */
+  ready: Schema.Boolean,
   /** The task ids the body mentions as `[[HM-3]]`, in order, each once. */
   mentions: Schema.Array(Schema.String),
   /** The tasks whose body mentions this one. Never stored. */

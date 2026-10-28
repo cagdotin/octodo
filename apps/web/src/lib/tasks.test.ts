@@ -1,5 +1,6 @@
 import type { Task, WorkspaceSnapshot } from "@octodo/core";
 import { DEFAULT_STATUSES } from "@octodo/core";
+import { readiness } from "@octodo/core/layout";
 import { describe, expect, it } from "vitest";
 import {
   applyMove,
@@ -32,18 +33,23 @@ const task = (id: string, fields: Partial<Task> = {}): Task => ({
   blockedBy: [],
   blocks: [],
   blocked: false,
+  ready: true,
   mentions: [],
   mentionedIn: [],
   ...fields,
 });
 
-const snapshot = (tasks: Array<Task>): WorkspaceSnapshot => ({
-  workspace: { id: "hm", name: "House", key: "HM", root: "/tmp/house" },
-  statuses: DEFAULT_STATUSES,
-  lists: [{ id: "home", name: "Home", parent: null, folder: "home" }],
-  tasks,
-  diagnostics: [],
-});
+/** A snapshot of `tasks` with `blocked` and `ready` derived as a read does. */
+const snapshot = (tasks: Array<Task>): WorkspaceSnapshot => {
+  const rules = readiness(tasks, DEFAULT_STATUSES);
+  return {
+    workspace: { id: "hm", name: "House", key: "HM", root: "/tmp/house" },
+    statuses: DEFAULT_STATUSES,
+    lists: [{ id: "home", name: "Home", parent: null, folder: "home" }],
+    tasks: tasks.map((task) => ({ ...task, ...rules.of(task) })),
+    diagnostics: [],
+  };
+};
 
 const TASKS = [
   task("HM-1", { list: "home" }),
@@ -71,16 +77,19 @@ describe("subtasks in views", () => {
   });
 
   it("shows open tasks that are not blocked in the Ready view, subtasks too, as the CLI and MCP do", () => {
-    const tasks = [
+    const tasks = snapshot([
       task("HM-1"),
-      task("HM-2", { blocked: true, blockedBy: ["HM-1"] }),
+      task("HM-2", { blockedBy: ["HM-1"] }),
       task("HM-3", { status: "done" }),
       task("HM-4", { parent: "HM-1" }),
       task("HM-5", { status: "in-progress" }),
-      task("HM-6", { parent: "HM-1", blocked: true, blockedBy: ["HM-5"] }),
-    ];
-    expect(filterTasks(snapshot(tasks), SMART.ready).map((entry) => entry.id)).toEqual([
-      "HM-1",
+      task("HM-6", { parent: "HM-1", blockedBy: ["HM-5"] }),
+    ]);
+    const ready = (current: WorkspaceSnapshot) =>
+      filterTasks(current, SMART.ready).map((entry) => entry.id);
+    expect(ready(tasks)).toEqual(["HM-1", "HM-4", "HM-5"]);
+    expect(ready(applyMove(tasks, "HM-1", { status: "done" })), "a finished blocker").toEqual([
+      "HM-2",
       "HM-4",
       "HM-5",
     ]);

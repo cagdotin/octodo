@@ -43,7 +43,7 @@ export interface TaskPlace {
 }
 
 /** A task as its own file has it, before a snapshot adds what other tasks say about it. */
-export type TaskFile = Omit<Task, "blocks" | "blocked" | "mentionedIn">;
+export type TaskFile = Omit<Task, "blocks" | "blocked" | "ready" | "mentionedIn">;
 
 /**
  * A task file read strictly. A bad optional field is a problem and reads as its default; a file

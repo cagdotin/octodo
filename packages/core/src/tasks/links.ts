@@ -1,6 +1,6 @@
 import type { Diagnostic, StatusDefinition, Task } from "../domain.ts";
 import { diagnostic } from "../health/problems.ts";
-import { LINK_KINDS, isClosedCategory } from "../layout.ts";
+import { LINK_KINDS, readiness } from "../layout.ts";
 import type { TaskFile } from "./task-file.ts";
 
 /** For each task id, the tasks whose `pick` lists it, in snapshot order. */
@@ -22,7 +22,7 @@ const reverseIndex = (
 
 /**
  * Completes the tasks of a snapshot with what other tasks say about them: `blocks`,
- * `mentionedIn` and `blocked`, which no file stores. A link to an id no file on disk has is a
+ * `mentionedIn`, `blocked` and `ready`, which no file stores. A link to an id no file on disk has is a
  * diagnostic, never a reason not to read the task. A blocker that is not read, missing or only
  * unreadable for now, keeps the task blocked.
  */
@@ -47,12 +47,7 @@ export const linkTasks = (
     }),
   );
 
-  const byId = new Map(files.map((task) => [task.id, task]));
-  const category = new Map(statuses.map((status) => [status.id, status.category]));
-  const isOpen = (id: string) => {
-    const blocker = byId.get(id);
-    return blocker === undefined || !isClosedCategory(category.get(blocker.status));
-  };
+  const rules = readiness(files, statuses);
   const blocks = reverseIndex(files, (task) => task.blockedBy);
   const mentionedIn = reverseIndex(files, (task) => task.mentions);
 
@@ -60,7 +55,7 @@ export const linkTasks = (
     tasks: files.map((task) => ({
       ...task,
       blocks: blocks.get(task.id) ?? [],
-      blocked: task.blockedBy.some(isOpen),
+      ...rules.of(task),
       mentionedIn: mentionedIn.get(task.id) ?? [],
     })),
     diagnostics,

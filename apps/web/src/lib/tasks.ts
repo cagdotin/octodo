@@ -8,7 +8,7 @@ import type {
   Task,
   WorkspaceSnapshot,
 } from "@octodo/core";
-import { inSubtree, isClosedCategory, isReady, movedListId } from "@octodo/core/layout";
+import { inSubtree, isClosedCategory, movedListId, readiness } from "@octodo/core/layout";
 import {
   addDays,
   format,
@@ -132,7 +132,7 @@ const dueDay = (due: string) => due.slice(0, 10);
  * subtasks too.
  */
 export const filterTasks = (
-  { tasks: all, statuses }: Pick<WorkspaceSnapshot, "tasks" | "statuses">,
+  { tasks: all }: Pick<WorkspaceSnapshot, "tasks">,
   list: string | undefined,
 ): ReadonlyArray<Task> => {
   const dueBy = (last: string) =>
@@ -146,7 +146,7 @@ export const filterTasks = (
     case SMART.upcoming:
       return dueBy(format(addDays(new Date(), 7), "yyyy-MM-dd"));
     case SMART.ready:
-      return all.filter((task) => isReady(task, statuses));
+      return all.filter((task) => task.ready);
     case SMART.none:
       return tasks.filter((task) => task.list === null);
     default:
@@ -336,7 +336,10 @@ export const applyMove = (
   const moved: Task = { ...task, status: move.status ?? task.status, list, parent };
   const placed = move.before !== undefined || move.after !== undefined;
   if (!placed && list === task.list && parent === task.parent)
-    return { ...snapshot, tasks: snapshot.tasks.map((entry) => (entry === task ? moved : entry)) };
+    return withReadiness({
+      ...snapshot,
+      tasks: snapshot.tasks.map((entry) => (entry === task ? moved : entry)),
+    });
   const rest = snapshot.tasks.filter((entry) => entry.id !== id);
   let index = rest.length;
   if (move.before !== undefined) {
@@ -346,7 +349,10 @@ export const applyMove = (
     const at = rest.findIndex((entry) => entry.id === move.after);
     if (at !== -1) index = at + 1;
   }
-  return { ...snapshot, tasks: [...rest.slice(0, index), moved, ...rest.slice(index)] };
+  return withReadiness({
+    ...snapshot,
+    tasks: [...rest.slice(0, index), moved, ...rest.slice(index)],
+  });
 };
 
 /**
@@ -402,17 +408,16 @@ export const withoutSubtree = (tasks: ReadonlyArray<Task>, id: string) => {
   return tasks.filter((task) => !ids.has(task.id));
 };
 
-/** The ids among `ids` whose task is open or missing: the blockers that still hold a task back. */
-export const openBlockers = (
-  { tasks, statuses }: Pick<WorkspaceSnapshot, "tasks" | "statuses">,
-  ids: ReadonlyArray<string>,
-) => {
-  const categories = statusMap(statuses);
-  const byId = new Map(tasks.map((task) => [task.id, task]));
-  return ids.filter((id) => {
-    const blocker = byId.get(id);
-    return blocker === undefined || !isClosedCategory(categories.get(blocker.status)?.category);
-  });
+/** The snapshot with each task's `blocked` and `ready` as the next read derives them. */
+const withReadiness = (snapshot: WorkspaceSnapshot): WorkspaceSnapshot => {
+  const rules = readiness(snapshot.tasks, snapshot.statuses);
+  return {
+    ...snapshot,
+    tasks: snapshot.tasks.map((task) => {
+      const { blocked, ready } = rules.of(task);
+      return blocked === task.blocked && ready === task.ready ? task : { ...task, blocked, ready };
+    }),
+  };
 };
 
 /** The snapshot once task `id` waits for `blockedBy`, with what the next read derives from it. */
@@ -428,14 +433,12 @@ export const withBlockedBy = (
     if (!waits.has(task.id)) return others;
     return [...others, id].toSorted((a, b) => position.get(a)! - position.get(b)!);
   };
-  return {
+  return withReadiness({
     ...snapshot,
     tasks: snapshot.tasks.map((task) =>
-      task.id === id
-        ? { ...task, blockedBy, blocked: openBlockers(snapshot, blockedBy).length > 0 }
-        : { ...task, blocks: blocks(task) },
+      task.id === id ? { ...task, blockedBy } : { ...task, blocks: blocks(task) },
     ),
-  };
+  });
 };
 
 export interface Progress {

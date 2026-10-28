@@ -4,8 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_STATUSES } from "../src/domain.ts";
-import { findMentions, isReady } from "../src/layout.ts";
+import { findMentions } from "../src/layout.ts";
 import { editTaskFile, keepLinks, readTaskFile } from "../src/tasks/task-file.ts";
 import { initWorkspace, makeWorkspace } from "../src/workspace.ts";
 
@@ -352,7 +351,7 @@ describe("links in a workspace", () => {
       { id: "HM-1", blocked: true, blocks: ["HM-2"] },
       { id: "HM-2", blocked: true, blocks: ["HM-1"] },
     ]);
-    expect(snapshot.tasks.filter((task) => isReady(task, snapshot.statuses))).toEqual([]);
+    expect(snapshot.tasks.filter((task) => task.ready)).toEqual([]);
   });
 
   it("finishes a delete that failed partway when it runs again", async () => {
@@ -408,10 +407,24 @@ describe("links in a workspace", () => {
     expect(done.diagnostics).toEqual([]);
   });
 
-  it("counts a task as ready when it is open and not blocked", () => {
-    expect(isReady({ status: "todo", blocked: false }, DEFAULT_STATUSES)).toBe(true);
-    expect(isReady({ status: "todo", blocked: true }, DEFAULT_STATUSES)).toBe(false);
-    expect(isReady({ status: "done", blocked: false }, DEFAULT_STATUSES)).toBe(false);
-    expect(isReady({ status: "archived", blocked: false }, DEFAULT_STATUSES)).toBe(false);
+  it("counts a task as ready when it is open and not blocked", async () => {
+    const root = fresh();
+    const snapshot = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        const blocker = yield* ws.createTask({ title: "Open" });
+        const waiting = yield* ws.createTask({ title: "Waiting" });
+        yield* ws.updateTask(waiting.id, { blocked_by: [blocker.id] });
+        yield* ws.createTask({ title: "Done", status: "done" });
+        yield* ws.createTask({ title: "Archived", status: "archived" });
+        return yield* ws.snapshot;
+      }),
+    );
+    expect(snapshot.tasks.map(({ title, blocked, ready }) => ({ title, blocked, ready }))).toEqual([
+      { title: "Open", blocked: false, ready: true },
+      { title: "Waiting", blocked: true, ready: false },
+      { title: "Done", blocked: false, ready: false },
+      { title: "Archived", blocked: false, ready: false },
+    ]);
   });
 });

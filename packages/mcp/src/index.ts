@@ -13,7 +13,6 @@ import {
   UpdateTaskInput,
   WorkspaceInfo,
   Workspaces,
-  isReady,
   type Workspace,
   type WorkspaceSnapshot,
 } from "@octodo/core";
@@ -48,6 +47,7 @@ const TaskSummary = Schema.Struct({
   tags: Schema.Array(Schema.String),
   due: Schema.NullOr(Schema.String),
   blocked: Schema.Boolean,
+  ready: Schema.Boolean,
 });
 
 /** Another task named by a link, with a null title and status when no task has its id. */
@@ -311,12 +311,12 @@ export const toolkitLayer = (options: { readonly defaultDir?: string | undefined
                   (list === undefined || task.list === list) &&
                   (parent === undefined || task.parent === parent) &&
                   (tag === undefined || task.tags.includes(tag)) &&
-                  (ready !== true || isReady(task, snapshot.statuses)) &&
+                  (ready !== true || task.ready) &&
                   (needle === undefined ||
                     task.title.toLowerCase().includes(needle) ||
                     task.body.toLowerCase().includes(needle)),
               )
-              .map(({ id, title, status, list, parent, priority, tags, due, blocked }) => ({
+              .map(({ id, title, status, list, parent, priority, tags, due, blocked, ready }) => ({
                 id,
                 title,
                 status,
@@ -326,6 +326,7 @@ export const toolkitLayer = (options: { readonly defaultDir?: string | undefined
                 tags,
                 due,
                 blocked,
+                ready,
               }));
           }),
         get_task: ({ workspace, id }) =>

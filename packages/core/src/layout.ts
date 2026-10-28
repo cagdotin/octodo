@@ -355,10 +355,35 @@ export const findMentions = (body: string): Array<Mention> => {
   return mentions;
 };
 
-/** Work that can start now: not blocked, and not in a closed category. */
-export const isReady = (
-  task: Pick<Task, "status" | "blocked">,
+/** What a snapshot derives for a task from the others and stores in no file. */
+export interface Readiness {
+  /** Whether a task in `blockedBy` holds it back. */
+  readonly blocked: boolean;
+  /** Whether it can start now: open, and not blocked. */
+  readonly ready: boolean;
+}
+
+/**
+ * The blocked and ready rules over one snapshot's tasks. A blocker holds a task back while its
+ * status is in no closed category or no task read has its id.
+ */
+export const readiness = (
+  tasks: ReadonlyArray<Pick<Task, "id" | "status">>,
   statuses: ReadonlyArray<StatusDefinition>,
-): boolean =>
-  !task.blocked &&
-  !isClosedCategory(statuses.find((status) => status.id === task.status)?.category);
+) => {
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const category = new Map(statuses.map((status) => [status.id, status.category]));
+  const isOpen = (status: string) => !isClosedCategory(category.get(status));
+  const holdsBack = (id: string) => {
+    const blocker = byId.get(id);
+    return blocker === undefined || isOpen(blocker.status);
+  };
+  return {
+    /** The ids in `blockedBy` that hold a task back. */
+    openBlockers: (blockedBy: ReadonlyArray<string>): Array<string> => blockedBy.filter(holdsBack),
+    of: (task: Pick<Task, "status" | "blockedBy">): Readiness => {
+      const blocked = task.blockedBy.some(holdsBack);
+      return { blocked, ready: !blocked && isOpen(task.status) };
+    },
+  };
+};

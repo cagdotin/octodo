@@ -6,7 +6,6 @@ import {
   Workspaces,
   defaultHome,
   isClosedCategory,
-  isReady,
   taskSubtree,
   type Diagnostic,
   type Task,
@@ -164,7 +163,7 @@ const listCommand = Command.make(
             : options.all || !closed.has(task.status)) &&
           (Option.isNone(options.list) || task.list === options.list.value) &&
           (Option.isNone(options.tag) || task.tags.includes(options.tag.value)) &&
-          (!options.ready || isReady(task, snapshot.statuses)),
+          (!options.ready || task.ready),
       )
       .toSorted((a, b) => (order.get(a.status) ?? 0) - (order.get(b.status) ?? 0));
     if (options.json) return yield* Console.log(JSON.stringify(tasks, null, 2));

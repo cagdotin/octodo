@@ -60,7 +60,8 @@ instead of keeping the code because it exists.
   person wrote; one that guesses (making a loose file a task) is picked one at a time.
 - Writes go to a temporary sibling and are renamed into place, so a crash or a reader never sees
   half a file; a new task or list folder is built under a dot name and renamed in. Writes go only
-  into folders that exist: never `mkdir -p` a container. Any in-memory index is a cache that a file
+  into folders that exist: never `mkdir -p` a container (only `octo init` creates the folder it is asked to
+  make a workspace). Any in-memory index is a cache that a file
   watcher invalidates.
 
 ## Layout

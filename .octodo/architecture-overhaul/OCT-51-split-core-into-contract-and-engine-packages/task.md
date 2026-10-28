@@ -1,7 +1,7 @@
 ---
 id: OCT-51
 title: Split core into contract and engine packages
-status: todo
+status: done
 priority: medium
 tags:
   - architecture

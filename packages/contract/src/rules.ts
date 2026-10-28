@@ -8,6 +8,9 @@ import type { Diagnostic, List, StatusCategory, StatusDefinition, Task } from ".
 /** How deep lists nest: a top-level list, its sublists and theirs. */
 export const MAX_LIST_DEPTH = 3;
 
+/** The largest attachment octodo saves or reads: 20 MB. */
+export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+
 /**
  * What a status can mean. Statuses are ordered by it: categories always come in this order, and
  * only the statuses inside one category are ordered by the user.

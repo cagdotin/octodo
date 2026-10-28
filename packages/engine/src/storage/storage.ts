@@ -15,7 +15,7 @@ import { ignoreBookkeeping, isHidden, removeLeftovers } from "./bookkeeping.ts";
 import { configFile, configText, readConfig, type ConfigRead } from "./config.ts";
 import { makeFiles, type Files } from "./files.ts";
 import { OWNER_LOCK_FILE, OwnerLockBusy, OwnerLockFailed, makeOwnerLock } from "./owner-lock.ts";
-import { makeTreeReader, type Tree } from "./tree.ts";
+import { makeTreeReader, readAttachments, type AttachmentFile, type Tree } from "./tree.ts";
 
 /** What storage runs on. Other modules only hand it on to `storage/`. */
 export type Platform = FileSystem.FileSystem | Path.Path;
@@ -48,6 +48,11 @@ export interface Storage {
   readonly version: () => number;
   readonly forget: Effect.Effect<void>;
   readonly exists: (path: string) => Effect.Effect<boolean, PlatformError.PlatformError>;
+  /** The attachments in the task folder `dir`, as the folder grammar reads them. */
+  readonly attachments: (
+    dir: string,
+  ) => Effect.Effect<ReadonlyArray<AttachmentFile>, PlatformError.PlatformError>;
+  readonly readBytes: (file: string) => Effect.Effect<Uint8Array, PlatformError.PlatformError>;
   /**
    * Whether the deepest existing part of `dir/segments` resolves, symlinks and all, to a place
    * inside `dir`, and the last segment is not a symlink.
@@ -182,6 +187,8 @@ export const makeStorage = (
       version: reads.version,
       forget,
       exists: (at) => fs.exists(at),
+      attachments: (dir) => withPlatform(readAttachments(dir)),
+      readBytes: (file) => fs.readFile(file),
       staysInside,
       write,
       changes: Stream.fromPubSub(changes),

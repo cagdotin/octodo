@@ -43,6 +43,19 @@ Effect 4.0.6's `McpServer` was checked in a stdio prototype:
 - octodo has no MCP resources. A resource is application-controlled in MCP, so the host decides
   when it is read, and it would be a second, MCP-only entry point outside the catalog.
 
+### How the engine reads them
+
+- The engine lists a task's attachments in `storage/tree.ts`, the one reader of the folder
+  grammar: every file in the task folder and its plain folders, but not `task.md` or `list.md` in
+  any case, a folder holding one of them, a hidden name or a symlink. `read_attachment` first
+  refuses a path that attachment upload refuses (`InvalidRequest`), then one the listing does not
+  have (`AttachmentNotFound`).
+- The upload limit (`MAX_ATTACHMENT_BYTES` in `contract/rules.ts`, 20 MB) also bounds a read, on
+  every surface (`AttachmentTooLarge`), since the engine reads the bytes into memory. The HTTP
+  download streams the file and is not bounded.
+- The media type comes from `mediaType` in `engine/src/tasks/media-type.ts`, by extension. The HTTP
+  download sends the same type.
+
 ### Files a plugin owns
 
 - A file a plugin owns is that plugin's storage, not part of the API. `read_attachment` refuses it

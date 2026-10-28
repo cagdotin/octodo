@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { STATUS_CATEGORIES, WORKSPACE_KEY } from "./rules.ts";
+import { MAX_ATTACHMENT_BYTES, STATUS_CATEGORIES, WORKSPACE_KEY } from "./rules.ts";
 
 export const Priority = Schema.Literals(["none", "low", "medium", "high", "urgent"]);
 export type Priority = typeof Priority.Type;
@@ -119,6 +119,59 @@ export const Task = Schema.Struct({
 });
 export type Task = typeof Task.Type;
 
+/** What `list_tasks` gives for each task: no body, no frontmatter beyond the attributes. */
+export const TaskSummary = Schema.Struct({
+  id: Schema.String,
+  title: Schema.String,
+  status: Schema.String,
+  list: Schema.NullOr(Schema.String),
+  parent: Schema.NullOr(Schema.String),
+  priority: Priority,
+  tags: Schema.Array(Schema.String),
+  due: Schema.NullOr(Schema.String),
+  blocked: Schema.Boolean,
+  ready: Schema.Boolean,
+});
+export type TaskSummary = typeof TaskSummary.Type;
+
+/** Another task named by a link, with a null title and status when no task has its id. */
+export const TaskRef = Schema.Struct({
+  id: Schema.String,
+  title: Schema.NullOr(Schema.String),
+  status: Schema.NullOr(Schema.String),
+});
+export type TaskRef = typeof TaskRef.Type;
+
+/** A file in a task folder that is not `task.md` or a subtask. `path` is relative to the folder. */
+export const Attachment = Schema.Struct({
+  path: Schema.String,
+  /** In bytes. */
+  size: Schema.Int,
+  mediaType: Schema.String,
+});
+export type Attachment = typeof Attachment.Type;
+
+/** An attachment with its bytes and where it is on disk, as `read_attachment` gives it. */
+export interface AttachmentContent extends Attachment {
+  /** The absolute path of the file. */
+  readonly file: string;
+  readonly bytes: Uint8Array;
+}
+
+/** A task with the tasks it links to as id, title and status, its direct subtasks and its files. */
+export const TaskDetail = Schema.Struct({
+  ...Task.fields,
+  blockedBy: Schema.Array(TaskRef),
+  blocks: Schema.Array(TaskRef),
+  mentions: Schema.Array(TaskRef),
+  mentionedIn: Schema.Array(TaskRef),
+  subtasks: Schema.Array(
+    Schema.Struct({ id: Schema.String, title: Schema.String, status: Schema.String }),
+  ),
+  attachments: Schema.Array(Attachment),
+});
+export type TaskDetail = typeof TaskDetail.Type;
+
 /** Every problem a file under `.octodo/` can have; the engine's `PROBLEMS` table says what each means. */
 export const DiagnosticKind = Schema.Literals([
   "invalid-config",
@@ -221,6 +274,15 @@ export const WorkspaceSnapshot = Schema.Struct({
 });
 export type WorkspaceSnapshot = typeof WorkspaceSnapshot.Type;
 
+/** What `get_workspace` tells an agent first: the statuses and lists with their task counts. */
+export const WorkspaceOverview = Schema.Struct({
+  workspace: WorkspaceInfo,
+  statuses: Schema.Array(Schema.Struct({ ...StatusDefinition.fields, count: Schema.Number })),
+  lists: Schema.Array(Schema.Struct({ ...List.fields, count: Schema.Number })),
+  diagnostics: Schema.Array(Diagnostic),
+});
+export type WorkspaceOverview = typeof WorkspaceOverview.Type;
+
 /** `list` and a non-null `parent` are exclusive: a subtask is in its parent's list. */
 export const CreateTaskInput = Schema.Struct({
   title: Schema.NonEmptyString,
@@ -315,6 +377,27 @@ export class TaskNotFound extends Schema.TaggedError<TaskNotFound>()("TaskNotFou
 }) {
   override get message(): string {
     return `No task with id ${this.id}`;
+  }
+}
+
+const megabytes = (bytes: number) => Math.ceil(bytes / 1024 / 1024);
+
+/** No file the engine lists as an attachment of `task` is at `path`. */
+export class AttachmentNotFound extends Schema.TaggedError<AttachmentNotFound>()(
+  "AttachmentNotFound",
+  { task: Schema.String, path: Schema.String },
+) {
+  override get message(): string {
+    return `Task ${this.task} has no attachment ${this.path}`;
+  }
+}
+
+export class AttachmentTooLarge extends Schema.TaggedError<AttachmentTooLarge>()(
+  "AttachmentTooLarge",
+  { path: Schema.String, size: Schema.Number },
+) {
+  override get message(): string {
+    return `${this.path} is ${megabytes(this.size)} MB; octodo reads attachments up to ${megabytes(MAX_ATTACHMENT_BYTES)} MB`;
   }
 }
 

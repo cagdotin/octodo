@@ -13,13 +13,14 @@ import {
   type TaskNotFound,
   type WorkspaceNotFound,
 } from "@octodo/contract";
+import { MAX_ATTACHMENT_BYTES } from "@octodo/contract/rules";
 import { Workspaces, type Workspace } from "@octodo/engine";
 import { Cause, Effect, Exit, Fiber, Option, Schema, Stream, type ManagedRuntime } from "effect";
 import { Hono, type Context } from "hono";
 import { homedir } from "node:os";
 import { bodyLimit } from "hono/body-limit";
 import { streamSSE } from "hono/streaming";
-import { fileResponse, MAX_ATTACHMENT_BYTES } from "./attachments.ts";
+import { fileResponse } from "./attachments.ts";
 
 type ApiError = TaskNotFound | WorkspaceNotFound | InvalidRequest | StorageError;
 

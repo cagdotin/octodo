@@ -3,6 +3,10 @@ import { isWorkspaceKey } from "./layout.ts";
 import {
   DEFAULT_STATUSES,
   InvalidRequest,
+  type Attachment,
+  type AttachmentContent,
+  type AttachmentNotFound,
+  type AttachmentTooLarge,
   StorageError,
   TaskNotFound,
   type CreateListInput,
@@ -26,7 +30,12 @@ import { makeState, storageError } from "./state.ts";
 import { reorderStatuses } from "./statuses/operations.ts";
 import { hasConfig } from "./storage/config.ts";
 import { createWorkspace, type Platform } from "./storage/storage.ts";
-import { attachmentPath, writeAttachment } from "./tasks/attachments.ts";
+import {
+  attachmentPath,
+  listAttachments,
+  readAttachment,
+  writeAttachment,
+} from "./tasks/attachments.ts";
 import { createTask, deleteTask, getTask, moveTask, updateTask } from "./tasks/operations.ts";
 
 /** One workspace on disk: a folder with a `.octodo/` directory. The files are the source of truth. */
@@ -74,6 +83,21 @@ export interface Workspace {
     taskId: string,
     relativePath: string,
   ) => Effect.Effect<string, TaskNotFound | InvalidRequest | StorageError>;
+  /** The files in a task's folder that are its attachments, with their sizes and media types. */
+  readonly attachments: (
+    taskId: string,
+  ) => Effect.Effect<ReadonlyArray<Attachment>, TaskNotFound | StorageError>;
+  /**
+   * The bytes of one of a task's attachments, refusing a path `attachmentPath` refuses, one the
+   * folder does not list as an attachment, and a file larger than the upload limit.
+   */
+  readonly readAttachment: (
+    taskId: string,
+    relativePath: string,
+  ) => Effect.Effect<
+    AttachmentContent,
+    TaskNotFound | InvalidRequest | AttachmentNotFound | AttachmentTooLarge | StorageError
+  >;
   /**
    * Saves a file in a task's folder, creating the folders on the way (`images/`), and returns the
    * path relative to the task folder it got: a taken name gets `-2`, `-3`, ... before its extension.
@@ -140,6 +164,8 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     moveList: (listId, input) => moveList(state, listId, input),
     reorderStatuses: (input) => reorderStatuses(state, input),
     attachmentPath: (taskId, relativePath) => attachmentPath(state, taskId, relativePath),
+    attachments: (taskId) => listAttachments(state, taskId),
+    readAttachment: (taskId, relativePath) => readAttachment(state, taskId, relativePath),
     writeAttachment: (taskId, relativePath, bytes) =>
       writeAttachment(state, taskId, relativePath, bytes),
     fixDiagnostic: (request) => fixDiagnostic(state, request),

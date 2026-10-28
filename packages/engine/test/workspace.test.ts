@@ -956,6 +956,76 @@ describe("attachments", () => {
     expect(readdirSync(outside)).toEqual(["secret.txt"]);
   });
 
+  it("lists a task's attachments with sizes and media types, and reads only those", async () => {
+    const root = fresh();
+    const result = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        const task = yield* ws.createTask({ title: "Plan" });
+        yield* ws.createTask({ title: "Sub", parent: task.id });
+        yield* ws.writeAttachment(task.id, "images/plan.png", bytes);
+        yield* ws.writeAttachment(task.id, "notes.md", new TextEncoder().encode("# Notes"));
+        const dir = join(root, ".octodo/HM-1-plan");
+        writeFileSync(join(dir, "images/.cache"), "hidden");
+        writeFileSync(join(dir, "HM-2-sub/sub.txt"), "the subtask's");
+        symlinkSync(join(dir, "notes.md"), join(dir, "link.md"));
+        symlinkSync(join(dir, "images"), join(dir, "pictures"));
+        const read = yield* ws.readAttachment(task.id, "./images//plan.png");
+        const refused = yield* Effect.forEach(
+          ["images/none.png", "link.md", "pictures/plan.png", "HM-2-sub/sub.txt", "task.md"],
+          (path) => Effect.flip(ws.readAttachment(task.id, path)),
+        );
+        return {
+          listed: yield* ws.attachments(task.id),
+          sub: yield* ws.attachments("HM-2"),
+          read,
+          refused,
+          missing: yield* Effect.flip(ws.attachments("HM-9")),
+        };
+      }),
+    );
+    expect(result.listed).toEqual([
+      { path: "images/plan.png", size: 3, mediaType: "image/png" },
+      { path: "notes.md", size: 7, mediaType: "text/markdown; charset=utf-8" },
+    ]);
+    expect(result.sub).toEqual([
+      { path: "sub.txt", size: 13, mediaType: "text/plain; charset=utf-8" },
+    ]);
+    const { bytes: read, ...attachment } = result.read;
+    expect(attachment).toEqual({
+      path: "images/plan.png",
+      size: 3,
+      mediaType: "image/png",
+      file: join(root, ".octodo/HM-1-plan/images/plan.png"),
+    });
+    expect(new Uint8Array(read)).toEqual(bytes);
+    expect(result.refused.map((error) => error._tag)).toEqual([
+      "AttachmentNotFound",
+      "InvalidRequest",
+      "AttachmentNotFound",
+      "InvalidRequest",
+      "InvalidRequest",
+    ]);
+    expect(result.missing._tag).toBe("TaskNotFound");
+  });
+
+  it("refuses to read an attachment larger than the upload limit", async () => {
+    const root = fresh();
+    const error = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        const task = yield* ws.createTask({ title: "Film" });
+        writeFileSync(
+          join(root, ".octodo/HM-1-film/film.mp4"),
+          new Uint8Array(20 * 1024 * 1024 + 1),
+        );
+        return yield* Effect.flip(ws.readAttachment(task.id, "film.mp4"));
+      }),
+    );
+    expect(error).toMatchObject({ _tag: "AttachmentTooLarge", path: "film.mp4" });
+    expect(error.message).toBe("film.mp4 is 21 MB; octodo reads attachments up to 20 MB");
+  });
+
   it("does not recreate a task folder another process removed", async () => {
     const root = fresh();
     const error = await run(

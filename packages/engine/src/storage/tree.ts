@@ -370,3 +370,51 @@ export const taskFoldersFrom = (tree: Tree, dir: string): Array<string> => {
   const found = find(tree.children);
   return found === undefined ? [] : down(found);
 };
+
+/** A file in a task folder that is one of its attachments, at `path` inside the folder. */
+export interface AttachmentFile {
+  readonly path: string;
+  readonly size: number;
+}
+
+/**
+ * The attachments in the task folder `dir`, in name order, by their path inside it joined with
+ * `/`. Hidden names, `task.md` and `list.md` (in any case), folders holding one of them (a subtask)
+ * and symlinks, which are never followed, are not attachments. An entry that cannot be read is
+ * left out.
+ */
+export const readAttachments = (
+  dir: string,
+): Effect.Effect<Array<AttachmentFile>, PlatformError.PlatformError, Platform> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const call = calls.withPermits(1);
+    const isMarker = (name: string) => MARKERS.includes(name.toLowerCase());
+
+    const inFolder = (
+      at: string,
+      prefix: ReadonlyArray<string>,
+      names: ReadonlyArray<string>,
+    ): Effect.Effect<Array<AttachmentFile>> =>
+      Effect.map(
+        Effect.forEach(
+          names.filter((name) => !isHidden(name) && !isMarker(name)).toSorted(),
+          (name) =>
+            Effect.gen(function* () {
+              const child = path.join(at, name);
+              const inside = [...prefix, name];
+              const info = yield* call(fs.lstat(child));
+              if (info.type === "File")
+                return [{ path: inside.join("/"), size: Number(info.size) }];
+              if (info.type !== "Directory") return [];
+              const childNames = yield* call(fs.readDirectory(child));
+              return childNames.some(isMarker) ? [] : yield* inFolder(child, inside, childNames);
+            }).pipe(Effect.orElseSucceed((): Array<AttachmentFile> => [])),
+          { concurrency: ENTRIES_AT_ONCE },
+        ),
+        (found) => found.flat(),
+      );
+
+    return yield* inFolder(dir, [], yield* call(fs.readDirectory(dir)));
+  });

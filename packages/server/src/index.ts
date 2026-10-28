@@ -1,8 +1,9 @@
 import { NodeHttpServer, NodeServices } from "@effect/platform-node";
 import { InvalidRequest } from "@octodo/contract";
-import { Api, Validation } from "@octodo/contract/api";
-import { Workspaces } from "@octodo/engine";
+import { makeApi, Validation } from "@octodo/contract/api";
+import { makeRegistry, Workspaces, type Plugin, type Registry } from "@octodo/engine";
 import { httpLayer } from "@octodo/mcp";
+import { plugins } from "@octodo/plugins";
 import { Cause, Effect, Exit, Layer, Scope } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse, HttpStaticServer } from "effect/http";
 import { HttpApiBuilder, HttpApiMiddleware } from "effect/http-api";
@@ -10,8 +11,8 @@ import { existsSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
-import { AppLive } from "./app.ts";
-import { OperationsLive } from "./operations.ts";
+import { appLive } from "./app.ts";
+import { operationsLive } from "./operations.ts";
 
 export interface ServerOptions {
   /** Where workspaces.json lives. */
@@ -19,6 +20,8 @@ export interface ServerOptions {
   readonly port?: number | undefined;
   /** Built web app to serve at `/`. Without it only the API and MCP endpoints are served. */
   readonly webDir?: string | undefined;
+  /** The plugins octodo has; every first-party one unless given. */
+  readonly plugins?: ReadonlyArray<Plugin> | undefined;
 }
 
 export interface RunningServer {
@@ -39,10 +42,14 @@ const ValidationLive = HttpApiMiddleware.layerSchemaErrorTransform(Validation, (
     : Effect.fail(new InvalidRequest({ message: error.cause.message })),
 );
 
-const ApiLive = HttpApiBuilder.layer(Api, { openapiPath: "/api/openapi.json" }).pipe(
-  Layer.provide([OperationsLive, AppLive]),
-  Layer.provide(ValidationLive),
-);
+/** The API for the operations of `registry`: the catalog's and its plugins'. */
+const apiLive = (registry: Registry) => {
+  const api = makeApi(registry.operations);
+  return HttpApiBuilder.layer(api, { openapiPath: "/api/openapi.json" }).pipe(
+    Layer.provide([operationsLive(api, registry), appLive(api)]),
+    Layer.provide(ValidationLive),
+  );
+};
 
 /** An `/api` path no endpoint has is a JSON 404, never the web app. */
 const UnknownApiRoute = HttpRouter.add(
@@ -70,15 +77,18 @@ const failure = (cause: Cause.Cause<unknown>) => {
 
 export const startServer = async (options: ServerOptions): Promise<RunningServer> => {
   const node = createServer();
+  const installed = options.plugins ?? plugins;
   const routes = Layer.mergeAll(
-    ApiLive,
+    apiLive(makeRegistry(installed)),
     httpLayer({ path: "/mcp" }),
     UnknownApiRoute,
     webApp(options.webDir),
   );
   const server = HttpRouter.serve(routes, { disableLogger: true, disableListenLog: true }).pipe(
     Layer.provide(
-      Workspaces.layer({ home: options.home, watch: true }).pipe(Layer.provide(NodeServices.layer)),
+      Workspaces.layer({ home: options.home, watch: true, plugins: installed }).pipe(
+        Layer.provide(NodeServices.layer),
+      ),
     ),
     Layer.provide(
       NodeHttpServer.layer(() => node, { host: LOOPBACK, port: options.port ?? DEFAULT_PORT }),

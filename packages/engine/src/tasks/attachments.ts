@@ -4,6 +4,7 @@ import {
   type Attachment,
   type AttachmentContent,
   type AttachmentFile,
+  type Task,
 } from "@octodo/contract";
 import { MAX_ATTACHMENT_BYTES } from "@octodo/contract/rules";
 import { Effect } from "effect";
@@ -16,10 +17,14 @@ import { mediaType } from "./media-type.ts";
 import { findTask } from "./operations.ts";
 
 /** The task folder and the path segments of a file inside it, refusing anything else. */
-const attachmentTarget = ({ storage, scan }: State, taskId: string, relativePath: string) =>
+const attachmentTarget = (
+  { storage, scan, plugins }: State,
+  taskId: string,
+  relativePath: string,
+) =>
   Effect.gen(function* () {
     const { snapshot, dirs } = yield* scan;
-    yield* findTask(snapshot, taskId);
+    const task = yield* findTask(snapshot, taskId);
     const dir = dirs.tasks.get(taskId)!;
     const segments = relativePath.split(/[\\/]/).filter((part) => part !== "" && part !== ".");
     if (isAbsolute(relativePath) || segments.length === 0)
@@ -40,12 +45,16 @@ const attachmentTarget = ({ storage, scan }: State, taskId: string, relativePath
       !(yield* storageError("Could not read the task folder")(storage.staysInside(dir, segments)))
     )
       return yield* invalid("Attachment paths cannot follow symlinks out of the task folder");
-    return { dir, segments };
+    return { dir, segments, owned: ownedFiles(plugins, task) };
   });
 
-const listed = ({ storage }: State, dir: string) =>
+/** The files the plugin of the task's kind owns, which are not its attachments. */
+const ownedFiles = (plugins: State["plugins"], task: Task): ReadonlyArray<string> =>
+  plugins.find((plugin) => plugin.shared.id === task.kind?.id)?.shared.files ?? [];
+
+const listed = ({ storage }: State, dir: string, owned: ReadonlyArray<string>) =>
   Effect.map(
-    storageError("Could not read the task folder")(storage.attachments(dir)),
+    storageError("Could not read the task folder")(storage.attachments(dir, owned)),
     (files): Array<Attachment> =>
       files.map((file) => ({ ...file, mediaType: mediaType(file.path) })),
   );
@@ -54,16 +63,16 @@ export const listAttachments = (state: State, taskId: string) =>
   state.read(
     Effect.gen(function* () {
       const { snapshot, dirs } = yield* state.scan;
-      yield* findTask(snapshot, taskId);
-      return yield* listed(state, dirs.tasks.get(taskId)!);
+      const task = yield* findTask(snapshot, taskId);
+      return yield* listed(state, dirs.tasks.get(taskId)!, ownedFiles(state.plugins, task));
     }),
   );
 
 const findAttachment = (state: State, taskId: string, relativePath: string) =>
   Effect.gen(function* () {
-    const { dir, segments } = yield* attachmentTarget(state, taskId, relativePath);
+    const { dir, segments, owned } = yield* attachmentTarget(state, taskId, relativePath);
     const path = segments.join("/");
-    const attachment = (yield* listed(state, dir)).find((file) => file.path === path);
+    const attachment = (yield* listed(state, dir, owned)).find((file) => file.path === path);
     if (attachment === undefined) return yield* new AttachmentNotFound({ task: taskId, path });
     return { ...attachment, file: join(dir, ...segments) } satisfies AttachmentFile;
   });
@@ -92,7 +101,13 @@ export const writeAttachment = (
 ) =>
   state.write((files) =>
     Effect.gen(function* () {
-      const { dir, segments } = yield* attachmentTarget(state, taskId, relativePath);
+      const { dir, segments, owned } = yield* attachmentTarget(state, taskId, relativePath);
+      const first = segments[0]!.toLowerCase();
+      const taken = owned.find((name) => name.toLowerCase() === first);
+      if (taken !== undefined)
+        return yield* invalid(
+          `${taken} holds the data of the task's kind, so no attachment can take its name`,
+        );
       return yield* Effect.gen(function* () {
         // One level at a time, so a task folder that has gone is not created again.
         let folder = dir;

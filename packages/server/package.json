@@ -7,13 +7,14 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "dev": "node --watch-path=src --watch-path=../contract/src --watch-path=../engine/src --watch-path=../mcp/src src/main.ts"
+    "dev": "node --watch-path=src --watch-path=../contract/src --watch-path=../engine/src --watch-path=../mcp/src --watch-path=../plugins/src src/main.ts"
   },
   "dependencies": {
     "@effect/platform-node": "4.0.6",
     "@octodo/contract": "workspace:*",
     "@octodo/engine": "workspace:*",
     "@octodo/mcp": "workspace:*",
+    "@octodo/plugins": "workspace:*",
     "effect": "4.0.6"
   }
 }

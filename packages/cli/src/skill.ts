@@ -1,4 +1,6 @@
-import { catalog, CLI_ANNOTATION, type Operation } from "@octodo/contract/catalog";
+import { CLI_ANNOTATION, type Operation } from "@octodo/contract/catalog";
+import { makeRegistry } from "@octodo/engine";
+import { plugins } from "@octodo/plugins";
 import { SchemaAST } from "effect";
 
 const firstSentence = (text: string) => text.split(/(?<=\.)\s/)[0]!;
@@ -16,7 +18,8 @@ const usage = (operation: Operation) => {
   return `\`${["octo", ...operation.cli.command, ...positionals].join(" ")}\``;
 };
 
-const operations = Object.entries(catalog) as Array<[string, Operation]>;
+/** Every operation octodo has, plugins' included: the skill does not depend on a workspace. */
+const operations = Object.entries(makeRegistry(plugins).operations);
 
 const list = operations
   .map(

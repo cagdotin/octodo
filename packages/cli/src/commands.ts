@@ -1,21 +1,25 @@
-import type { AttachmentContent } from "@octodo/contract";
+import type { AttachmentContent, PluginNotEnabled } from "@octodo/contract";
 import {
-  catalog,
   FileSuccess,
   type CliCommand,
   type Operation,
   type OperationName,
 } from "@octodo/contract/catalog";
-import { runOperation, type OperationError, type Workspace, type Workspaces } from "@octodo/engine";
+import {
+  type OperationError,
+  type Registry,
+  type Workspace,
+  type Workspaces,
+} from "@octodo/engine";
 import { Console, Effect, FileSystem, Option, Schema, type PlatformError } from "effect";
 import { Command, Flag } from "effect/cli";
 import { renderers } from "./render.ts";
 import { schemaFlags } from "./schema-flags.ts";
 
 /**
- * A command generated from a catalog operation, with the words that run it. Its types are stated
- * here, since it is built from the catalog at runtime: it fails as any operation can, or as `E`
- * when opening the workspace does.
+ * A command generated from an operation, with the words that run it. Its types are stated here,
+ * since it is built from the registry at runtime: it fails as any operation can, or as `E` when
+ * opening the workspace does.
  */
 export interface OperationCommand<E, R> {
   readonly words: CliCommand["command"];
@@ -23,7 +27,7 @@ export interface OperationCommand<E, R> {
     string,
     unknown,
     {},
-    E | OperationError<OperationName> | PlatformError.PlatformError,
+    E | OperationError<OperationName> | PluginNotEnabled | PlatformError.PlatformError,
     R | Workspaces | FileSystem.FileSystem
   >;
 }
@@ -50,8 +54,10 @@ const writeStdout = (bytes: Uint8Array) =>
   });
 
 /** Prints a success: the renderer's lines, or JSON when there is none or `--json` asks for it. */
-const print = (name: OperationName, result: unknown, asJson: boolean) => {
-  const render = renderers[name] as ((result: unknown) => ReadonlyArray<string>) | undefined;
+const print = (name: string, result: unknown, asJson: boolean) => {
+  const render = renderers[name as OperationName] as
+    | ((result: unknown) => ReadonlyArray<string>)
+    | undefined;
   if (render === undefined || asJson) return Console.log(JSON.stringify(result, null, 2));
   return Effect.forEach(render(result), (text) => Console.log(text), { discard: true });
 };
@@ -67,7 +73,8 @@ const save = (file: AttachmentContent, to: Option.Option<string>) =>
   });
 
 const commandFor = <E, R>(
-  name: OperationName,
+  registry: Registry,
+  name: string,
   operation: Operation,
   cli: CliCommand,
   workspace: Effect.Effect<Workspace, E, R>,
@@ -75,7 +82,11 @@ const commandFor = <E, R>(
   const { workspace: _selector, ...fields } = operation.input.fields;
   const flags = schemaFlags(Schema.Struct(fields));
   const isFile = operation.success === FileSuccess;
-  const extra = isFile ? { output } : renderers[name] === undefined ? {} : { json };
+  const extra = isFile
+    ? { output }
+    : renderers[name as OperationName] === undefined
+      ? {}
+      : { json };
   const command = Command.make(
     cli.command.at(-1)!,
     { input: flags.params, ...extra },
@@ -85,11 +96,7 @@ const commandFor = <E, R>(
       readonly output?: Option.Option<string>;
     }) {
       const input = yield* flags.decode(parsed.input);
-      const result = yield* runOperation(name, input as never, () => workspace) as Effect.Effect<
-        unknown,
-        unknown,
-        Workspaces | R
-      >;
+      const result = yield* registry.run(name, input, () => workspace);
       if (isFile) return yield* save(result as AttachmentContent, parsed.output ?? Option.none());
       yield* print(name, result, parsed.json === true);
     }),
@@ -105,19 +112,21 @@ const commandFor = <E, R>(
 };
 
 /**
- * One command for each catalog operation with a `cli` entry. `workspace` opens the workspace the
- * command line names; the catalog's `workspace` field is not a flag of its own.
+ * One command for each of the registry's operations with a `cli` entry. `workspace` opens the
+ * workspace the command line names; the operation's `workspace` field is not a flag of its own.
  */
 export const operationCommands = <E, R>(
+  registry: Registry,
   workspace: Effect.Effect<Workspace, E, R>,
 ): Array<OperationCommand<E, R>> =>
-  (Object.entries(catalog) as Array<[OperationName, Operation]>).flatMap(([name, operation]) =>
+  Object.entries(registry.operations).flatMap(([name, operation]) =>
     operation.cli === undefined
       ? []
       : [
           {
             words: operation.cli.command,
             command: commandFor(
+              registry,
               name,
               operation,
               operation.cli,

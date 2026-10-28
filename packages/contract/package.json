@@ -8,6 +8,7 @@
     "./api": "./src/api.ts",
     "./catalog": "./src/catalog.ts",
     "./client": "./src/client.ts",
+    "./plugin": "./src/plugin.ts",
     "./rules": "./src/rules.ts"
   },
   "dependencies": {

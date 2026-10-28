@@ -1,4 +1,6 @@
-import type { Diagnostic, DiagnosticKind, Fix, FixAction } from "@octodo/contract";
+import type { CoreDiagnosticKind, Diagnostic, Fix, FixAction } from "@octodo/contract";
+import type { PluginShared } from "@octodo/contract/plugin";
+import type { KindProblem } from "../plugins/plugin.ts";
 import { MAX_LIST_DEPTH } from "@octodo/contract/rules";
 
 interface Remedy {
@@ -99,7 +101,12 @@ export const PROBLEMS = {
     remedy: "Check that octodo may read it",
     fixes: [],
   },
-} as const satisfies Record<DiagnosticKind, Remedy>;
+  "unknown-kind": {
+    remedy:
+      'It reads as a plain task until the plugin is added to "plugins" in config.json or the type line is removed',
+    fixes: [],
+  },
+} as const satisfies Record<CoreDiagnosticKind, Remedy>;
 
 export const FIX_LABELS: Record<FixAction, string> = {
   "fresh-id": "Give this copy a new id",
@@ -114,9 +121,9 @@ export const FIX_LABELS: Record<FixAction, string> = {
 /** Fixes that guess what a person meant, which fix-all leaves to be picked one at a time. */
 const ONE_AT_A_TIME: ReadonlySet<FixAction> = new Set(["wrap-as-task"]);
 
-type FixesOf<K extends DiagnosticKind> = (typeof PROBLEMS)[K]["fixes"][number];
+type FixesOf<K extends CoreDiagnosticKind> = (typeof PROBLEMS)[K]["fixes"][number];
 
-export interface DiagnosticOptions<K extends DiagnosticKind> {
+export interface DiagnosticOptions<K extends CoreDiagnosticKind> {
   readonly field?: string | null;
   readonly fix?: FixesOf<K> | null;
 }
@@ -126,7 +133,7 @@ export interface DiagnosticOptions<K extends DiagnosticKind> {
  * with this file; the kind's remedy follows it. The fix is the kind's only one unless `fix` picks
  * one, or null when none applies here.
  */
-export const diagnostic = <K extends DiagnosticKind>(
+export const diagnostic = <K extends CoreDiagnosticKind>(
   kind: K,
   path: string,
   detail: string,
@@ -151,3 +158,19 @@ export const diagnostic = <K extends DiagnosticKind>(
     fix,
   };
 };
+
+/**
+ * The diagnostic `<plugin>/<problem>` at `path`, with the remedy the plugin's row gives. A
+ * plugin's problems have no fixes.
+ */
+export const kindDiagnostic = (
+  plugin: PluginShared,
+  { problem, detail, field }: KindProblem,
+  path: string,
+): Diagnostic => ({
+  path,
+  kind: `${plugin.id}/${problem}`,
+  field: field ?? null,
+  message: `${detail}. ${plugin.problems[problem] ?? "Its plugin says no more about it"}.`,
+  fix: null,
+});

@@ -10,6 +10,7 @@ import {
 import { slugify } from "@octodo/contract/rules";
 import { hasConfig, readConfig } from "./storage/config.ts";
 import { browseFolders, readRegistry as readRegistryIn, writeRegistry } from "./storage/home.ts";
+import { checkPlugins, type Plugin } from "./plugins/plugin.ts";
 import type { Platform } from "./storage/storage.ts";
 import { initWorkspace, makeWorkspace, type Workspace } from "./workspace.ts";
 
@@ -21,6 +22,8 @@ export class Workspaces extends Context.Service<
   Workspaces,
   {
     readonly home: string;
+    /** The plugins octodo has, whose operations every surface offers. */
+    readonly plugins: ReadonlyArray<Plugin>;
     readonly list: Effect.Effect<ReadonlyArray<WorkspaceInfo>, StorageError>;
     readonly add: (
       root: string,
@@ -41,10 +44,17 @@ export class Workspaces extends Context.Service<
     readonly changes: Stream.Stream<WorkspaceChange>;
   }
 >()("@octodo/engine/Workspaces") {
-  static readonly layer = (options: { readonly home: string; readonly watch: boolean }) =>
+  /** `plugins` are the plugins octodo has; a set that cannot all be installed throws. */
+  static readonly layer = (options: {
+    readonly home: string;
+    readonly watch: boolean;
+    readonly plugins?: ReadonlyArray<Plugin>;
+  }) =>
     Layer.effect(
       Workspaces,
       Effect.gen(function* () {
+        const plugins = options.plugins ?? [];
+        checkPlugins(plugins);
         const path = yield* Path.Path;
         const scope = yield* Scope.Scope;
         const platform = yield* Effect.context<Platform>();
@@ -71,10 +81,10 @@ export class Workspaces extends Context.Service<
           Effect.gen(function* () {
             const existing = handles.get(id);
             if (existing !== undefined) return existing;
-            const workspace = yield* makeWorkspace(id, root, { watch: options.watch }).pipe(
-              Scope.provide(scope),
-              withPlatform,
-            );
+            const workspace = yield* makeWorkspace(id, root, {
+              watch: options.watch,
+              plugins,
+            }).pipe(Scope.provide(scope), withPlatform);
             handles.set(id, workspace);
             yield* workspace.changes.pipe(
               Stream.runForEach(() => PubSub.publish(changes, { workspace: id })),
@@ -163,6 +173,7 @@ export class Workspaces extends Context.Service<
 
         return Workspaces.of({
           home: options.home,
+          plugins,
           list,
           add,
           remove,

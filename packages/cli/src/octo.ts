@@ -1,7 +1,8 @@
 import { FixAction, InvalidRequest, type Diagnostic } from "@octodo/contract";
 import { isProblem } from "@octodo/contract/rules";
-import { Workspaces, defaultHome } from "@octodo/engine";
+import { Workspaces, defaultHome, makeRegistry } from "@octodo/engine";
 import { stdioLayer } from "@octodo/mcp";
+import { plugins } from "@octodo/plugins";
 import { DEFAULT_PORT, startServer } from "@octodo/server";
 import { Console, Effect, FileSystem, Layer, Option, Path } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
@@ -47,7 +48,7 @@ const workspace = Effect.gen(function* () {
   return ws;
 });
 
-const generated = operationCommands(workspace);
+const generated = operationCommands(makeRegistry(plugins), workspace);
 
 /** The generated commands run by `words`, which start with the group's name when it has one. */
 const commandsIn = (...group: ReadonlyArray<string>) =>
@@ -199,7 +200,9 @@ const mcpCommand = Command.make(
     const flags = yield* root;
     const defaultDir = Option.getOrElse(flags.workspace, () => process.cwd());
     return yield* Layer.launch(
-      stdioLayer({ defaultDir }).pipe(Layer.provide(Workspaces.layer({ home, watch: true }))),
+      stdioLayer({ defaultDir }).pipe(
+        Layer.provide(Workspaces.layer({ home, watch: true, plugins })),
+      ),
     );
   }),
 ).pipe(Command.withDescription("Run the MCP server over stdio, for agents"));

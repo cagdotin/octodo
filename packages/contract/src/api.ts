@@ -232,10 +232,17 @@ export class Validation extends HttpApiMiddleware.Service<Validation>()("octodo/
   error: wireError(InvalidRequest),
 }) {}
 
-/** Everything under `/api`. */
-export class Api extends HttpApi.make("octodo")
-  .add(operationsGroup(catalog))
-  .add(AppGroup)
-  .middleware(Validation)
-  .annotate(HttpApi.ParseOptions, { errors: "all" })
-  .prefix("/api") {}
+/** Everything under `/api` for a set of operations: the server serves the catalog and its plugins'. */
+export const makeApi = <const Ops extends Record<string, Operation>>(operations: Ops) =>
+  HttpApi.make("octodo")
+    .add(operationsGroup(operations))
+    .add(AppGroup)
+    .middleware(Validation)
+    .annotate(HttpApi.ParseOptions, { errors: "all" })
+    .prefix("/api");
+
+/** The API a server with any set of plugins serves. */
+export type ServedApi = ReturnType<typeof makeApi<Record<string, Operation>>>;
+
+/** Everything under `/api` for the catalog's operations: what clients are typed from. */
+export class Api extends makeApi(catalog) {}

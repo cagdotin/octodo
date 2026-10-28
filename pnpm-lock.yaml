@@ -354,6 +354,9 @@ importers:
       '@octodo/mcp':
         specifier: workspace:*
         version: link:../mcp
+      '@octodo/plugins':
+        specifier: workspace:*
+        version: link:../plugins
       '@octodo/server':
         specifier: workspace:*
         version: link:../server
@@ -394,6 +397,18 @@ importers:
         specifier: 4.0.6
         version: 4.0.6
 
+  packages/plugins:
+    dependencies:
+      '@octodo/contract':
+        specifier: workspace:*
+        version: link:../contract
+      '@octodo/engine':
+        specifier: workspace:*
+        version: link:../engine
+      effect:
+        specifier: ^4.0.6
+        version: 4.0.6
+
   packages/server:
     dependencies:
       '@effect/platform-node':
@@ -408,6 +423,9 @@ importers:
       '@octodo/mcp':
         specifier: workspace:*
         version: link:../mcp
+      '@octodo/plugins':
+        specifier: workspace:*
+        version: link:../plugins
       effect:
         specifier: 4.0.6
         version: 4.0.6

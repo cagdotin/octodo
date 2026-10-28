@@ -13,10 +13,13 @@ import {
   type Storage,
 } from "./storage/storage.ts";
 import { needsId } from "./tasks/task-file.ts";
+import type { Plugin } from "./plugins/plugin.ts";
 
 /** One open workspace as its operations see it. */
 export interface State {
   readonly storage: Storage;
+  /** The plugins octodo has, whether this workspace enables them or not. */
+  readonly plugins: ReadonlyArray<Plugin>;
   /**
    * The last scan, until a file changes. Files made by hand get an id the first time it reads
    * them. Use it inside `read` or `write`, which take turns over it.
@@ -58,12 +61,20 @@ const giveIds = (files: Files, ids: Ids, scan: Scan) =>
 export const makeState = (
   id: string,
   root: string,
-  options: { readonly watch?: boolean; readonly lockWait?: Duration.Input },
+  options: {
+    readonly watch?: boolean;
+    readonly lockWait?: Duration.Input;
+    readonly plugins?: ReadonlyArray<Plugin>;
+  },
 ): Effect.Effect<State, never, Platform | Scope.Scope> =>
   Effect.gen(function* () {
-    const storage = yield* makeStorage(root, options);
+    const plugins = options.plugins ?? [];
+    const storage = yield* makeStorage(root, {
+      ...options,
+      owned: plugins.flatMap((plugin) => plugin.shared.files),
+    });
     const lock = yield* Semaphore.make(1);
-    const scanned = Effect.map(storage.read, (read) => scanWorkspace(id, root, read));
+    const scanned = Effect.map(storage.read, (read) => scanWorkspace(id, root, read, plugins));
 
     let kept: { readonly version: number; readonly scan: Scan } | undefined;
     const scan = Effect.gen(function* () {
@@ -83,6 +94,7 @@ export const makeState = (
 
     return {
       storage,
+      plugins,
       scan,
       read: lock.withPermits(1),
       write: (change) => lock.withPermits(1)(storage.write(change)),

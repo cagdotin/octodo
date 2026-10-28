@@ -21,7 +21,8 @@ import { orderBetween } from "../place.ts";
 import { fileText } from "../scan.ts";
 import { containerDir, orderedTasks } from "../siblings.ts";
 import { invalid, nextId, readBack, storageError, type State } from "../state.ts";
-import { editTaskFile, keepLinks, newTaskFile } from "./task-file.ts";
+import type { KindChange } from "../plugins/plugin.ts";
+import { editTaskFile, keepLinks, newTaskFile, type NewKind } from "./task-file.ts";
 
 const TOP: Container = { list: null, parent: null };
 
@@ -62,11 +63,31 @@ const checkLinks = (snapshot: WorkspaceSnapshot, task: Task, ids: ReadonlyArray<
   return Effect.succeed([...new Set(ids)]);
 };
 
-export const createTask = (state: State, input: CreateTaskInput) =>
+/** Refuses a change of keys or files that the plugin `id` does not own, or a plugin not enabled. */
+const checkKind = (
+  state: State,
+  snapshot: WorkspaceSnapshot,
+  id: string,
+  change: { readonly keys?: object | undefined; readonly files?: object | undefined },
+) => {
+  const plugin = state.plugins.find((candidate) => candidate.shared.id === id);
+  if (plugin === undefined || !(snapshot.plugins ?? []).includes(id))
+    return invalid(`The ${id} plugin is not enabled in this workspace`);
+  const foreign = [
+    ...Object.keys(change.keys ?? {}).filter((key) => !(key in plugin.shared.keys.fields)),
+    ...Object.keys(change.files ?? {}).filter((file) => !plugin.shared.files.includes(file)),
+  ];
+  return foreign.length === 0
+    ? Effect.void
+    : invalid(`The ${id} plugin does not own ${foreign.join(", ")}`);
+};
+
+export const createTask = (state: State, input: CreateTaskInput, kind?: NewKind) =>
   state.write((files, ids) =>
     Effect.gen(function* () {
       const scan = yield* state.scan;
       const { snapshot } = scan;
+      if (kind !== undefined) yield* checkKind(state, snapshot, kind.id, kind);
       const status = input.status ?? defaultStatus(snapshot.statuses)?.id;
       if (status === undefined) return yield* invalid("The workspace has no statuses");
       yield* checkStatus(snapshot, status);
@@ -79,6 +100,7 @@ export const createTask = (state: State, input: CreateTaskInput) =>
           status,
           order: orderBetween(siblings, {}),
           now: DateTime.formatIso(yield* DateTime.now),
+          kind,
         });
         yield* files.createFolder(
           containerDir(scan, container),
@@ -110,6 +132,37 @@ export const updateTask = (state: State, taskId: string, given: UpdateTaskInput)
                 taskFolderName(taskId, input.title),
               );
         yield* files.writeFile(join(dir, TASK_FILE), editTaskFile(text, input));
+      }).pipe(storageError("Could not write the task"));
+      return yield* reread(state, taskId);
+    }),
+  );
+
+/** Writes the plugin `id`'s keys and files of a task of its kind, the files before `task.md`. */
+export const editKind = (state: State, id: string, taskId: string, change: KindChange) =>
+  state.write((files) =>
+    Effect.gen(function* () {
+      const scan = yield* state.scan;
+      const { snapshot } = scan;
+      const task = yield* findTask(snapshot, taskId);
+      if (task.kind?.id !== id) return yield* invalid(`${taskId} is not a task of the ${id} kind`);
+      yield* checkKind(state, snapshot, id, change);
+      const dir = scan.dirs.tasks.get(taskId)!;
+      const read = scan.kindFiles.get(taskId) ?? new Map<string, string>();
+      for (const name of Object.keys(change.files ?? {}))
+        if (
+          !read.has(name) &&
+          (yield* state.storage
+            .exists(join(dir, name))
+            .pipe(storageError("Could not read the task folder")))
+        )
+          return yield* invalid(`${name} could not be read, so it is not changed`);
+      yield* Effect.gen(function* () {
+        for (const [name, next] of Object.entries(change.files ?? {}))
+          yield* files.writeFile(join(dir, name), next(read.get(name) ?? null));
+        if (change.keys !== undefined) {
+          const file = join(snapshot.workspace.root, task.path);
+          yield* files.writeFile(file, patchFrontmatter(yield* fileText(scan, file), change.keys));
+        }
       }).pipe(storageError("Could not write the task"));
       return yield* reread(state, taskId);
     }),

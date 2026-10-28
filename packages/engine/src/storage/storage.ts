@@ -48,9 +48,13 @@ export interface Storage {
   readonly version: () => number;
   readonly forget: Effect.Effect<void>;
   readonly exists: (path: string) => Effect.Effect<boolean, PlatformError.PlatformError>;
-  /** The attachments in the task folder `dir`, as the folder grammar reads them. */
+  /**
+   * The attachments in the task folder `dir`, as the folder grammar reads them, leaving out the
+   * files `owned` names: the files of the task's plugin.
+   */
   readonly attachments: (
     dir: string,
+    owned?: ReadonlyArray<string>,
   ) => Effect.Effect<ReadonlyArray<AttachmentFile>, PlatformError.PlatformError>;
   readonly readBytes: (file: string) => Effect.Effect<Uint8Array, PlatformError.PlatformError>;
   /**
@@ -79,13 +83,15 @@ export const makeStorage = (
     readonly watch?: boolean;
     /** How long a write waits for another process to release the owner lock. */
     readonly lockWait?: Duration.Input;
+    /** The files plugins own at the top of a task folder, which reads take in too. */
+    readonly owned?: ReadonlyArray<string>;
   } = {},
 ): Effect.Effect<Storage, never, Platform | Scope.Scope> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const tasksDir = path.join(root, TASKS_DIR);
-    const reads = makeTreeReader();
+    const reads = makeTreeReader(options.owned);
     const files = makeFiles(fs, path, root, reads.changed);
     const changes = yield* PubSub.sliding<void>(16);
     let watching = options.watch === true;
@@ -187,7 +193,7 @@ export const makeStorage = (
       version: reads.version,
       forget,
       exists: (at) => fs.exists(at),
-      attachments: (dir) => withPlatform(readAttachments(dir)),
+      attachments: (dir, owned) => withPlatform(readAttachments(dir, owned)),
       readBytes: (file) => fs.readFile(file),
       staysInside,
       write,

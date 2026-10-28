@@ -33,5 +33,9 @@ use itself is not ready to ship.
 
 ## Consequences
 
+- [0014](0014-one-plugin-api-for-the-plain-task-and-every-plugin.md) sets the API: the shapes, how
+  enablement reaches the scan and the surfaces, problem kinds named `<plugin>/<problem>`, and no
+  version number on the keys schema.
+
 - Third-party plugins, if they ever come, need a trust model and must load from `<home>`, never
   from `.octodo/`. That idea is recorded in the Open ideas list.

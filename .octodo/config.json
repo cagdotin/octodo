@@ -27,5 +27,6 @@
       "name": "Archived",
       "category": "archived"
     }
-  ]
+  ],
+  "plugins": ["recurring"]
 }

@@ -33,7 +33,9 @@ instead of keeping the code because it exists.
   moving it into a completed status logs that line and leaves it in the first unstarted status
   ([0016](docs/decisions/0016-recurring-tasks-complete-in-place.md)). A days-since counter
   (`type: counter`) logs each reset in the same `log.jsonl` and closes like a plain task
-  ([0019](docs/decisions/0019-days-since-counters-share-the-occurrence-log.md)).
+  ([0019](docs/decisions/0019-days-since-counters-share-the-occurrence-log.md)). An anniversary
+  keeps the day it first happened in `date`; clients compute its next occurrence from today
+  ([0020](docs/decisions/0020-anniversaries-store-the-day-clients-compute-the-next.md)).
 - A link is a frontmatter key holding a list of plain task ids, `blocked_by: [HM-3, HM-7]`;
   `LINK_KINDS` in `contract/src/rules.ts` lists the keys. Only one end stores an edge: the reverse (`blocks`),
   `mentionedIn` (from `[[HM-3]]` in a body, outside code), `blocked` and `ready` (open and not

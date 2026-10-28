@@ -19,7 +19,7 @@ Packages may depend only in one direction:
 | `engine`   | storage, tasks, lists, statuses, health, plugin registry, `Workspace`, `Workspaces` | server, client (embedded mode)                   |
 | `plugins`  | first-party plugins, each with `shared`, `engine` and `web` entry points            | server, cli, mcp (`engine`), web (`web`)         |
 | `server`   | HTTP API, MCP over HTTP, change feed, auth                                          | cli, desktop                                     |
-| `client`   | typed client and `connect()`: a running server, or the engine in-process            | cli, mcp                                         |
+| `client`   | typed client and `connect()`: a running server, or the engine in-process            | cli                                              |
 | `cli`      | commands generated from the catalog                                                 |                                                  |
 
 Tasks, lists and statuses stay folders inside `engine`. They share one storage layer, one snapshot

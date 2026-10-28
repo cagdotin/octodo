@@ -41,7 +41,7 @@ const build = (api: ServedApi, registry: Registry) =>
     const platform = yield* Effect.context<
       FileSystem.FileSystem | Path.Path | HttpPlatform.HttpPlatform
     >();
-    const open = (workspace: string | undefined) => workspaces.get(workspace!);
+    const open = (workspace: string | undefined) => workspaces.open(workspace!);
     for (const endpoint of Object.values(api.groups.operations.endpoints)) {
       const name = endpoint.identifier;
       const locate = files[name as OperationName];
@@ -66,7 +66,7 @@ const build = (api: ServedApi, registry: Registry) =>
 /**
  * Implements every endpoint of the `operations` group: an operation's input is its path
  * parameters, its query and its body together, and the registry runs it in the workspace the
- * path names, which must be registered. The loop is untyped; `Api` types each endpoint.
+ * path names: a registered id, or a folder the way MCP and the CLI take one. The loop is untyped; `Api` types each endpoint.
  */
 export const operationsLive = (
   api: ServedApi,

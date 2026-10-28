@@ -31,6 +31,10 @@ import {
   type WireError,
 } from "./domain.ts";
 import { MAX_ATTACHMENT_BYTES } from "./rules.ts";
+import packageJson from "../package.json" with { type: "json" };
+
+/** The version of octodo, which a client compares with the server's `/api/health` (decision 0018). */
+export const VERSION: string = packageJson.version;
 
 type PathParamNames<Path extends string> = Path extends `${string}:${infer Name}/${infer Rest}`
   ? Name | PathParamNames<`/${Rest}`>
@@ -66,6 +70,16 @@ export type OperationEndpoint<
   WireError<Op["error"]>
 >;
 
+/** As MCP takes it; a relative path would resolve against the server's own working directory. */
+const WorkspaceSelector = Schema.String.pipe(
+  Schema.check(
+    Schema.isPattern(/^[^.]/, { message: "Use a workspace id or an absolute folder path" }),
+  ),
+).annotate({
+  description:
+    "A registered workspace id, or an absolute folder path as one percent-encoded segment (the workspace containing it)",
+});
+
 const RegisteredWorkspace = Schema.String.annotate({ description: "Registered workspace id" });
 
 /**
@@ -77,7 +91,7 @@ const operationEndpoint = (name: string, operation: Operation) => {
   const params = Object.fromEntries(
     inPath.map((key) => {
       const field = operation.input.fields[key]!;
-      if (key === "workspace") return [key, RegisteredWorkspace];
+      if (key === "workspace") return [key, WorkspaceSelector];
       return [key, field.ast.context?.isOptional === true ? Schema.String : field];
     }),
   );
@@ -152,7 +166,7 @@ const AddWorkspaceInput = Schema.Struct({
 const errors = <const List extends ReadonlyArray<Schema.Top>>(...list: List) =>
   list.map((error) => wireError(error)) as unknown as { [K in keyof List]: WireError<List[K]> };
 
-const inWorkspace = { workspace: RegisteredWorkspace };
+const inWorkspace = { workspace: WorkspaceSelector };
 
 const ChangeEvent = Schema.Struct({
   event: Schema.Literal("change"),
@@ -183,7 +197,7 @@ export class AppGroup extends HttpApiGroup.make("app").add(
     error: errors(InvalidRequest, StorageError),
   }),
   HttpApiEndpoint.delete("remove_workspace", "/workspaces/:workspace", {
-    params: inWorkspace,
+    params: { workspace: RegisteredWorkspace },
     success: Schema.Struct({ removed: Schema.String }),
     error: errors(WorkspaceNotFound, StorageError),
   }),

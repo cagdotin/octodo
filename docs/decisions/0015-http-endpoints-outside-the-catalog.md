@@ -34,7 +34,8 @@ catalog, and so become MCP tools and CLI commands, once the plugin registry (OCT
 entries are collected.
 
 `capabilities` in `/api/health` names what this server offers (`operations`, `mcp`, `openapi`), so
-a client that finds a running server (OCT-54) can tell what it may call before calling it.
+a client that finds a running server can tell what it may call before calling it
+([0018](0018-connect-finds-the-server-through-server-json.md)).
 
 ## Consequences
 

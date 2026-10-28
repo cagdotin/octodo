@@ -1,7 +1,15 @@
 import { NodeHttpServer, NodeServices } from "@effect/platform-node";
 import { InvalidRequest } from "@octodo/contract";
 import { makeApi, Validation } from "@octodo/contract/api";
-import { makeRegistry, Workspaces, type Plugin, type Registry } from "@octodo/engine";
+import { VERSION } from "@octodo/contract/api";
+import {
+  makeRegistry,
+  removeServerInfo,
+  writeServerInfo,
+  Workspaces,
+  type Plugin,
+  type Registry,
+} from "@octodo/engine";
 import { httpLayer } from "@octodo/mcp";
 import { plugins } from "@octodo/plugins";
 import { Cause, Effect, Exit, Layer, Scope } from "effect";
@@ -31,6 +39,9 @@ export interface RunningServer {
 }
 
 export const DEFAULT_PORT = 4520;
+
+/** Room for a folder path in one percent-encoded segment: PATH_MAX, three bytes a character. */
+const MAX_PATH_SEGMENT = 3 * 4096;
 
 /** The only address the server listens on: octodo has no authentication (decision 0010). */
 const LOOPBACK = "127.0.0.1";
@@ -84,7 +95,12 @@ export const startServer = async (options: ServerOptions): Promise<RunningServer
     UnknownApiRoute,
     webApp(options.webDir),
   );
-  const server = HttpRouter.serve(routes, { disableLogger: true, disableListenLog: true }).pipe(
+  const server = HttpRouter.serve(routes, {
+    disableLogger: true,
+    disableListenLog: true,
+    // A workspace folder or an attachment path is one segment, often longer than the default 100.
+    routerConfig: { maxParamLength: MAX_PATH_SEGMENT },
+  }).pipe(
     Layer.provide(
       Workspaces.layer({ home: options.home, watch: true, plugins: installed }).pipe(
         Layer.provide(NodeServices.layer),
@@ -100,14 +116,25 @@ export const startServer = async (options: ServerOptions): Promise<RunningServer
 
   const { port } = node.address() as AddressInfo;
   const url = `http://${LOOPBACK}:${port}`;
+  const discovery = { url, pid: process.pid, version: VERSION };
+  const onDisk = <A, E>(effect: Effect.Effect<A, E, NodeServices.NodeServices>) =>
+    Effect.runPromise(Effect.provide(Effect.orDie(effect), NodeServices.layer));
+  const stop = async () => {
+    // Open event streams never end on their own, so close every connection instead of waiting.
+    node.close();
+    node.closeAllConnections();
+    await Effect.runPromise(Scope.close(scope, Exit.void));
+  };
+  await onDisk(writeServerInfo(options.home, discovery)).catch(async (error: unknown) => {
+    await stop();
+    throw error;
+  });
   return {
     url,
     mcpUrl: `${url}/mcp`,
     close: async () => {
-      // Open event streams never end on their own, so close every connection instead of waiting.
-      node.close();
-      node.closeAllConnections();
-      await Effect.runPromise(Scope.close(scope, Exit.void));
+      await onDisk(removeServerInfo(options.home, discovery));
+      await stop();
     },
   };
 };

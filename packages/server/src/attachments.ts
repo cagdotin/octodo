@@ -8,6 +8,7 @@ import {
   HttpStaticServer,
 } from "effect/http";
 import { basename, dirname } from "node:path";
+import { pathToFileURL } from "node:url";
 
 /**
  * Task folders come from git and sync tools, so a file in one is untrusted. The sandbox keeps an
@@ -26,6 +27,8 @@ const PAGE_TYPES =
 /**
  * Streams an attachment from disk with its media type, answering `Range`, `ETag` and `304` the
  * way static files are answered, and with the headers of an untrusted file (decision 0006).
+ * `Content-Location` is the file on this computer, which a client in server mode passes on as
+ * `read_attachment` does (decision 0018).
  */
 export const serveAttachment = (attachment: AttachmentFile) =>
   Effect.gen(function* () {
@@ -46,6 +49,7 @@ export const serveAttachment = (attachment: AttachmentFile) =>
     return HttpServerResponse.setHeaders(response, {
       ...UNTRUSTED_FILE_HEADERS,
       "Content-Type": attachment.mediaType,
+      "Content-Location": pathToFileURL(attachment.file).href,
       ...(PAGE_TYPES.test(attachment.mediaType)
         ? { "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(name)}` }
         : {}),

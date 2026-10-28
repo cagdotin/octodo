@@ -1,10 +1,9 @@
-import type { ServedApi } from "@octodo/contract/api";
+import { VERSION, type ServedApi } from "@octodo/contract/api";
 import { Workspaces } from "@octodo/engine";
 import { Effect, Stream } from "effect";
 import { HttpServer } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 import { homedir } from "node:os";
-import packageJson from "../package.json" with { type: "json" };
 import { uploadedBytes } from "./attachments.ts";
 
 const ping = { event: "ping", data: "" } as const;
@@ -21,7 +20,7 @@ export const appLive = (api: ServedApi) =>
         handlers
           .handle("health", () =>
             Effect.succeed({
-              version: packageJson.version,
+              version: VERSION,
               capabilities: { operations: true, mcp: true, openapi: true },
             }),
           )
@@ -34,18 +33,18 @@ export const appLive = (api: ServedApi) =>
             Effect.as(workspaces.remove(workspace), { removed: workspace }),
           )
           .handle("snapshot", ({ params }) =>
-            Effect.flatMap(workspaces.get(params.workspace), (ws) => ws.snapshot),
+            Effect.flatMap(workspaces.open(params.workspace), (ws) => ws.snapshot),
           )
           .handle("reorder_statuses", ({ params, payload }) =>
-            Effect.flatMap(workspaces.get(params.workspace), (ws) => ws.reorderStatuses(payload)),
+            Effect.flatMap(workspaces.open(params.workspace), (ws) => ws.reorderStatuses(payload)),
           )
           .handle("fix_all", ({ params }) =>
-            Effect.flatMap(workspaces.get(params.workspace), (ws) => ws.fixAll),
+            Effect.flatMap(workspaces.open(params.workspace), (ws) => ws.fixAll),
           )
           // Raw, so that any content type is taken: the body is the file whatever it says it is.
           .handleRaw("upload_attachment", ({ params: { workspace, id, path } }) =>
             Effect.gen(function* () {
-              const ws = yield* workspaces.get(workspace);
+              const ws = yield* workspaces.open(workspace);
               const bytes = yield* uploadedBytes(path);
               return { path: yield* ws.writeAttachment(id, path, bytes) };
             }),

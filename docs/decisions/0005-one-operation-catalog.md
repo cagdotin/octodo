@@ -57,7 +57,8 @@ and generates its API, CLI flags and JSON Schema from that declaration, with a t
   lists every operation with its command and its description's first sentence, and the examples.
   `operationsGroup(entries)` in `packages/contract/src/api.ts` makes an HttpApi endpoint of each
   entry, typed from the entry, and `packages/server/src/operations.ts` implements them all in one
-  loop over `runOperation`, with the `workspace` path parameter naming a registered workspace.
+  loop over `runOperation`, with the `workspace` path parameter naming a registered workspace or an absolute folder
+  ([0018](0018-connect-finds-the-server-through-server-json.md)).
 - CLI-only flags stay out of the catalog: `--workspace`, `--json` (on a command with a text
   renderer) and `--output` (on a file operation).
 - Tests: `packages/cli/test/surfaces.test.ts` runs a table of calls covering every operation on the

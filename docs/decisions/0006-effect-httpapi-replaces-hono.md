@@ -60,7 +60,7 @@ is no auth middleware and no pairing endpoint.
 ## As built (OCT-53)
 
 - The definition lives in `@octodo/contract/api` (`Api`, prefixed `/api`), so the server, the
-  client types and later a Node client (OCT-54) share it. Its endpoints are listed in
+  client types and the Node client `@octodo/client` share it. Its endpoints are listed in
   [0015](0015-http-endpoints-outside-the-catalog.md). OpenAPI is served at `/api/openapi.json`.
 - Errors carry `httpApiStatus` in `domain.ts`: `WorkspaceNotFound`, `TaskNotFound` and
   `AttachmentNotFound` 404, `InvalidRequest` 400, `AttachmentTooLarge` 413, `StorageError` 500.

@@ -1,5 +1,6 @@
 export * from "./workspace.ts";
 export * from "./workspaces.ts";
+export { readServerInfo, removeServerInfo, writeServerInfo } from "./storage/home.ts";
 export { mediaType } from "./tasks/media-type.ts";
 export type { TaskFile } from "./tasks/task-file.ts";
 export * from "./operations.ts";

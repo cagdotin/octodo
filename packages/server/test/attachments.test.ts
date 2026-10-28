@@ -10,6 +10,7 @@ import {
 import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startServer, type RunningServer } from "../src/index.ts";
 
@@ -74,6 +75,9 @@ describe("task attachments over HTTP", () => {
     expect(get.status).toBe(200);
     expect(get.headers.get("content-type")).toBe("image/png");
     expect(get.headers.get("content-security-policy")).toContain("sandbox");
+    expect(get.headers.get("content-location")).toBe(
+      pathToFileURL(join(taskFolder, "images", "hall.png")).href,
+    );
     expect(new Uint8Array(await get.arrayBuffer())).toEqual(PNG);
   });
 

@@ -464,6 +464,38 @@ export class StorageError extends Schema.TaggedError<StorageError>()(
   { httpApiStatus: 500 },
 ) {}
 
+/**
+ * `<home>/server.json`, which a running server writes so the CLI and stdio MCP find it
+ * (decision 0018). A hint: a client probes `url` before it trusts it.
+ */
+export const ServerInfo = Schema.Struct({
+  url: Schema.String,
+  pid: Schema.Int,
+  version: Schema.String,
+});
+export type ServerInfo = typeof ServerInfo.Type;
+
+/** The server `server.json` names answers, but from another version of octodo than the client's. */
+export class ServerMismatch extends Schema.TaggedError<ServerMismatch>()("ServerMismatch", {
+  url: Schema.String,
+  version: Schema.String,
+  expected: Schema.String,
+}) {
+  override get message(): string {
+    return `The octodo server at ${this.url} is version ${this.version}, and this octo is ${this.expected}. Restart the server from this version, or stop it.`;
+  }
+}
+
+/** The server `server.json` names is running but cannot be used: it hangs or answers nonsense. */
+export class ServerUnavailable extends Schema.TaggedError<ServerUnavailable>()(
+  "ServerUnavailable",
+  { url: Schema.String, reason: Schema.String },
+) {
+  override get message(): string {
+    return `The octodo server at ${this.url} ${this.reason}`;
+  }
+}
+
 interface TaggedErrorClass extends Schema.Top {
   readonly fields: Schema.Struct.Fields;
   new (fields: never): { readonly message: string };

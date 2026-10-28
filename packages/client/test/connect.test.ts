@@ -1,14 +1,14 @@
 import { NodeServices } from "@effect/platform-node";
 import { VERSION } from "@octodo/contract/api";
 import { makeRegistry } from "@octodo/engine";
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { connect } from "../src/index.ts";
+import { connect, findServer } from "../src/index.ts";
 
 const registry = makeRegistry([]);
 const servers: Array<Server> = [];
@@ -152,5 +152,28 @@ describe("connect", () => {
     expect(error.message).toBe(
       `The octodo server at ${stuck} (pid ${process.pid}) does not answer within 2 s. Stop it, or wait for it to answer.`,
     );
+  });
+});
+
+describe("findServer", () => {
+  const find = (home: string) =>
+    Effect.runPromise(
+      findServer(home).pipe(
+        Effect.map(Option.getOrNull),
+        Effect.catch((error) => Effect.succeed(error._tag)),
+        Effect.provide(NodeServices.layer),
+      ),
+    );
+
+  it("names the server that answers as this version, nothing when none runs, and reports one that cannot be used", async () => {
+    const { home } = await scratch();
+    expect(await find(home)).toBeNull();
+    const url = await fake(() => ({ status: 200, body: health }));
+    nameServer(home, url);
+    expect(await find(home)).toEqual({ url, pid: process.pid, version: VERSION });
+    nameServer(home, url, 2 ** 22 + 1);
+    expect(await find(home)).toBeNull();
+    nameServer(home, await fake(() => ({ status: 200, body: { ...health, version: "0.9.0" } })));
+    expect(await find(home)).toBe("ServerMismatch");
   });
 });

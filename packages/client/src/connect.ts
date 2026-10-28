@@ -4,6 +4,7 @@ import {
   ServerUnavailable,
   type FixResult,
   type ServerInfo,
+  type StorageError,
   type WorkspaceInfo,
 } from "@octodo/contract";
 import { VERSION } from "@octodo/contract/api";
@@ -64,10 +65,16 @@ const isRunning = (pid: number) => {
 };
 
 /**
- * Whether to use the server `info` names: yes when it answers as this version does, no when
- * nothing listens at its address any more, and an error when it is there but cannot be used.
+ * How the server `info` names answers: `None` when nothing listens at its address any more, its
+ * capability to run operations when it answers as this version does, and an error when it is there
+ * but cannot be used.
  */
-const usable = (info: ServerInfo): Effect.Effect<boolean, ServerMismatch | ServerUnavailable> =>
+const probe = (
+  info: ServerInfo,
+): Effect.Effect<
+  Option.Option<{ readonly operations: boolean }>,
+  ServerMismatch | ServerUnavailable
+> =>
   Effect.gen(function* () {
     const unavailable = (reason: string) =>
       new ServerUnavailable({ url: info.url, reason: `(pid ${info.pid}) ${reason}` });
@@ -92,7 +99,7 @@ const usable = (info: ServerInfo): Effect.Effect<boolean, ServerMismatch | Serve
             ),
       ),
     );
-    if (answer === null) return false;
+    if (answer === null) return Option.none();
     const body = answer.body as { readonly version?: unknown; readonly capabilities?: any } | null;
     if (answer.status !== 200 || typeof body?.version !== "string")
       return yield* unavailable(
@@ -100,7 +107,25 @@ const usable = (info: ServerInfo): Effect.Effect<boolean, ServerMismatch | Serve
       );
     if (body.version !== VERSION)
       return yield* new ServerMismatch({ url: info.url, version: body.version, expected: VERSION });
-    return body.capabilities?.operations === true;
+    return Option.some({ operations: body.capabilities?.operations === true });
+  });
+
+/**
+ * The server `<home>/server.json` names, when it runs and answers as this version does; `None`
+ * when no server runs there; an error when one runs but cannot be used (decision 0018).
+ */
+export const findServer = (
+  home: string,
+): Effect.Effect<
+  Option.Option<ServerInfo>,
+  ServerMismatch | ServerUnavailable | StorageError,
+  FileSystem.FileSystem | Path.Path
+> =>
+  Effect.gen(function* () {
+    const named = yield* readServerInfo(home);
+    if (Option.isNone(named) || !isRunning(named.value.pid)) return Option.none();
+    const answer = yield* probe(named.value);
+    return Option.map(answer, () => named.value);
   });
 
 /** A folder relative to this process's directory, made absolute; an id or absolute path as is. */
@@ -134,7 +159,8 @@ export const connect = (
       if (Option.isNone(named) || !isRunning(named.value.pid)) return yield* embedded;
       const { url, pid } = named.value;
       if (server?.url === url && server.pid === pid) return server.backend;
-      if (!(yield* usable(named.value))) return yield* embedded;
+      const answer = yield* probe(named.value);
+      if (Option.isNone(answer) || !answer.value.operations) return yield* embedded;
       server = { url, pid, backend: remoteBackend(url) };
       return server.backend;
     });

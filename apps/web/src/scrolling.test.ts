@@ -2,7 +2,9 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const SRC = import.meta.dirname;
+/** The code the web app bundles: its own, the UI kit and the plugins' web halves. */
+const ROOT = join(import.meta.dirname, "../../..");
+const SOURCES = ["apps/web/src", "packages/ui/src", "packages/plugins/src"];
 
 /** Ways to get a scrollbar that differs from ScrollArea's, and the files allowed each one. */
 const RULES = [
@@ -15,7 +17,7 @@ const RULES = [
   {
     name: "a hidden scrollbar",
     pattern: /\bno-scrollbar\b|\bscrollbar-?[wW]idth\b|::-webkit-scrollbar/g,
-    allowed: ["components/quick-add/editor.ts"],
+    allowed: ["apps/web/src/components/quick-add/editor.ts"],
   },
 ] as const;
 
@@ -27,7 +29,7 @@ const sources = (dir: string): Array<string> =>
   });
 
 const violations = (file: string) => {
-  const path = relative(SRC, file);
+  const path = relative(ROOT, file);
   const lines = readFileSync(file, "utf8").split("\n");
   return RULES.flatMap((rule) =>
     (rule.allowed as ReadonlyArray<string>).includes(path)
@@ -36,7 +38,7 @@ const violations = (file: string) => {
           [...line.matchAll(rule.pattern)].map(
             ([match]) =>
               `${path}:${index + 1} uses ${rule.name} (${match}). Put the scrolling content in ` +
-              `<ScrollArea> from @/components/ui/scroll-area, so every scrollbar looks and behaves ` +
+              `<ScrollArea> from @octodo/ui/components/scroll-area, so every scrollbar looks and behaves ` +
               `like the task list's.`,
           ),
         ),
@@ -45,6 +47,6 @@ const violations = (file: string) => {
 
 describe("scrolling", () => {
   it("goes through ScrollArea everywhere", () => {
-    expect(sources(SRC).flatMap(violations)).toEqual([]);
+    expect(SOURCES.flatMap((dir) => sources(join(ROOT, dir))).flatMap(violations)).toEqual([]);
   });
 });

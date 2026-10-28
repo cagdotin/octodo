@@ -18,4 +18,9 @@ export interface PluginShared {
   readonly operations: Readonly<Record<string, Operation>>;
   /** What to do about each problem its reader reports, by name; the kind is `<id>/<name>`. */
   readonly problems: Readonly<Record<string, string>>;
+  /**
+   * A few words for a task line on the command line, from the task's `kind.fields` as they are
+   * encoded: `every 3 days, next 2026-10-31`. Absolute, since a read is cached across midnight.
+   */
+  readonly label?: (fields: never) => string;
 }

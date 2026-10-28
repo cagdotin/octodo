@@ -255,8 +255,12 @@ export const makeApi = <const Ops extends Record<string, Operation>>(operations:
     .annotate(HttpApi.ParseOptions, { errors: "all" })
     .prefix("/api");
 
-/** The API a server with any set of plugins serves. */
-export type ServedApi = ReturnType<typeof makeApi<Record<string, Operation>>>;
+/**
+ * The API a server serves for a set of operations, any plugins' by default. A plugin's web half
+ * types its client from its own: `createClient<ServedApi<typeof shared.operations>>`.
+ */
+export type ServedApi<Ops extends Record<string, Operation> = Record<string, Operation>> =
+  ReturnType<typeof makeApi<Ops>>;
 
 /** Everything under `/api` for the catalog's operations: what clients are typed from. */
 export class Api extends makeApi(catalog) {}

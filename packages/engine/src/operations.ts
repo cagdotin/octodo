@@ -103,7 +103,7 @@ const listTasks = (
           task.body.toLowerCase().includes(needle)),
     )
     .toSorted((a, b) => (order.get(a.status) ?? 0) - (order.get(b.status) ?? 0))
-    .map(({ id, title, status, list, parent, priority, tags, due, blocked, ready }) => ({
+    .map(({ id, title, status, list, parent, priority, tags, due, blocked, ready, kind }) => ({
       id,
       title,
       status,
@@ -114,6 +114,7 @@ const listTasks = (
       due,
       blocked,
       ready,
+      ...(kind === undefined ? {} : { kind }),
     }));
 };
 

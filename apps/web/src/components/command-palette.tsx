@@ -26,7 +26,7 @@ import {
   CommandList,
   CommandSeparator,
   CommandShortcut,
-} from "@/components/ui/command";
+} from "@octodo/ui/components/command";
 import { workspacesQuery } from "@/lib/api";
 import { listLabel, SMART } from "@/lib/tasks";
 

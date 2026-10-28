@@ -2,7 +2,7 @@ import * as React from "react"
 import { cn } from "cn"
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui"
 import { CheckIcon, ChevronRightIcon } from "lucide-react"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { ScrollArea } from "@octodo/ui/components/scroll-area"
 
 /** Menu items in a scroll area capped at the menu's max height. */
 function MenuScroll({ children }: { children: React.ReactNode }) {

@@ -7,8 +7,8 @@ import {
   ItemDescription,
   ItemGroup,
   ItemTitle,
-} from "@/components/ui/item";
-import { ScrollArea } from "@/components/ui/scroll-area";
+} from "@octodo/ui/components/item";
+import { ScrollArea } from "@octodo/ui/components/scroll-area";
 import { PageToolbar } from "@/components/app-frame";
 
 /** A settings page: its title in the toolbar, then the content in a centred, readable column. */

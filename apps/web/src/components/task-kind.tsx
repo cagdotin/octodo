@@ -1,0 +1,23 @@
+import type { Task } from "@octodo/contract";
+import { webPlugins } from "@octodo/plugins/web";
+
+/** The web half of the plugin whose kind the task is, if it has one (decision 0016). */
+export const kindWeb = (task: Task) =>
+  task.kind === undefined ? undefined : webPlugins[task.kind.id];
+
+/** Whether completing the task logs it and leaves it open instead of closing it. */
+export const completesInPlace = (task: Task) => kindWeb(task)?.completesInPlace === true;
+
+/** The plugin's part of a task row's date slot, or null for a plain task. */
+export function KindRow({ task, className }: { task: Task; className?: string | undefined }) {
+  const web = kindWeb(task);
+  if (web === undefined || task.kind === undefined) return null;
+  return <web.Row task={{ ...task, kind: task.kind }} className={className} />;
+}
+
+/** The plugin's section of the task panel, or nothing for a plain task. */
+export function KindPanel({ workspace, task }: { workspace: string; task: Task }) {
+  const web = kindWeb(task);
+  if (web === undefined || task.kind === undefined) return null;
+  return <web.Panel workspace={workspace} task={{ ...task, kind: task.kind }} />;
+}

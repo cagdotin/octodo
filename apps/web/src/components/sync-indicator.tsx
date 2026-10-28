@@ -1,7 +1,7 @@
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@octodo/ui/components/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@octodo/ui/components/tooltip";
 import { useSync } from "@/components/sync-provider";
-import { cn } from "@/lib/utils";
+import { cn } from "@octodo/ui/lib/utils";
 
 const LABELS = {
   connecting: "Connecting…",

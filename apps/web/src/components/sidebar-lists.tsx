@@ -19,9 +19,9 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-} from "@/components/ui/sidebar";
+} from "@octodo/ui/components/sidebar";
 import { useMoveList, useMoveTask } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn } from "@octodo/ui/lib/utils";
 import { applyListMove, listTree, type ListNode } from "@/lib/tasks";
 
 /** Linear-sized nav rows: 28px tall, 13px text. */

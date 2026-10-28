@@ -4,7 +4,7 @@ import { CheckIcon, CopyIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Row, Section, SettingsPage } from "@/components/settings-page";
-import { Button } from "@/components/ui/button";
+import { Button } from "@octodo/ui/components/button";
 import {
   Item,
   ItemActions,
@@ -12,7 +12,7 @@ import {
   ItemDescription,
   ItemSeparator,
   ItemTitle,
-} from "@/components/ui/item";
+} from "@octodo/ui/components/item";
 import { connectionQuery } from "@/lib/api";
 
 export const Route = createFileRoute("/w/$workspace_/settings/connections")({

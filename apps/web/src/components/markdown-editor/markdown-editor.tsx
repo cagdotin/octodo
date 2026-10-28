@@ -2,7 +2,7 @@ import { EditorState, type TransactionSpec } from "@codemirror/state";
 import { EditorView, keymap, placeholder as placeholderText } from "@codemirror/view";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { toast } from "sonner";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea } from "@octodo/ui/components/scroll-area";
 import { imageMarkdown, type Attachments } from "@/lib/attachments";
 import { bodyExtensions, fromFile, syncToFile } from "./body-state.ts";
 import { imageUrl } from "./live-preview.ts";

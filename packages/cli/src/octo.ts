@@ -65,7 +65,7 @@ const runInWorkspace = (name: string, input: object) =>
     return yield* connection.run(name, { ...input, workspace });
   });
 
-const generated = operationCommands(registry.operations, runInWorkspace);
+const generated = operationCommands(registry, runInWorkspace);
 
 /** The generated commands run by `words`, which start with the group's name when it has one. */
 const commandsIn = (...group: ReadonlyArray<string>) =>
@@ -193,6 +193,22 @@ const listsCommand = Command.make("lists").pipe(
   Command.withSubcommands(commandsIn("lists")),
 );
 
+/** A group for each first word of a plugin's two-word commands: `octo recurring create`. */
+const pluginGroups = [
+  ...new Set(
+    registry.plugins.flatMap((plugin) =>
+      Object.values(plugin.shared.operations).flatMap((operation) =>
+        operation.cli?.command.length === 2 ? [operation.cli.command[0]] : [],
+      ),
+    ),
+  ),
+].map((group) =>
+  Command.make(group).pipe(
+    Command.withDescription(`Commands of the ${group} plugin`),
+    Command.withSubcommands(commandsIn(group)),
+  ),
+);
+
 const serveCommand = Command.make(
   "serve",
   {
@@ -270,6 +286,7 @@ export const octo = root.pipe(
     initCommand,
     workspaceCommand,
     listsCommand,
+    ...pluginGroups,
     serveCommand,
     mcpCommand,
     skillsCommand,

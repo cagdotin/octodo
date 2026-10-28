@@ -3,10 +3,11 @@ import { useMemo } from "react";
 import { QuickAddInput } from "@/components/quick-add/quick-add-input";
 import { suggestionsFor, useQuickAdd } from "@/components/quick-add/use-quick-add";
 import { PriorityIcon, StatusIcon, TagChip } from "@/components/task-bits";
-import { Kbd } from "@/components/ui/kbd";
+import { Kbd } from "@octodo/ui/components/kbd";
 import { useCreateTask } from "@/lib/api";
-import { cn } from "@/lib/utils";
-import { dueInfo, isSmartView, SMART, todayKey } from "@/lib/tasks";
+import { cn } from "@octodo/ui/lib/utils";
+import { dueInfo } from "@octodo/ui/lib/dates";
+import { isSmartView, SMART, todayKey } from "@/lib/tasks";
 
 interface Props {
   workspace: string;

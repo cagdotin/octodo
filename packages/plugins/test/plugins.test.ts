@@ -59,8 +59,8 @@ const fresh = async () => {
 const kinds = (snapshot: WorkspaceSnapshot) => snapshot.diagnostics.map((d) => [d.kind, d.path]);
 
 describe("the plugin registry", () => {
-  it("installs no plugin yet, and the plain task registers through it", () => {
-    expect(plugins).toEqual([]);
+  it("installs the first-party plugins, and the plain task registers through it", () => {
+    expect(plugins.map((plugin) => plugin.shared.id)).toEqual(["recurring"]);
     expect(Object.keys(makeRegistry([]).operations)).toEqual(Object.keys(plainTask.operations));
   });
 
@@ -206,7 +206,14 @@ describe("a plugin's kind in a workspace", () => {
       ]),
     );
     const lines = await ws.use(
-      Command.runWith(octo, { version: "0" })(["tally", "create", "Water", "--step", "3"]).pipe(
+      Command.runWith(octo, { version: "0" })([
+        "tally",
+        "create",
+        "Water",
+        "--step",
+        "3",
+        "--json",
+      ]).pipe(
         Effect.andThen(TestConsole.logLines),
         Effect.provide(TestConsole.layer),
       ) as Effect.Effect<ReadonlyArray<unknown>, unknown, Workspaces | NodeServices.NodeServices>,

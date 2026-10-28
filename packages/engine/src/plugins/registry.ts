@@ -30,6 +30,7 @@ const forPlugin = (workspace: Workspace, plugin: string): PluginWorkspace => ({
   ...workspace,
   createOfKind: (input, keys) => workspace.createTask(input, { id: plugin, keys }),
   editOfKind: (taskId, change) => workspace.editKind(plugin, taskId, change),
+  filesOfKind: (taskId) => workspace.kindFiles(plugin, taskId),
 });
 
 /** The plain task and `plugins` as one set of operations. Throws on what `checkPlugins` refuses. */

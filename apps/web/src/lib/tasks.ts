@@ -9,6 +9,7 @@ import type {
   WorkspaceSnapshot,
 } from "@octodo/contract";
 import {
+  defaultStatus,
   destination,
   inSubtree,
   isClosedCategory,
@@ -16,16 +17,8 @@ import {
   readiness,
   taskSubtree,
 } from "@octodo/contract/rules";
-import {
-  addDays,
-  format,
-  isBefore,
-  isToday,
-  isTomorrow,
-  isYesterday,
-  parseISO,
-  startOfDay,
-} from "date-fns";
+import { dueDay } from "@octodo/ui/lib/dates";
+import { addDays, format, parseISO } from "date-fns";
 
 export const PRIORITIES: ReadonlyArray<{ value: Priority; label: string }> = [
   { value: "urgent", label: "Urgent" },
@@ -130,9 +123,6 @@ export const allTags = (tasks: ReadonlyArray<Task>) =>
 
 export const todayKey = () => format(new Date(), "yyyy-MM-dd");
 
-/** The day a due date falls on as written, `YYYY-MM-DD`, also for a date-time. */
-const dueDay = (due: string) => due.slice(0, 10);
-
 /**
  * The tasks a view shows. Views of a list show top-level tasks, with subtasks inside their parent;
  * the date views show every task due in their range, and Ready every task open and not blocked,
@@ -178,28 +168,6 @@ export const viewTitle = (list: string | undefined, lists: ReadonlyArray<List>) 
   }
 };
 
-export interface DueInfo {
-  label: string;
-  overdue: boolean;
-  today: boolean;
-}
-
-export const dueInfo = (due: string | null): DueInfo | null => {
-  if (due === null) return null;
-  const date = parseISO(dueDay(due));
-  if (Number.isNaN(date.getTime())) return { label: due, overdue: false, today: false };
-  const today = isToday(date);
-  const overdue = !today && isBefore(date, startOfDay(new Date()));
-  let label = format(
-    date,
-    date.getFullYear() === new Date().getFullYear() ? "MMM d" : "MMM d, yyyy",
-  );
-  if (today) label = "Today";
-  else if (isTomorrow(date)) label = "Tomorrow";
-  else if (isYesterday(date)) label = "Yesterday";
-  return { label, overdue, today };
-};
-
 /** Short "Oct 19" label for a creation timestamp, with the full date as a tooltip. */
 export const createdLabel = (created: string | null) => {
   if (created === null) return null;
@@ -210,12 +178,6 @@ export const createdLabel = (created: string | null) => {
     label: format(date, thisYear ? "MMM d" : "MMM yyyy"),
     title: `Created ${format(date, "MMM d, yyyy")}`,
   };
-};
-
-export const formatTimestamp = (value: string | null) => {
-  if (value === null) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : format(date, "MMM d, yyyy HH:mm");
 };
 
 /** Open (not closed) top-level task counts per list, including tasks in nested lists. */
@@ -316,19 +278,25 @@ export const listLabel = (lists: ReadonlyArray<List>, id: string | null) => {
 /**
  * Mirrors a move in a cached snapshot, whose task array is the order views render in. As in core,
  * the task keeps its place unless the move names a neighbour or changes its list or parent; then it
- * goes next to the neighbour, or last.
+ * goes next to the neighbour, or last. A task that `completesInPlace` (a recurring task) moved into
+ * a completed status goes to the first unstarted status instead, as the engine moves it.
  */
 export const applyMove = (
   snapshot: WorkspaceSnapshot,
   id: string,
   move: MoveTaskInput,
+  completesInPlace: (task: Task) => boolean = () => false,
 ): WorkspaceSnapshot => {
   const task = snapshot.tasks.find((entry) => entry.id === id);
   if (!task) return snapshot;
   const container = destination(snapshot, move, task);
   if (typeof container === "string") return snapshot;
   const { list, parent } = container;
-  const moved: Task = { ...task, status: move.status ?? task.status, list, parent };
+  const completing =
+    snapshot.statuses.find((status) => status.id === move.status)?.category === "completed" &&
+    completesInPlace(task);
+  const status = completing ? (defaultStatus(snapshot.statuses)?.id ?? task.status) : move.status;
+  const moved: Task = { ...task, status: status ?? task.status, list, parent };
   const placed = move.before !== undefined || move.after !== undefined;
   if (!placed && list === task.list && parent === task.parent)
     return withReadiness({

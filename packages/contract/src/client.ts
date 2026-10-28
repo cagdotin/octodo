@@ -1,15 +1,11 @@
 /**
  * The browser's client for the HTTP API: `fetch`, typed from the API definition through type-only
  * imports, so no Effect code reaches the bundle (decision 0006). Each route is named by its method
- * and path, as `"GET /api/workspaces/:workspace"`.
+ * and path, as `"GET /api/workspaces/:workspace"`. It is typed from `Api`, the catalog's, unless
+ * given another: a plugin's web half passes its own (decision 0017).
  */
 import type { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api";
 import type { Api } from "./api.ts";
-
-type Endpoints =
-  typeof Api extends HttpApi.HttpApi<infer _Id, infer Groups>
-    ? HttpApiGroup.Endpoints<Groups>
-    : never;
 
 type Part<S> = [S] extends [never] ? undefined : S extends { readonly Type: infer T } ? T : never;
 
@@ -42,15 +38,20 @@ type RouteOf<E> =
       }
     : never;
 
-type Routes = RouteOf<Endpoints>;
+type Routes<A> =
+  A extends HttpApi.HttpApi<infer _Id, infer Groups>
+    ? RouteOf<HttpApiGroup.Endpoints<Groups>>
+    : never;
+
+type KeyOf<Route> = Route extends { readonly key: infer Key extends string } ? Key : never;
 
 /** A route by its method and path: `"PATCH /api/workspaces/:workspace/tasks/:id"`. */
-export type RouteKey = Routes["key"];
+export type RouteKey<A = typeof Api> = KeyOf<Routes<A>>;
 
 /** The routes whose body is JSON, which `request` reads; a file or a stream is read through `url`. */
-export type JsonRouteKey = Extract<Routes, { readonly streams: false }>["key"];
+export type JsonRouteKey<A = typeof Api> = KeyOf<Extract<Routes<A>, { readonly streams: false }>>;
 
-type RouteFor<K extends RouteKey> = Extract<Routes, { readonly key: K }>;
+type RouteFor<K, A> = Extract<Routes<A>, { readonly key: K }>;
 
 type Optional<Name extends string, T> = [T] extends [undefined]
   ? {}
@@ -58,14 +59,17 @@ type Optional<Name extends string, T> = [T] extends [undefined]
     ? { readonly [_ in Name]?: T }
     : { readonly [_ in Name]: T };
 
-export type Input<K extends RouteKey> = Optional<"params", RouteFor<K>["params"]> &
-  Optional<"query", RouteFor<K>["query"]> &
-  Optional<"payload", RouteFor<K>["payload"]>;
+export type Input<K extends RouteKey<A>, A = typeof Api> = Optional<
+  "params",
+  RouteFor<K, A>["params"]
+> &
+  Optional<"query", RouteFor<K, A>["query"]> &
+  Optional<"payload", RouteFor<K, A>["payload"]>;
 
-export type Success<K extends RouteKey> = RouteFor<K>["success"];
+export type Success<K extends RouteKey<A>, A = typeof Api> = RouteFor<K, A>["success"];
 
 /** What the server sent for a failed request: `{ _tag, ...fields, message }` (decision 0006). */
-export type ErrorBody<K extends RouteKey> = RouteFor<K>["error"];
+export type ErrorBody<K extends RouteKey<A>, A = typeof Api> = RouteFor<K, A>["error"];
 
 export class ApiError<Body = unknown> extends Error {
   readonly status: number;
@@ -89,11 +93,11 @@ const queryValues = (value: unknown): Array<string> =>
 const isBytes = (payload: unknown): payload is BodyInit =>
   payload instanceof Blob || payload instanceof ArrayBuffer || payload instanceof Uint8Array;
 
-export const createClient = (baseUrl: string) => {
+export const createClient = <A = typeof Api>(baseUrl: string) => {
   const base = baseUrl.replace(/\/$/, "");
 
   /** The URL of a route; each path parameter is one percent-encoded segment. */
-  const url = <K extends RouteKey>(key: K, input: Input<K>): string => {
+  const url = <K extends RouteKey<A>>(key: K, input: Input<K, A>): string => {
     const { params, query } = input as {
       readonly params?: Record<string, string>;
       readonly query?: Record<string, unknown>;
@@ -109,7 +113,10 @@ export const createClient = (baseUrl: string) => {
   };
 
   /** Sends a request and resolves to its success, or rejects with an `ApiError`. */
-  const request = async <K extends JsonRouteKey>(key: K, input: Input<K>): Promise<Success<K>> => {
+  const request = async <K extends JsonRouteKey<A>>(
+    key: K,
+    input: Input<K, A>,
+  ): Promise<Success<K, A>> => {
     const { payload } = input as { readonly payload?: unknown };
     const response = await fetch(url(key, input), {
       method: key.slice(0, key.indexOf(" ")),
@@ -121,11 +128,11 @@ export const createClient = (baseUrl: string) => {
     });
     const body: unknown =
       response.status === 204 ? undefined : await response.json().catch(() => undefined);
-    if (!response.ok) throw new ApiError<ErrorBody<K>>(response.status, body as never);
-    return body as Success<K>;
+    if (!response.ok) throw new ApiError<ErrorBody<K, A>>(response.status, body as never);
+    return body as Success<K, A>;
   };
 
   return { url, request };
 };
 
-export type Client = ReturnType<typeof createClient>;
+export type Client<A = typeof Api> = ReturnType<typeof createClient<A>>;

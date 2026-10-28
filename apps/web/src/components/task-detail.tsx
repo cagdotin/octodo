@@ -26,6 +26,7 @@ import {
   TagChips,
 } from "@/components/task-bits";
 import { TagsEditor } from "@/components/tags-editor";
+import { KindPanel } from "@/components/task-kind";
 import { TaskRelations, useMentions } from "@/components/task-relations";
 import { ParentLink, SubtasksGoing, TaskSubtasks } from "@/components/task-subtasks";
 import {
@@ -37,8 +38,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+} from "@octodo/ui/components/alert-dialog";
+import { Button } from "@octodo/ui/components/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,12 +50,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Textarea } from "@/components/ui/textarea";
+} from "@octodo/ui/components/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@octodo/ui/components/popover";
+import { Textarea } from "@octodo/ui/components/textarea";
 import { taskAttachments, useDeleteTask, useMoveTask, useUpdateTask } from "@/lib/api";
-import { cn } from "@/lib/utils";
-import { dueInfo, formatTimestamp, listLabel, PRIORITIES } from "@/lib/tasks";
+import { cn } from "@octodo/ui/lib/utils";
+import { dueInfo, formatTimestamp } from "@octodo/ui/lib/dates";
+import { listLabel, PRIORITIES } from "@/lib/tasks";
 import { changes, editorMachine } from "@/machines/editor";
 
 interface Props {
@@ -208,6 +210,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
         onBlur={() => editor.send({ type: "FLUSH" })}
         className="min-h-0 flex-1 text-base md:text-sm"
       />
+      <KindPanel workspace={workspace} task={task} />
       <TaskRelations workspace={workspace} snapshot={snapshot} task={task} />
       <TaskSubtasks workspace={workspace} snapshot={snapshot} task={task} />
 

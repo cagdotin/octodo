@@ -16,7 +16,8 @@ import {
   LockOpenIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { Badge } from "@/components/ui/badge";
+import { KindRow, kindWeb } from "@/components/task-kind";
+import { Badge } from "@octodo/ui/components/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,11 +26,12 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@octodo/ui/components/dropdown-menu";
 import { useMoveTask, useUpdateTask } from "@/lib/api";
 import { checklistProgress } from "@/lib/checklist";
-import { cn } from "@/lib/utils";
-import { createdLabel, dueInfo, listLabel, PRIORITIES, PRIORITY_TEXT, SMART } from "@/lib/tasks";
+import { cn } from "@octodo/ui/lib/utils";
+import { dueInfo } from "@octodo/ui/lib/dates";
+import { createdLabel, listLabel, PRIORITIES, PRIORITY_TEXT, SMART } from "@/lib/tasks";
 
 /* ---------------------------------------------------------------------------------------------- */
 /* Icons                                                                                          */
@@ -246,6 +248,7 @@ export function ChecklistCount({ body, className }: { body: string; className?: 
 }
 
 export function TaskDate({ task, className }: { task: Task; className?: string }) {
+  if (kindWeb(task) !== undefined) return <KindRow task={task} className={className} />;
   const due = dueInfo(task.due);
   if (due) {
     return (

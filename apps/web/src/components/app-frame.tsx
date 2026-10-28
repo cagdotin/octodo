@@ -1,9 +1,9 @@
 import { createContext, type CSSProperties, type ReactNode, useContext, useState } from "react";
 import { createPortal } from "react-dom";
 import { AppRail } from "@/components/app-rail";
-import { Separator } from "@/components/ui/separator";
-import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { cn } from "@/lib/utils";
+import { Separator } from "@octodo/ui/components/separator";
+import { SidebarProvider, SidebarTrigger, useSidebar } from "@octodo/ui/components/sidebar";
+import { cn } from "@octodo/ui/lib/utils";
 
 const FRAME = { "--rail-width": "3rem" } as CSSProperties;
 

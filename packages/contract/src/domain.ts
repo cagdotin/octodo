@@ -145,6 +145,8 @@ export const TaskSummary = Schema.Struct({
   due: Schema.NullOr(Schema.String),
   blocked: Schema.Boolean,
   ready: Schema.Boolean,
+  /** Absent for a plain task. */
+  kind: Schema.optionalKey(TaskKind),
 });
 export type TaskSummary = typeof TaskSummary.Type;
 

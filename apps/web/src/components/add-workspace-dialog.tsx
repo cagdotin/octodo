@@ -9,8 +9,8 @@ import {
   FolderCheckIcon,
 } from "lucide-react";
 import { useState, type FormEvent, type ReactElement } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@octodo/ui/components/badge";
+import { Button } from "@octodo/ui/components/button";
 import {
   Dialog,
   DialogContent,
@@ -19,19 +19,25 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+} from "@octodo/ui/components/dialog";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@octodo/ui/components/field";
+import { Input } from "@octodo/ui/components/input";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
-} from "@/components/ui/input-group";
-import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from "@/components/ui/item";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
+} from "@octodo/ui/components/input-group";
+import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from "@octodo/ui/components/item";
+import { ScrollArea } from "@octodo/ui/components/scroll-area";
+import { Skeleton } from "@octodo/ui/components/skeleton";
+import { Spinner } from "@octodo/ui/components/spinner";
 import { foldersQuery, useAddWorkspace } from "@/lib/api";
 import { desktop } from "@/lib/desktop";
 

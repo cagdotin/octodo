@@ -22,14 +22,14 @@ import { completing } from "@/components/quick-add/editor";
 import { QuickAddInput, type QuickAddInputHandle } from "@/components/quick-add/quick-add-input";
 import { suggestionsFor, useQuickAdd } from "@/components/quick-add/use-quick-add";
 import { ListGlyph, PriorityIcon, StatusIcon } from "@/components/task-bits";
-import { Button } from "@/components/ui/button";
+import { Button } from "@octodo/ui/components/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@octodo/ui/components/dialog";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -40,15 +40,15 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Kbd } from "@/components/ui/kbd";
-import { ScrollArea } from "@/components/ui/scroll-area";
+} from "@octodo/ui/components/dropdown-menu";
+import { Kbd } from "@octodo/ui/components/kbd";
+import { ScrollArea } from "@octodo/ui/components/scroll-area";
 import { useCreateTask } from "@/lib/api";
 import { withoutRanges, type QuickAddToken } from "@/lib/quick-add";
-import { cn } from "@/lib/utils";
+import { cn } from "@octodo/ui/lib/utils";
+import { dueInfo } from "@octodo/ui/lib/dates";
 import {
   allTags,
-  dueInfo,
   isSmartView,
   listLabel,
   listTree,

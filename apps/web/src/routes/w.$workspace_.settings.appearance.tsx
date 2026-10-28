@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
 import { Row, Section, SettingsPage } from "@/components/settings-page";
 import { type Theme, useTheme } from "@/components/theme-provider";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { ToggleGroup, ToggleGroupItem } from "@octodo/ui/components/toggle-group";
 
 export const Route = createFileRoute("/w/$workspace_/settings/appearance")({
   component: AppearanceSettings,

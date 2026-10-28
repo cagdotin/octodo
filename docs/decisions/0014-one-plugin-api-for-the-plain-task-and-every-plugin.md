@@ -79,8 +79,8 @@ engine's `Workspace`.
 - The web app takes a plugin's `web` entry by `task.kind.id`. A task row and the task panel each
   render that entry's part for a task whose `kind` is set, and nothing for a plain task, so a
   plugin shows only where it is enabled. Its props are the task, with `kind.fields` typed as the
-  `Encoded` side of the plugin's `fields` schema. The first plugin with a UI (OCT-57) builds this
-  and settles the exact component types; no web code exists for it yet.
+  `Encoded` side of the plugin's `fields` schema. [0016](0016-recurring-tasks-complete-in-place.md)
+  settles the component types (`PluginWeb`: `Row`, `Panel`, `completesInPlace`).
 
 ## Why
 
@@ -102,8 +102,11 @@ engine's `Workspace`.
   `optionalKey`: absent when there is nothing to report.
 - The server serves `makeApi(registry.operations)`, so a plugin's operations are endpoints at their
   `http` paths, and `PluginNotEnabled` is a 409. Clients are typed from `Api`, the catalog alone; a
-  plugin's web half calls its own operations through the same client.
-- Days-since counters and recurring tasks cannot both own `log.jsonl` as two plugins: one claim
-  per file name. They share it as one plugin, or one of them names its log differently.
-- `createOfKind` and `editOfKind` are the only writes a plugin has. One that needs another (moving
+  plugin's web half calls its own operations through the same client, typed from them
+  ([0017](0017-the-ui-kit-is-a-package-plugins-type-their-own-client.md)).
+- Days-since counters and recurring tasks cannot both own `log.jsonl` as two plugins while file
+  claims are global. [0016](0016-recurring-tasks-complete-in-place.md) keeps them two plugins and
+  has OCT-58 make file claims per kind.
+- `createOfKind` and `editOfKind` are the only writes a plugin has (`filesOfKind` reads its files,
+  and `complete` is a change the engine writes with a move, [0016](0016-recurring-tasks-complete-in-place.md)). One that needs another (moving
   its file, writing two tasks) adds it to `PluginWorkspace`, not a way around storage.

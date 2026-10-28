@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { FolderOpenIcon } from "lucide-react";
 import { AddWorkspaceDialog } from "@/components/add-workspace-dialog";
-import { Button } from "@/components/ui/button";
+import { Button } from "@octodo/ui/components/button";
 import {
   Empty,
   EmptyContent,
@@ -10,8 +10,8 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@/components/ui/empty";
-import { Spinner } from "@/components/ui/spinner";
+} from "@octodo/ui/components/empty";
+import { Spinner } from "@octodo/ui/components/spinner";
 import { WindowDragArea } from "@/components/window-drag-area";
 import { workspacesQuery } from "@/lib/api";
 import { lastWorkspace } from "@/lib/prefs";

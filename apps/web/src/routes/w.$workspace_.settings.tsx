@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { AppFrame } from "@/components/app-frame";
 import { SettingsSidebar } from "@/components/settings-sidebar";
-import { SidebarInset } from "@/components/ui/sidebar";
+import { SidebarInset } from "@octodo/ui/components/sidebar";
 import { snapshotQuery } from "@/lib/api";
 import { useHotkeys } from "@/lib/hotkeys";
 

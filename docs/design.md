@@ -13,6 +13,9 @@ private, local and trustworthy. [branding.md](branding.md) covers the name, the 
 | Text             | `#f0ece5` | `#22211f` |
 | Accent (`--ink`) | `#8db3da` | `#33618f` |
 
+The tokens are CSS variables in `packages/ui/src/styles.css`, next to the shadcn components
+that use them ([0017](decisions/0017-the-ui-kit-is-a-package-plugins-type-their-own-client.md)).
+
 - The one accent is ink blue. It is used only for urgent "!", the active-row bar and focus rings.
   The brand red is kept for urgent and destructive actions. Add no other accent colours.
 - Light mode is near-white paper with very light fills. Avoid warm beige, strong selection fills

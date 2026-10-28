@@ -13,9 +13,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
-import { ItemSeparator } from "@/components/ui/item";
+} from "@octodo/ui/components/alert-dialog";
+import { Button } from "@octodo/ui/components/button";
+import { ItemSeparator } from "@octodo/ui/components/item";
 import { snapshotQuery, useRemoveWorkspace } from "@/lib/api";
 import { desktop } from "@/lib/desktop";
 

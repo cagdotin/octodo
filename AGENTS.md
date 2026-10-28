@@ -28,7 +28,10 @@ instead of keeping the code because it exists.
   `task.md`. `type: recurring` makes it a task of an enabled plugin's kind, which owns more keys
   and files in its folder; no `type` is the plain task, and a `type` the workspace does not enable
   reads as a plain task with an `unknown-kind` diagnostic
-  ([0014](docs/decisions/0014-one-plugin-api-for-the-plain-task-and-every-plugin.md)).
+  ([0014](docs/decisions/0014-one-plugin-api-for-the-plain-task-and-every-plugin.md)). A
+  recurring task keeps its rule in `repeat` and one line per time it was done in `log.jsonl`;
+  moving it into a completed status logs that line and leaves it in the first unstarted status
+  ([0016](docs/decisions/0016-recurring-tasks-complete-in-place.md)).
 - A link is a frontmatter key holding a list of plain task ids, `blocked_by: [HM-3, HM-7]`;
   `LINK_KINDS` in `contract/src/rules.ts` lists the keys. Only one end stores an edge: the reverse (`blocks`),
   `mentionedIn` (from `[[HM-3]]` in a body, outside code), `blocked` and `ready` (open and not
@@ -77,29 +80,33 @@ instead of keeping the code because it exists.
 
 ## Layout
 
-| Path                | What                                                                                                                                                                                                                                                                 |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/contract` | What every client shares: Effect schemas and errors (`domain.ts`), the operation catalog (`catalog.ts`), the HTTP API (`api.ts`), its typed `fetch` client (`client.ts`), a plugin's shared shape (`plugin.ts`) and `rules.ts`, the plain rules the browser runs too |
-| `packages/engine`   | Effect v4 domain: storage, scan, markdown round-trip, folder grammar, tasks, lists, statuses, health, `Workspace(s)`                                                                                                                                                 |
-| `packages/plugins`  | First-party plugins (none yet), each a folder with `shared`, `engine` and `web` halves; `plugins` is the list every process gives `Workspaces.layer`                                                                                                                 |
-| `packages/mcp`      | MCP tools generated from the operation catalog, and stdio/HTTP layers on Effect's `McpServer`                                                                                                                                                                        |
-| `packages/server`   | Serves `makeApi` over the catalog and the plugins' operations on Effect HttpApi at `/api` (OpenAPI at `/api/openapi.json`), MCP at `/mcp`, the SSE change feed, the built web app, on one router                                                                     |
-| `packages/client`   | `connect()`: every CLI and stdio MCP call runs on the server `<home>/server.json` names, or on the engine in-process when none answers ([0018](docs/decisions/0018-connect-finds-the-server-through-server-json.md))                                                 |
-| `packages/cli`      | `octo` CLI on `effect/cli`, its commands and the bundled agent skill generated from the catalog; run it with `bin/octo`                                                                                                                                              |
-| `apps/web`          | Vite + React, TanStack Router/Query, shadcn/ui, XState                                                                                                                                                                                                               |
-| `apps/desktop`      | Electron shell: starts the server in the main process and opens the web app                                                                                                                                                                                          |
-| `apps/site`         | Static landing page (plain HTML, no build); icons come from `brand/`                                                                                                                                                                                                 |
-| `brand/`            | `glyph.svg` and `build.ts` (`pnpm brand`), which renders every icon, banner and social image                                                                                                                                                                         |
+| Path                | What                                                                                                                                                                                                                                                                               |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/contract` | What every client shares: Effect schemas and errors (`domain.ts`), the operation catalog (`catalog.ts`), the HTTP API (`api.ts`), its typed `fetch` client (`client.ts`), a plugin's shared shape (`plugin.ts`) and `rules.ts`, the plain rules the browser runs too               |
+| `packages/engine`   | Effect v4 domain: storage, scan, markdown round-trip, folder grammar, tasks, lists, statuses, health, `Workspace(s)`                                                                                                                                                               |
+| `packages/plugins`  | First-party plugins (`recurring`), each a folder with `shared`, `engine` and `web` halves; `plugins` is the list every process gives `Workspaces.layer`, `./web` the app's `webPlugins`; a web half uses `@octodo/ui` and a client typed from its own operations, never `apps/web` |
+| `packages/mcp`      | MCP tools generated from the operation catalog, and stdio/HTTP layers on Effect's `McpServer`                                                                                                                                                                                      |
+| `packages/server`   | Serves `makeApi` over the catalog and the plugins' operations on Effect HttpApi at `/api` (OpenAPI at `/api/openapi.json`), MCP at `/mcp`, the SSE change feed, the built web app, on one router                                                                                   |
+| `packages/client`   | `connect()`: every CLI and stdio MCP call runs on the server `<home>/server.json` names, or on the engine in-process when none answers ([0018](docs/decisions/0018-connect-finds-the-server-through-server-json.md))                                                               |
+| `packages/cli`      | `octo` CLI on `effect/cli`, its commands and the bundled agent skill generated from the catalog; run it with `bin/octo`                                                                                                                                                            |
+| `packages/ui`       | The UI kit the app and the plugins' web halves share: shadcn components, `cn`, date labels, `styles.css` (design tokens, fonts); imports no octodo package                                                                                                                         |
+| `apps/web`          | Vite + React, TanStack Router/Query, XState; its components come from `@octodo/ui`                                                                                                                                                                                                 |
+| `apps/desktop`      | Electron shell: starts the server in the main process and opens the web app                                                                                                                                                                                                        |
+| `apps/site`         | Static landing page (plain HTML, no build); icons come from `brand/`                                                                                                                                                                                                               |
+| `brand/`            | `glyph.svg` and `build.ts` (`pnpm brand`), which renders every icon, banner and social image                                                                                                                                                                                       |
 
 Decisions: Effect holds all logic, and Effect HttpApi is the HTTP layer
 ([0006](docs/decisions/0006-effect-httpapi-replaces-hono.md)). Use Effect's built-in modules where
 they exist (`effect/ai` McpServer, `effect/cli`, `effect/http-api`, `FileSystem`, `Schema`); `effect` is
 pinned to an exact version. Packages depend in one direction,
-`contract` ← `engine` ← `plugins` ← `server` ([0004](docs/decisions/0004-packages-by-dependency-direction.md)).
+`contract` ← `engine` ← `plugins` ← `server` ([0004](docs/decisions/0004-packages-by-dependency-direction.md)),
+and `ui` ← `plugins` ← `apps/web`: a plugin never imports the app
+([0017](docs/decisions/0017-the-ui-kit-is-a-package-plugins-type-their-own-client.md)).
 The browser bundle (`apps/web`, the desktop preload) never imports `@octodo/engine` or Effect at
-runtime and imports only types from `@octodo/contract`; `@octodo/contract/rules` (plain functions)
-and `@octodo/contract/client` (the `fetch` client, typed from `api.ts` through type-only imports)
-are the runtime imports it may use. Lint enforces it.
+runtime and imports only types from `@octodo/contract`; `@octodo/contract/rules` (plain functions),
+`@octodo/contract/client` (the `fetch` client, typed from `api.ts` through type-only imports) and
+`@octodo/ui` are the octodo runtime imports it may use. A plugin's web half types its client from its own operations,
+`createClient<ServedApi<typeof shared.operations>>`. Lint enforces it.
 
 Every operation is one entry in `contract/src/catalog.ts` plus its handler in
 `engine/src/operations.ts`; HTTP endpoints, MCP tools, CLI commands and the skill are generated from
@@ -130,7 +137,8 @@ OCT-69.
 - Test against scratch folders (`OCTODO_HOME=<tmp> bin/octo ...`), never a real project's
   `.octodo/`.
 - UI work: follow the `shadcn` skill in `.agents/skills/` (also visible as `.claude/skills`).
-- Everything that scrolls in the web app goes through `ScrollArea` (`components/ui/scroll-area.tsx`),
+  `shadcn add` run in `apps/web` writes into `packages/ui`.
+- Everything that scrolls in the web app goes through `ScrollArea` (`@octodo/ui/components/scroll-area`),
   never `overflow-auto` or a hidden scrollbar; `apps/web/src/scrolling.test.ts` enforces it.
 - The code is the documentation. A comment signals code that is too complicated or an edge case,
   so first try to make it unnecessary (better names, types, smaller functions). Public functions

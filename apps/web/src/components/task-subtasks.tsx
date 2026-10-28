@@ -3,11 +3,11 @@ import { defaultStatus } from "@octodo/contract/rules";
 import { Link } from "@tanstack/react-router";
 import { CornerLeftUpIcon, ListTreeIcon, PlusIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@octodo/ui/components/checkbox";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@octodo/ui/components/input-group";
+import { ScrollArea } from "@octodo/ui/components/scroll-area";
 import { useCreateTask, useMoveTask } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn } from "@octodo/ui/lib/utils";
 import {
   descendantCount,
   firstStatus,

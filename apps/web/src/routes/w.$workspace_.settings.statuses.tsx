@@ -22,9 +22,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { GripVerticalIcon } from "lucide-react";
 import { SettingsPage } from "@/components/settings-page";
 import { StatusIcon } from "@/components/task-bits";
-import { Card } from "@/components/ui/card";
+import { Card } from "@octodo/ui/components/card";
 import { snapshotQuery, useReorderStatuses } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn } from "@octodo/ui/lib/utils";
 
 export const Route = createFileRoute("/w/$workspace_/settings/statuses")({
   component: StatusSettings,

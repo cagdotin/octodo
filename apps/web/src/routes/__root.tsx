@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
 import { RefreshCwIcon, ServerOffIcon } from "lucide-react";
 import { SyncProvider } from "@/components/sync-provider";
-import { Button } from "@/components/ui/button";
+import { Button } from "@octodo/ui/components/button";
 import {
   Empty,
   EmptyContent,
@@ -11,8 +11,8 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@/components/ui/empty";
-import { Spinner } from "@/components/ui/spinner";
+} from "@octodo/ui/components/empty";
+import { Spinner } from "@octodo/ui/components/spinner";
 import { WindowDragArea } from "@/components/window-drag-area";
 import { healthQuery } from "@/lib/api";
 

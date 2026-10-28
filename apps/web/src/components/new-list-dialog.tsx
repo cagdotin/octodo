@@ -2,7 +2,7 @@ import type { List } from "@octodo/contract";
 import { listDepth, MAX_LIST_DEPTH } from "@octodo/contract/rules";
 import { useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@octodo/ui/components/button";
 import {
   Dialog,
   DialogContent,
@@ -10,9 +10,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+} from "@octodo/ui/components/dialog";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@octodo/ui/components/field";
+import { Input } from "@octodo/ui/components/input";
 import {
   Select,
   SelectContent,
@@ -20,8 +26,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
+} from "@octodo/ui/components/select";
+import { Spinner } from "@octodo/ui/components/spinner";
 import { useCreateList } from "@/lib/api";
 import { listLabel } from "@/lib/tasks";
 

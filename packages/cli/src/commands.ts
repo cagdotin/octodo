@@ -1,4 +1,4 @@
-import type { AttachmentContent } from "@octodo/contract";
+import { Task, type AttachmentContent } from "@octodo/contract";
 import {
   FileSuccess,
   type CliCommand,
@@ -8,7 +8,7 @@ import {
 import type { Registry } from "@octodo/engine";
 import { Console, Effect, FileSystem, Option, Schema, type PlatformError } from "effect";
 import { Command, Flag } from "effect/cli";
-import { renderers } from "./render.ts";
+import { line, renderers, type KindLabel } from "./render.ts";
 import { schemaFlags } from "./schema-flags.ts";
 
 /** Runs an operation by name on its decoded input, without the `workspace` field. */
@@ -50,14 +50,32 @@ const writeStdout = (bytes: Uint8Array) =>
     process.stdout.write(bytes, () => resume(Effect.void));
   });
 
+/** Each task line's words from its kind's plugin. */
+const kindLabel =
+  (registry: Registry): KindLabel =>
+  (kind) => {
+    const label = registry.plugins.find((plugin) => plugin.shared.id === kind?.id)?.shared.label;
+    return kind === undefined || label === undefined ? "" : label(kind.fields as never);
+  };
+
+type Render = (result: unknown, label: KindLabel) => ReadonlyArray<string>;
+
+/** The operation's own renderer, or a task line for any operation, a plugin's too, giving a task. */
+const rendererOf = (name: string, operation: Operation): Render | undefined =>
+  (renderers[name as OperationName] as Render | undefined) ??
+  (operation.success === Task ? (task, label) => [line(task as Task, label)] : undefined);
+
 /**
  * Prints a success: the renderer's lines, or JSON when there is none or `--json` asks for it. The
  * JSON is the success as its schema encodes it, as MCP and HTTP send it, whichever process ran it.
  */
-const print = (name: string, operation: Operation, result: unknown, asJson: boolean) => {
-  const render = renderers[name as OperationName] as
-    | ((result: unknown) => ReadonlyArray<string>)
-    | undefined;
+const print = (
+  registry: Registry,
+  operation: Operation,
+  render: Render | undefined,
+  result: unknown,
+  asJson: boolean,
+) => {
   if (render === undefined || asJson)
     return Console.log(
       JSON.stringify(
@@ -71,7 +89,9 @@ const print = (name: string, operation: Operation, result: unknown, asJson: bool
         2,
       ),
     );
-  return Effect.forEach(render(result), (text) => Console.log(text), { discard: true });
+  return Effect.forEach(render(result, kindLabel(registry)), (text) => Console.log(text), {
+    discard: true,
+  });
 };
 
 const save = (file: AttachmentContent, to: Option.Option<string>) =>
@@ -85,6 +105,7 @@ const save = (file: AttachmentContent, to: Option.Option<string>) =>
   });
 
 const commandFor = <E, R>(
+  registry: Registry,
   name: string,
   operation: Operation,
   cli: CliCommand,
@@ -93,11 +114,8 @@ const commandFor = <E, R>(
   const { workspace: _selector, ...fields } = operation.input.fields;
   const flags = schemaFlags(Schema.Struct(fields));
   const isFile = operation.success === FileSuccess;
-  const extra = isFile
-    ? { output }
-    : renderers[name as OperationName] === undefined
-      ? {}
-      : { json };
+  const render = rendererOf(name, operation);
+  const extra = isFile ? { output } : render === undefined ? {} : { json };
   const command = Command.make(
     cli.command.at(-1)!,
     { input: flags.params, ...extra },
@@ -109,7 +127,7 @@ const commandFor = <E, R>(
       const input = yield* flags.decode(parsed.input);
       const result = yield* run(name, input);
       if (isFile) return yield* save(result as AttachmentContent, parsed.output ?? Option.none());
-      yield* print(name, operation, result, parsed.json === true);
+      yield* print(registry, operation, render, result, parsed.json === true);
     }),
   ).pipe(
     Command.validate(({ input }) => Effect.asVoid(flags.decode(input))),
@@ -127,19 +145,22 @@ const commandFor = <E, R>(
  * line names; the operation's `workspace` field is not a flag of its own.
  */
 export const operationCommands = <E, R>(
-  operations: Registry["operations"],
+  registry: Registry,
   run: RunOperation<E, R>,
 ): Array<OperationCommand<E, R>> =>
-  Object.entries(operations).flatMap(([name, operation]) =>
+  Object.entries(registry.operations).flatMap(([name, operation]) =>
     operation.cli === undefined
       ? []
       : [
           {
             words: operation.cli.command,
-            command: commandFor(name, operation, operation.cli, run) as unknown as OperationCommand<
-              E,
-              R
-            >["command"],
+            command: commandFor(
+              registry,
+              name,
+              operation,
+              operation.cli,
+              run,
+            ) as unknown as OperationCommand<E, R>["command"],
           },
         ],
   );

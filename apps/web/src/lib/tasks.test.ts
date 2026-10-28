@@ -1,10 +1,10 @@
 import { type Task, type WorkspaceSnapshot, DEFAULT_STATUSES } from "@octodo/contract";
 import { readiness } from "@octodo/contract/rules";
+import { dueInfo } from "@octodo/ui/lib/dates";
 import { describe, expect, it } from "vitest";
 import {
   applyMove,
   descendantCount,
-  dueInfo,
   filterTasks,
   listCounts,
   SMART,
@@ -129,6 +129,14 @@ describe("subtasks in views", () => {
       parent: "HM-1",
       status: "done",
     });
+  });
+
+  it("keeps a task that completes in place open, as the engine does", () => {
+    const inPlace = (entry: Task) => entry.id === "HM-3";
+    const moved = applyMove(snapshot(TASKS), "HM-3", { status: "done" }, inPlace);
+    expect(moved.tasks.find((entry) => entry.id === "HM-3")?.status).toBe("todo");
+    const archived = applyMove(snapshot(TASKS), "HM-3", { status: "archived" }, inPlace);
+    expect(archived.tasks.find((entry) => entry.id === "HM-3")?.status).toBe("archived");
   });
 
   it("leaves the snapshot as it is for a move the server refuses", () => {

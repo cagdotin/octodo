@@ -18,7 +18,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
-} from "@/components/ui/sidebar";
+} from "@octodo/ui/components/sidebar";
 
 /** Linear-sized nav rows, as in the app's sidebar. */
 const ITEM = "h-7 gap-2.5 px-2 text-sidebar-foreground/90 data-active:font-medium";

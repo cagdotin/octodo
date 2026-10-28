@@ -89,6 +89,10 @@ export interface PluginWorkspace extends Workspace {
     taskId: string,
     change: KindChange,
   ) => Effect.Effect<Task, TaskNotFound | InvalidRequest | StorageError>;
+  /** The text of each of the plugin's files a task of its kind has, refusing a task of another kind. */
+  readonly filesOfKind: (
+    taskId: string,
+  ) => Effect.Effect<ReadonlyMap<string, string>, TaskNotFound | InvalidRequest | StorageError>;
 }
 
 type Success<O extends Operation> = O["success"] extends FileSuccess
@@ -108,6 +112,12 @@ export interface Plugin {
   /** Reads a task of its kind into its computed fields and the problems it has. */
   readonly read: (task: KindInput) => KindRead;
   readonly handlers: Readonly<Record<string, PluginHandler>>;
+  /**
+   * What completing a task of its kind writes instead of closing it: a move into a completed
+   * status writes this change and puts the task in the first unstarted status. `at` is the
+   * minute it happened, in UTC.
+   */
+  readonly complete?: ((at: string) => KindChange) | undefined;
 }
 
 /** A plugin, typed from its shared half: a handler per operation, problems it declares, its fields. */
@@ -118,6 +128,7 @@ export const definePlugin = <S extends PluginShared>(
       task: KindInput,
     ) => KindRead<S["fields"]["Type"], Extract<keyof S["problems"], string>>;
     readonly handlers: { readonly [K in keyof S["operations"]]: PluginHandler<S["operations"][K]> };
+    readonly complete?: (at: string) => KindChange;
   },
 ): Plugin => {
   const encode = Schema.encodeSync(shared.fields as unknown as Schema.Codec<unknown, unknown>);
@@ -128,6 +139,7 @@ export const definePlugin = <S extends PluginShared>(
       return { fields: encode(fields) as Record<string, unknown>, problems };
     },
     handlers: engine.handlers as unknown as Plugin["handlers"],
+    complete: engine.complete,
   };
 };
 

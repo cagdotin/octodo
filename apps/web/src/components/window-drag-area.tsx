@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@octodo/ui/lib/utils";
 
 /**
  * A strip across the top of the window that drags it (and zooms it on double-click) in the macOS

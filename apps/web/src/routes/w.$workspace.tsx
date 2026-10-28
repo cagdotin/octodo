@@ -17,18 +17,18 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@/components/ui/empty";
+} from "@octodo/ui/components/empty";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet";
-import { SidebarInset } from "@/components/ui/sidebar";
-import { Spinner } from "@/components/ui/spinner";
+} from "@octodo/ui/components/sheet";
+import { SidebarInset } from "@octodo/ui/components/sidebar";
+import { Spinner } from "@octodo/ui/components/spinner";
 import { WindowDragArea } from "@/components/window-drag-area";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@octodo/ui/hooks/use-mobile";
 import { snapshotQuery } from "@/lib/api";
 import { useHotkeys } from "@/lib/hotkeys";
 import {

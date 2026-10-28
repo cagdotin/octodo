@@ -1,4 +1,5 @@
-import type { Task } from "@octodo/contract";
+import type { CreateTaskInput, Task } from "@octodo/contract";
+import type { LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import { counterWeb } from "./counter/web.tsx";
 import { anniversaryWeb } from "./anniversary/web.tsx";
@@ -14,12 +15,36 @@ export interface KindProps<Fields> {
   readonly task: TaskOf<Fields>;
 }
 
+/** What the new-task dialog asks of every task, whatever its kind. A kind's date replaces `due`. */
+export type NewTask = Omit<CreateTaskInput, "due">;
+
+export interface CreateFieldsProps<Draft> {
+  readonly draft: Draft;
+  readonly onChange: (draft: Draft) => void;
+  /** Hands focus back to the dialog's title, where Enter creates, when a picker closes. */
+  readonly onCloseAutoFocus: (event: Event) => void;
+}
+
+/** How the new-task dialog creates a task of this kind (decision 0023). */
+export interface KindCreate<Draft> {
+  /** One task of the kind, as the dialog's kind picker names it. */
+  readonly noun: string;
+  readonly Icon: LucideIcon;
+  /** The kind's own fields of a new task, before any is set. */
+  readonly empty: Draft;
+  /** Chips in the dialog's property row that set the draft; mounted when the kind is picked. */
+  readonly Fields?: ComponentType<CreateFieldsProps<Draft>>;
+  readonly ready: (draft: Draft) => boolean;
+  /** Calls the plugin's own create operation. */
+  readonly create: (workspace: string, task: NewTask, draft: Draft) => Promise<Task>;
+}
+
 /**
  * A plugin's `web` half: what the app shows for a task of its kind (decision 0016). It renders
  * with `@octodo/ui` and calls only its own plugin's operations, through a client typed from them
  * (decision 0017).
  */
-export interface PluginWeb<Fields> {
+export interface PluginWeb<Fields, Draft = unknown> {
   /** Shown in a task row's date slot, in place of the due or created date. */
   readonly Row: ComponentType<{
     readonly task: TaskOf<Fields>;
@@ -32,6 +57,7 @@ export interface PluginWeb<Fields> {
    * as the engine's `complete` does for this kind, so the app's optimistic update agrees.
    */
   readonly completesInPlace: boolean;
+  readonly create: KindCreate<Draft>;
 }
 
 type KindFields = Readonly<Record<string, unknown>>;

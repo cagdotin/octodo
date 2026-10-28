@@ -99,4 +99,5 @@ it is built on. Three questions were left open:
 - A kind that wants other behaviour on completion declares its own `complete`; a kind without one
   closes like a plain task.
 - The app cannot create a recurring task yet: the composer and the new-task dialog make plain
-  tasks. That comes with the Chores preset (OCT-60).
+  tasks. That comes with the Chores preset (OCT-60). Done in
+  [0023](0023-plugins-contribute-their-create-fields-and-own-the-date-slot.md).

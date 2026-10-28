@@ -4,11 +4,13 @@ import { Button } from "@octodo/ui/components/button";
 import { Field, FieldError } from "@octodo/ui/components/field";
 import { InputGroup, InputGroupInput } from "@octodo/ui/components/input-group";
 import { Popover, PopoverContent, PopoverTrigger } from "@octodo/ui/components/popover";
+import { PropertyChip } from "@octodo/ui/components/property-chip";
 import { dueInfo, formatTimestamp } from "@octodo/ui/lib/dates";
 import { cn } from "@octodo/ui/lib/utils";
 import { RepeatIcon } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import type { KindProps, PluginWeb, TaskOf } from "../web.ts";
+import type { CreateFieldsProps, KindProps, PluginWeb, TaskOf } from "../web.ts";
+import { localDay, nextDue, parseRule, RULE_EXAMPLES } from "./rule.ts";
 import type { RecurringFields, recurringShared } from "./shared.ts";
 
 const api = createClient<ServedApi<typeof recurringShared.operations>>("");
@@ -113,6 +115,68 @@ function RepeatEditor({ workspace, task }: KindProps<RecurringFields>) {
   );
 }
 
+interface Draft {
+  readonly repeat: string;
+}
+
+/** What a rule says about a task created today: its first due day, or why it is not a rule. */
+const preview = (repeat: string) => {
+  if (repeat.trim() === "") return { error: null, first: null };
+  const parsed = parseRule(repeat);
+  if ("error" in parsed) return { error: parsed.error, first: null };
+  const first = nextDue(parsed.rule, null, localDay(new Date().toISOString()));
+  return { error: null, first: dueInfo(first)?.label ?? null };
+};
+
+/** The rule chip; it opens when Recurring is picked, since a recurring task needs a rule. */
+function CreateFields({ draft, onChange, onCloseAutoFocus }: CreateFieldsProps<Draft>) {
+  const [open, setOpen] = useState(true);
+  const { error, first } = preview(draft.repeat);
+  const valid = draft.repeat.trim() !== "" && error === null;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <PropertyChip set={valid} className={cn(error !== null && "text-destructive")}>
+          {draft.repeat.trim() === "" ? "Repeat" : draft.repeat}
+        </PropertyChip>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        collisionPadding={8}
+        className="w-72 p-1.5"
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (valid) setOpen(false);
+          }}
+        >
+          <Field data-invalid={error !== null || undefined} className="gap-1.5">
+            <InputGroup>
+              <InputGroupInput
+                autoFocus
+                aria-label="Repeat rule"
+                aria-invalid={error !== null || undefined}
+                placeholder="every 3 days"
+                value={draft.repeat}
+                onChange={(event) => onChange({ repeat: event.target.value })}
+              />
+            </InputGroup>
+            {error === null ? (
+              <p className="px-1 text-xs text-muted-foreground">
+                {first === null ? RULE_EXAMPLES : `First due: ${first}`}
+              </p>
+            ) : (
+              <FieldError className="px-1 text-xs">{error}</FieldError>
+            )}
+          </Field>
+        </form>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function Panel({ workspace, task }: KindProps<RecurringFields>) {
   const { next, count, recent } = task.kind.fields;
   const due = dueInfo(next);
@@ -147,8 +211,20 @@ function Panel({ workspace, task }: KindProps<RecurringFields>) {
   );
 }
 
-export const recurringWeb: PluginWeb<RecurringFields> = {
+export const recurringWeb: PluginWeb<RecurringFields, Draft> = {
   Row,
   Panel,
   completesInPlace: true,
+  create: {
+    noun: "Recurring task",
+    Icon: RepeatIcon,
+    empty: { repeat: "" },
+    Fields: CreateFields,
+    ready: ({ repeat }) => repeat.trim() !== "" && !("error" in parseRule(repeat)),
+    create: (workspace, task, { repeat }) =>
+      api.request("POST /api/workspaces/:workspace/recurring", {
+        params: { workspace },
+        payload: { ...task, repeat },
+      }),
+  },
 };

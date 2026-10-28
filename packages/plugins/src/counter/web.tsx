@@ -192,8 +192,19 @@ function Panel({ workspace, task }: KindProps<CounterFields>) {
 }
 
 /** A counter closes like any task: completing it is not a reset (decision 0019). */
-export const counterWeb: PluginWeb<CounterFields> = {
+export const counterWeb: PluginWeb<CounterFields, null> = {
   Row,
   Panel,
   completesInPlace: false,
+  create: {
+    noun: "Days-since counter",
+    Icon: TimerResetIcon,
+    empty: null,
+    ready: () => true,
+    create: (workspace, task) =>
+      api.request("POST /api/workspaces/:workspace/counters", {
+        params: { workspace },
+        payload: task,
+      }),
+  },
 };

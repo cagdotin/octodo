@@ -84,4 +84,5 @@ plugin afterwards meant editing `config.json` by hand, and nothing listed the pl
 - There is no `enable-plugin` fix for `unknown-kind`. Enabling from settings or the CLI covers it,
   and a fix-all that turned on a plugin a person had turned off would undo their choice.
 - The app still creates plain tasks only. Creating a task of a kind from the app (recurring,
-  counter, anniversary) is OCT-77, to be shaped once for every kind.
+  counter, anniversary) is OCT-77, to be shaped once for every kind. Done in
+  [0023](0023-plugins-contribute-their-create-fields-and-own-the-date-slot.md).

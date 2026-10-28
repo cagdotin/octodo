@@ -3,11 +3,12 @@ import { createClient } from "@octodo/contract/client";
 import { Button } from "@octodo/ui/components/button";
 import { Calendar } from "@octodo/ui/components/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@octodo/ui/components/popover";
+import { PropertyChip } from "@octodo/ui/components/property-chip";
 import { dueInfo } from "@octodo/ui/lib/dates";
 import { cn } from "@octodo/ui/lib/utils";
 import { CakeIcon } from "lucide-react";
 import { useState } from "react";
-import type { KindProps, PluginWeb, TaskOf } from "../web.ts";
+import type { CreateFieldsProps, KindProps, PluginWeb, TaskOf } from "../web.ts";
 import { daysBetween, nextOccurrence, today, type Day, type Occurrence } from "./day.ts";
 import type { AnniversaryFields, anniversaryShared } from "./shared.ts";
 
@@ -132,6 +133,51 @@ function DateEditor({ workspace, task }: KindProps<AnniversaryFields>) {
   );
 }
 
+interface Draft {
+  readonly date: Day | null;
+}
+
+/** The date chip; it opens when Anniversary is picked, since an anniversary needs its day. */
+function CreateFields({ draft, onChange, onCloseAutoFocus }: CreateFieldsProps<Draft>) {
+  const [open, setOpen] = useState(true);
+  const selected = draft.date === null ? undefined : toDate(draft.date);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <PropertyChip set={draft.date !== null}>
+          {draft.date === null ? (
+            "First happened"
+          ) : (
+            <span className="font-mono">{dueInfo(draft.date)?.label ?? draft.date}</span>
+          )}
+        </PropertyChip>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        collisionPadding={8}
+        className="w-fit p-2"
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
+        <Calendar
+          mode="single"
+          required
+          autoFocus
+          captionLayout="dropdown"
+          startMonth={new Date(1900, 0)}
+          endMonth={tenYearsOn()}
+          className="p-0 [--cell-size:--spacing(8)]"
+          selected={selected}
+          {...(selected === undefined ? {} : { defaultMonth: selected })}
+          onSelect={(picked) => {
+            onChange({ date: today(picked) });
+            setOpen(false);
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function Panel({ workspace, task }: KindProps<AnniversaryFields>) {
   const occurrence = occurrenceNow(task.kind.fields.date);
   return (
@@ -156,8 +202,20 @@ function Panel({ workspace, task }: KindProps<AnniversaryFields>) {
   );
 }
 
-export const anniversaryWeb: PluginWeb<AnniversaryFields> = {
+export const anniversaryWeb: PluginWeb<AnniversaryFields, Draft> = {
   Row,
   Panel,
   completesInPlace: false,
+  create: {
+    noun: "Anniversary",
+    Icon: CakeIcon,
+    empty: { date: null },
+    Fields: CreateFields,
+    ready: ({ date }) => date !== null,
+    create: (workspace, task, { date }) =>
+      api.request("POST /api/workspaces/:workspace/anniversaries", {
+        params: { workspace },
+        payload: { ...task, date: date ?? "" },
+      }),
+  },
 };

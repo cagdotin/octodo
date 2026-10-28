@@ -12,6 +12,7 @@ import type {
 import { createClient } from "@octodo/contract/client";
 import type { PresetId } from "@octodo/contract/presets";
 import { sortStatuses } from "@octodo/contract/rules";
+import type { KindCreate, NewTask } from "@octodo/plugins/web";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { attachmentName, attachmentPath, type Attachments } from "@/lib/attachments";
@@ -127,6 +128,14 @@ export const useCreateTask = (ws: string) =>
       params: { workspace: ws },
       payload: input,
     }),
+  );
+
+/** Creates a task of a plugin's kind through the plugin's own operation. */
+export const useCreateTaskOfKind = (ws: string) =>
+  useSnapshotMutation(
+    ws,
+    ({ kind, task, draft }: { kind: KindCreate<unknown>; task: NewTask; draft: unknown }) =>
+      kind.create(ws, task, draft),
   );
 
 export const useUpdateTask = (ws: string) =>

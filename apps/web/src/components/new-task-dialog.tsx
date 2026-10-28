@@ -7,21 +7,16 @@ import {
   MoreHorizontalIcon,
   NotebookTextIcon,
   PaperclipIcon,
+  SquareCheckIcon,
   type LucideIcon,
 } from "lucide-react";
-import {
-  useMemo,
-  useRef,
-  useState,
-  type ComponentProps,
-  type KeyboardEvent,
-  type ReactNode,
-} from "react";
+import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { DuePicker } from "@/components/due-picker";
 import { completing } from "@/components/quick-add/editor";
 import { QuickAddInput, type QuickAddInputHandle } from "@/components/quick-add/quick-add-input";
 import { suggestionsFor, useQuickAdd } from "@/components/quick-add/use-quick-add";
 import { ListGlyph, PriorityIcon, StatusIcon } from "@/components/task-bits";
+import { creatableKinds, type CreatableKind } from "@/components/task-kind";
 import { Button } from "@octodo/ui/components/button";
 import {
   Dialog,
@@ -42,8 +37,9 @@ import {
   DropdownMenuTrigger,
 } from "@octodo/ui/components/dropdown-menu";
 import { Kbd } from "@octodo/ui/components/kbd";
+import { PropertyChip as Chip } from "@octodo/ui/components/property-chip";
 import { ScrollArea } from "@octodo/ui/components/scroll-area";
-import { useCreateTask } from "@/lib/api";
+import { useCreateTask, useCreateTaskOfKind } from "@/lib/api";
 import { withoutRanges, type QuickAddToken } from "@/lib/quick-add";
 import { cn } from "@octodo/ui/lib/utils";
 import { dueInfo } from "@octodo/ui/lib/dates";
@@ -68,6 +64,9 @@ const LATER: ReadonlyArray<{ label: string; icon: LucideIcon }> = [
   { label: "Convert to Note", icon: NotebookTextIcon },
 ];
 
+/** No kind: the plain task. */
+const PLAIN = "";
+
 /** Lists in sidebar order with their depth, for an indented menu. */
 const flatLists = (
   nodes: ReadonlyArray<ListNode>,
@@ -91,7 +90,8 @@ interface Props {
 /**
  * The new-task dialog, opened by N / C, the sidebar and the command palette. A title that
  * understands the quick-add tokens (`!high #tag due:tomorrow`), notes, and a row of property
- * buttons whose picks merge with the tokens. Enter creates the task and closes the dialog,
+ * buttons whose picks merge with the tokens. When the workspace enables a plugin, a kind picker
+ * leads the row and the kind adds its own buttons. Enter creates the task and closes the dialog,
  * ⌘Enter also opens it.
  */
 export function NewTaskDialog({ open, onOpenChange, ...props }: Props) {
@@ -124,6 +124,10 @@ function NewTaskForm({
   onDone,
 }: Omit<Props, "open" | "onOpenChange"> & { onDone: () => void }) {
   const create = useCreateTask(workspace);
+  const createOfKind = useCreateTaskOfKind(workspace);
+  const kinds = creatableKinds(snapshot);
+  const [kind, setKind] = useState<{ kind: CreatableKind; draft: unknown }>();
+  const pickedFields = useRef(false);
   const titleInput = useRef<QuickAddInputHandle>(null);
   const draft = useQuickAdd(snapshot.lists, initialTitle);
   const suggestions = useMemo(() => suggestionsFor(snapshot), [snapshot]);
@@ -158,7 +162,10 @@ function NewTaskForm({
     a.localeCompare(b),
   );
   const dueLabel = dueInfo(due);
-  const ready = parsed.title !== "" && status !== undefined;
+  const ready =
+    parsed.title !== "" &&
+    status !== undefined &&
+    (kind === undefined || kind.kind.create.ready(kind.draft));
 
   const toggleTag = (tag: string) => {
     if (parsed.fields.tags.includes(tag)) {
@@ -171,18 +178,17 @@ function NewTaskForm({
 
   const submit = (open: boolean) => {
     if (!ready) return;
-    create.mutate(
-      {
-        title: parsed.title,
-        status: status.id,
-        tags,
-        ...(priority !== "none" ? { priority } : {}),
-        ...(due ? { due } : {}),
-        ...(targetList === null && isSmartView(list) ? {} : { list: targetList }),
-        ...(notes.trim() !== "" ? { body: notes.trim() } : {}),
-      },
-      open ? { onSuccess: (task) => onOpenTask(task.id) } : undefined,
-    );
+    const task = {
+      title: parsed.title,
+      status: status.id,
+      tags,
+      ...(priority !== "none" ? { priority } : {}),
+      ...(targetList === null && isSmartView(list) ? {} : { list: targetList }),
+      ...(notes.trim() !== "" ? { body: notes.trim() } : {}),
+    };
+    const then = open ? { onSuccess: ({ id }: { id: string }) => onOpenTask(id) } : undefined;
+    if (kind === undefined) create.mutate({ ...task, ...(due ? { due } : {}) }, then);
+    else createOfKind.mutate({ kind: kind.kind.create, task, draft: kind.draft }, then);
     onDone();
   };
   const onEnter = (event: KeyboardEvent, plainSubmits: boolean) => {
@@ -227,6 +233,65 @@ function NewTaskForm({
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
+        {kinds.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Chip set={kind !== undefined}>
+                {kind === undefined ? (
+                  <>
+                    <SquareCheckIcon />
+                    Task
+                  </>
+                ) : (
+                  <>
+                    <kind.kind.create.Icon />
+                    {kind.kind.create.noun}
+                  </>
+                )}
+              </Chip>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="w-52"
+              onCloseAutoFocus={(event) =>
+                // A kind's fields open their own picker, which takes focus.
+                pickedFields.current ? event.preventDefault() : refocus(event)
+              }
+            >
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Kind</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={kind?.kind.id ?? PLAIN}
+                  onValueChange={(value) => {
+                    const picked = kinds.find((entry) => entry.id === value);
+                    pickedFields.current = picked?.create.Fields !== undefined;
+                    setKind(picked && { kind: picked, draft: picked.create.empty });
+                  }}
+                >
+                  <DropdownMenuRadioItem value={PLAIN}>
+                    <SquareCheckIcon />
+                    Task
+                  </DropdownMenuRadioItem>
+                  {kinds.map((entry) => (
+                    <DropdownMenuRadioItem key={entry.id} value={entry.id}>
+                      <entry.create.Icon />
+                      {entry.create.noun}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        {kind?.kind.create.Fields && (
+          <kind.kind.create.Fields
+            key={kind.kind.id}
+            draft={kind.draft}
+            onChange={(draft) => setKind({ ...kind, draft })}
+            onCloseAutoFocus={refocus}
+          />
+        )}
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Chip>
@@ -283,19 +348,21 @@ function NewTaskForm({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <DuePicker
-          value={due}
-          onChange={(next) => {
-            if (parsed.fields.due) dropTokens((token) => token.kind === "due");
-            setPickedDue(next);
-          }}
-          onCloseAutoFocus={refocus}
-        >
-          <Chip set={dueLabel !== null} className={cn(dueLabel?.overdue && "text-destructive")}>
-            <CalendarIcon />
-            {dueLabel ? <span className="font-mono">{dueLabel.label}</span> : "Due date"}
-          </Chip>
-        </DuePicker>
+        {kind === undefined && (
+          <DuePicker
+            value={due}
+            onChange={(next) => {
+              if (parsed.fields.due) dropTokens((token) => token.kind === "due");
+              setPickedDue(next);
+            }}
+            onCloseAutoFocus={refocus}
+          >
+            <Chip set={dueLabel !== null} className={cn(dueLabel?.overdue && "text-destructive")}>
+              <CalendarIcon />
+              {dueLabel ? <span className="font-mono">{dueLabel.label}</span> : "Due date"}
+            </Chip>
+          </DuePicker>
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -392,28 +459,9 @@ function NewTaskForm({
           <Kbd>esc</Kbd>
         </span>
         <Button size="sm" className="ml-auto" disabled={!ready} onClick={() => submit(false)}>
-          Create task
+          Create {kind === undefined ? "task" : kind.kind.create.noun.toLowerCase()}
         </Button>
       </div>
     </div>
-  );
-}
-
-/** A property button in the dialog's row: muted until it holds a value. */
-function Chip({
-  set = true,
-  className,
-  children,
-  ...props
-}: ComponentProps<typeof Button> & { set?: boolean; children: ReactNode }) {
-  return (
-    <Button
-      variant="outline"
-      size="xs"
-      className={cn("bg-transparent", !set && "text-muted-foreground", className)}
-      {...props}
-    >
-      {children}
-    </Button>
   );
 }

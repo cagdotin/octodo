@@ -1,5 +1,5 @@
-import type { Task } from "@octodo/contract";
-import { webPlugins } from "@octodo/plugins/web";
+import type { Task, WorkspaceSnapshot } from "@octodo/contract";
+import { webPlugins, type KindCreate } from "@octodo/plugins/web";
 
 /** The web half of the plugin whose kind the task is, if it has one (decision 0016). */
 export const kindWeb = (task: Task) =>
@@ -7,6 +7,19 @@ export const kindWeb = (task: Task) =>
 
 /** Whether completing the task logs it and leaves it open instead of closing it. */
 export const completesInPlace = (task: Task) => kindWeb(task)?.completesInPlace === true;
+
+/** A kind a new task can be, by its plugin id. */
+export interface CreatableKind {
+  readonly id: string;
+  readonly create: KindCreate<unknown>;
+}
+
+/** The kinds the workspace enables, in config.json's order, that the app can create. */
+export const creatableKinds = (snapshot: Pick<WorkspaceSnapshot, "plugins">) =>
+  (snapshot.plugins ?? []).flatMap((id): Array<CreatableKind> => {
+    const web = webPlugins[id];
+    return web === undefined ? [] : [{ id, create: web.create }];
+  });
 
 /** The plugin's part of a task row's date slot, or null for a plain task. */
 export function KindRow({ task, className }: { task: Task; className?: string | undefined }) {

@@ -108,8 +108,12 @@ Building phase 1 settled what the decision left open, keeping to two ideas one l
   folders. A `blocked_by` that names an entry is a `broken-link`: links name tasks only.
 - **The plugin API.** A plugin's reader gets `{ entry, keys, files }`, where `entry` is what every
   task and entry has (a task is passed whole). A section plugin's handlers create an entry with
-  `createInSection(input, keys)`; editing and deleting entries come with the first plugin that
-  needs them (counters, OCT-89).
+  `createInSection(input, keys)`, read them with `entriesInSection` and `getInSection(id)`,
+  change one with `editInSection(id, { title, body, keys, files })` (renaming its folder for a
+  new title) and remove one with `deleteInSection(id)`, which first takes its id out of every
+  task's links, as deleting a task does; entries hold no links of their own. Each writes under
+  the owner lock, and an id that is not an entry of the plugin's own section is `EntryNotFound`
+  (OCT-89).
 - What is neither `config.json`, a section folder nor dot bookkeeping at the top of `.octodo/`, and
   what is not an entry in a section's folder, is a `misplaced` diagnostic.
 

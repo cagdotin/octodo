@@ -8,6 +8,7 @@ export * from "./operations.ts";
 export {
   definePlugin,
   plainTask,
+  type EntryChange,
   type KindChange,
   type KindInput,
   type KindProblem,

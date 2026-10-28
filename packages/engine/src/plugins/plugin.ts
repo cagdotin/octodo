@@ -5,6 +5,7 @@ import {
   type AttachmentContent,
   type CreateTaskInput,
   type Entry,
+  type EntryNotFound,
   type InvalidRequest,
   type StorageError,
   type WorkspaceBusy,
@@ -85,6 +86,13 @@ export interface KindChange {
   readonly files?: Readonly<Record<string, (text: string | null) => string>>;
 }
 
+/** What one write of a plugin changes in an entry of its section. */
+export interface EntryChange extends KindChange {
+  readonly title?: string | undefined;
+  /** The markdown body, replaced whole. */
+  readonly body?: string | undefined;
+}
+
 /** What a new entry of a plugin's section starts with besides its plugin's keys. */
 export interface NewEntry {
   readonly title: string;
@@ -98,6 +106,22 @@ export interface PluginWorkspace extends Workspace {
     input: NewEntry,
     keys: Readonly<Record<string, unknown>>,
   ) => Effect.Effect<Entry, InvalidRequest | StorageError | WorkspaceBusy>;
+  /** The entries of the plugin's section, in their order. */
+  readonly entriesInSection: Effect.Effect<ReadonlyArray<Entry>, StorageError>;
+  readonly getInSection: (entryId: string) => Effect.Effect<Entry, EntryNotFound | StorageError>;
+  /** Changes an entry of the plugin's section, refusing any key or file the plugin does not own. */
+  readonly editInSection: (
+    entryId: string,
+    change: EntryChange,
+  ) => Effect.Effect<Entry, EntryNotFound | InvalidRequest | StorageError | WorkspaceBusy>;
+  /** Removes an entry of the plugin's section; every task's links to it go first. */
+  readonly deleteInSection: (
+    entryId: string,
+  ) => Effect.Effect<void, EntryNotFound | StorageError | WorkspaceBusy>;
+  /** The text of each of the plugin's files an entry of its section has. */
+  readonly filesInSection: (
+    entryId: string,
+  ) => Effect.Effect<ReadonlyMap<string, string>, EntryNotFound | StorageError | WorkspaceBusy>;
   /** Creates a task of the plugin's kind with these keys. */
   readonly createOfKind: (
     input: CreateTaskInput,

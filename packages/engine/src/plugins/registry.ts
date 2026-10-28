@@ -1,6 +1,7 @@
 import { PluginNotEnabled } from "@octodo/contract";
 import type { Operation, OperationName } from "@octodo/contract/catalog";
 import { Effect, Schema } from "effect";
+import { findInSection } from "../entries/operations.ts";
 import { runOperation } from "../operations.ts";
 import type { Workspace } from "../workspace.ts";
 import type { Workspaces } from "../workspaces.ts";
@@ -31,6 +32,14 @@ const forPlugin = (workspace: Workspace, plugin: string): PluginWorkspace => ({
   createOfKind: (input, keys) => workspace.createTask(input, { id: plugin, keys }),
   editOfKind: (taskId, change) => workspace.editKind(plugin, taskId, change),
   createInSection: (input, keys) => workspace.createEntry(plugin, input, keys),
+  entriesInSection: Effect.map(workspace.snapshot, ({ entries = [] }) =>
+    entries.filter((entry) => entry.section === plugin),
+  ),
+  getInSection: (entryId) =>
+    Effect.flatMap(workspace.snapshot, (snapshot) => findInSection(snapshot, plugin, entryId)),
+  editInSection: (entryId, change) => workspace.editEntry(plugin, entryId, change),
+  deleteInSection: (entryId) => workspace.deleteEntry(plugin, entryId),
+  filesInSection: (entryId) => workspace.entryFiles(plugin, entryId),
   filesOfKind: (taskId) => workspace.kindFiles(plugin, taskId),
 });
 

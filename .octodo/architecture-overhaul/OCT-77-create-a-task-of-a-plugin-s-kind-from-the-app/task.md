@@ -1,7 +1,7 @@
 ---
 id: OCT-77
 title: Create a task of a plugin's kind from the app
-status: todo
+status: done
 priority: medium
 tags:
   - plugins

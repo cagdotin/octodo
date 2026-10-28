@@ -1,7 +1,7 @@
 ---
 id: OCT-76
 title: "Task panel: hide the plain Due control on kinds that own their date"
-status: todo
+status: done
 priority: low
 tags:
   - web

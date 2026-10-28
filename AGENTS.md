@@ -31,7 +31,9 @@ instead of keeping the code because it exists.
   ([0014](docs/decisions/0014-one-plugin-api-for-the-plain-task-and-every-plugin.md)). A
   recurring task keeps its rule in `repeat` and one line per time it was done in `log.jsonl`;
   moving it into a completed status logs that line and leaves it in the first unstarted status
-  ([0016](docs/decisions/0016-recurring-tasks-complete-in-place.md)).
+  ([0016](docs/decisions/0016-recurring-tasks-complete-in-place.md)). An anniversary keeps the
+  day it first happened in `date`; clients compute its next occurrence from today
+  ([0020](docs/decisions/0020-anniversaries-store-the-day-clients-compute-the-next.md)).
 - A link is a frontmatter key holding a list of plain task ids, `blocked_by: [HM-3, HM-7]`;
   `LINK_KINDS` in `contract/src/rules.ts` lists the keys. Only one end stores an edge: the reverse (`blocks`),
   `mentionedIn` (from `[[HM-3]]` in a body, outside code), `blocked` and `ready` (open and not

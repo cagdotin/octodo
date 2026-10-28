@@ -1,4 +1,5 @@
 import type { Plugin } from "@octodo/engine";
+import { anniversary } from "./anniversary/engine.ts";
 import { recurring } from "./recurring/engine.ts";
 
 /**
@@ -6,4 +7,4 @@ import { recurring } from "./recurring/engine.ts";
  * (`PluginShared`: anything any client may import), an `engine.ts` (`definePlugin`) and a
  * `web.tsx`; a workspace's config.json picks which of them apply there (decision 0014).
  */
-export const plugins: ReadonlyArray<Plugin> = [recurring];
+export const plugins: ReadonlyArray<Plugin> = [recurring, anniversary];

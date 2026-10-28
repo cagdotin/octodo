@@ -7,17 +7,53 @@
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown && OCTODO_DEV_URL=http://localhost:5520 electron .",
-    "start": "electron ."
+    "start": "electron .",
+    "package": "electron-builder --mac"
   },
-  "dependencies": {
+  "devDependencies": {
     "@effect/platform-node": "4.0.6",
     "@octodo/client": "workspace:*",
     "@octodo/engine": "workspace:*",
     "@octodo/server": "workspace:*",
-    "effect": "4.0.6"
-  },
-  "devDependencies": {
+    "effect": "4.0.6",
     "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
     "tsdown": "^0.23.2"
-  }
+  },
+  "build": {
+    "appId": "app.octodo.desktop",
+    "npmRebuild": false,
+    "files": [
+      "dist/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist",
+        "to": "web"
+      }
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "electronFuses": {
+      "runAsNode": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "grantFileProtocolExtraPrivileges": false
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "identity": "-",
+      "notarize": false
+    }
+  },
+  "productName": "octodo"
 }

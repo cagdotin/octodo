@@ -140,6 +140,10 @@ OCT-69.
   spawns one (127.0.0.1:4520); Vite proxies to whichever `server.json` names.
 - `pnpm dev:web`: API plus Vite, for the browser; open the URL the API prints.
 - `pnpm dev:site`: the landing page on 5530.
+- `pnpm package`: builds the macOS app with electron-builder into `apps/desktop/release/` (`.app`,
+  dmg, zip; ad-hoc signed, [0024](docs/decisions/0024-the-desktop-app-is-packaged-with-electron-builder.md)).
+  Try a build on scratch state, or it attaches to the octodo you run:
+  `OCTODO_HOME=<tmp> OCTODO_PORT=<spare> apps/desktop/release/mac-arm64/octodo.app/Contents/MacOS/octodo --user-data-dir=<tmp>/ud`.
 - `pnpm check`: format check, lint, typecheck, tests. Lefthook runs format, lint and typecheck on
   commit and `pnpm check` before push.
 - Test against scratch folders (`OCTODO_HOME=<tmp> bin/octo ...`), never a real project's

@@ -46,5 +46,6 @@ supersedes the old one and mark the old one's status.
 | [0020](0020-anniversaries-store-the-day-clients-compute-the-next.md)                 | Anniversaries store the day, clients compute the next one, and lists keep their order                    | accepted |
 | [0021](0021-the-desktop-app-attaches-to-or-spawns-the-server.md)                     | The desktop app attaches to the server, or spawns and supervises one                                     | accepted |
 | [0022](0022-presets-in-the-contract-workspace-and-plugin-settings-are-operations.md) | Presets live in the contract, and adding a workspace and choosing its plugins are operations             | accepted |
+| [0024](0024-the-desktop-app-is-packaged-with-electron-builder.md)                    | The desktop app is packaged with electron-builder, and its server child runs from app.asar               | accepted |
 | #                                                                                    | Decision                                                                                                 | Status   |
 | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | -------- |

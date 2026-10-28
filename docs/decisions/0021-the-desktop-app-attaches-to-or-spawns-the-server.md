@@ -102,7 +102,5 @@ desktop attaching, it was the last way to get two servers on one home.
   shows the server's 404 in the app window.
 - A SIGKILLed child leaves its `server.json` behind; clients treat it as stale through the pid
   check, and the next server overwrites it.
-- Packaging: there is no electron-builder configuration yet. The packaged layout the code expects
-  is the app in `Resources/app` (`dist/main.mjs`, `dist/server.mjs`, `dist/preload.cjs`) and the
-  web build in `Resources/web`. The child runs from `app.asar` only if Electron's Node mode loads
-  ES modules from it; until that is checked, `dist/server.mjs` belongs in `asarUnpack`.
+- Packaging is [0024](0024-the-desktop-app-is-packaged-with-electron-builder.md): the child runs
+  `dist/server.mjs` from inside `app.asar`, and the `RunAsNode` fuse stays on for it.

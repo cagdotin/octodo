@@ -2,3 +2,4 @@
 .pending-id*
 .new-*
 .*.tmp
+.owner-lock*

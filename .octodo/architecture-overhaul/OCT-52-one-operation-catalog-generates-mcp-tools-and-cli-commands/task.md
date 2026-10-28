@@ -1,7 +1,7 @@
 ---
 id: OCT-52
 title: One operation catalog generates MCP tools and CLI commands
-status: todo
+status: done
 priority: high
 tags:
   - architecture

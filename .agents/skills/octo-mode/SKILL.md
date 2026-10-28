@@ -23,6 +23,7 @@ The Principles section below grounds every trigger. In your reply, name each pri
 - Nontrivial multi-step → write the throughput checkpoint (Feature step 3).
 - Any prose, your reply included → the **unslop** skill. Write the reply per **Writing the reply**.
 - Docs, readmes, PR descriptions, commit messages → the **technical-writing** skill.
+- A change to how octodo is built (a process's or package's job, the design, a decision), or any edit to `docs/`, `AGENTS.md` or `README.md` → the **Librarian** playbook, with the doc edits in the same commit as the code.
 - `.ts` or `.tsx` work → the **typescript-best-practices** skill.
 - Before review → the **comment-review** skill over the diff.
 - Behavior a user can see → prove it on the real surface (see **Verify on the real surface**). For a bug, reproduce it there yourself first.
@@ -167,6 +168,7 @@ A large or cross-cutting effort (a migration across many call sites, an ambitiou
 - **Feature.** New or changed behavior, built from a named data shape.
 - **Refactoring.** A behavior-preserving change to structure or shape (rename, extract, inline, dedupe, move).
 - **Prototype.** A throwaway sketch to make a design or behavioral decision cheaply, or to settle an empirical fork by observing it ("prototype", "mock it up", "try this layout").
+- **Librarian.** Keeping `docs/`, `AGENTS.md` and `README.md` true as the code changes: decision records, the architecture's Today and Target sections, and what goes where.
 - **Visual parity.** Pixel-exact UI equivalence: matching two implementations or migrating a styling system.
 - **Authoring or modifying a skill.** Writing or editing a `SKILL.md`. File: `playbooks/authoring-a-skill.md`.
 - **Eval.** Testing how a skill or prompt change affects agent behavior before promoting it. Subagent-heavy by design, so run it only on request.

@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./counter/shared": "./src/counter/shared.ts",
+    "./counter/web": "./src/counter/web.tsx",
     "./recurring/shared": "./src/recurring/shared.ts",
     "./recurring/web": "./src/recurring/web.tsx",
     "./web": "./src/web.ts"

@@ -62,10 +62,12 @@ engine's `Workspace`.
   `fields` schema, and its plugin's keys leave `extra`. The snapshot and `get_workspace` give
   `plugins`, the enabled ids. Both keys are absent when there is nothing to say, so a workspace
   without plugins reads exactly as before.
-- A plugin's files are its data only in tasks of its kind. There the tree reads their text for the
-  reader, the attachment listing leaves them out, `read_attachment` answers `AttachmentNotFound`
+- A plugin's files are its data only in tasks whose `type` names it. There the attachment listing
+  leaves them out, `read_attachment` answers `AttachmentNotFound`
   ([0011](0011-attachments-are-one-operation-plugin-files-are-private.md)), and an upload with that
-  name, in any case, is refused. In a plain task the same name is an ordinary attachment.
+  name, in any case, is refused, whether the workspace enables the plugin or not: disabling it
+  hides the kind's fields and operations, not its files. Where it is enabled, the tree reads their
+  text for the reader. In a task without that `type` the same name is an ordinary attachment.
 - A plugin's problem is the diagnostic kind `<plugin>/<problem>` (`recurring/bad-repeat`), with its
   remedy appended as for every kind. Pointing at one of its files puts the diagnostic on that file.
   A plugin's problems have no fixes yet; one that needs a fix adds it to the fix model then.

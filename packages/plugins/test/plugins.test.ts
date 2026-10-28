@@ -121,9 +121,10 @@ describe("a plugin's kind in a workspace", () => {
         "The type tally is a plugin this workspace does not enable. It reads as a plain task until the plugin is enabled in the workspace's settings (octo plugins enable, MCP enable_plugin) or the type line is removed.",
       ],
     ]);
-    expect((await ws.call("get_task", { id: "HM-1" })).value.attachments).toEqual([
-      { path: "tally.log", size: 11, mediaType: "application/octet-stream" },
-    ]);
+    expect((await ws.call("get_task", { id: "HM-1" })).value.attachments).toEqual([]);
+    expect(await ws.call("read_attachment", { id: "HM-1", path: "tally.log" })).toEqual({
+      error: "AttachmentNotFound: Task HM-1 has no attachment tally.log",
+    });
     expect(await ws.call("bump_tally", { id: "HM-1" })).toEqual({
       error: `PluginNotEnabled: The tally plugin is not enabled in ${ws.root}; add "tally" to "plugins" in its .octodo/config.json`,
     });

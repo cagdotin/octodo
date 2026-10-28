@@ -53,6 +53,8 @@ export interface Scan {
   readonly tree: Tree;
   /** The text of each plugin file of each task of a plugin's kind, by task id and file name. */
   readonly kindFiles: ReadonlyMap<string, ReadonlyMap<string, string>>;
+  /** The `type` each task's frontmatter names, by task id, whether the workspace enables it or not. */
+  readonly types: ReadonlyMap<string, string>;
 }
 
 type Read<A> = Result.Result<A, PlatformError.PlatformError>;
@@ -133,6 +135,7 @@ export const scanWorkspace = (
   const lists: Array<List> = [];
   const taskFiles: Array<TaskFile> = [];
   const kindFiles = new Map<string, ReadonlyMap<string, string>>();
+  const types = new Map<string, string>();
   const listDirs = new Map<string, { dir: string; order: string | null }>();
   const taskDirs = new Map<string, string>();
   const taskTexts = new Map<string, string>();
@@ -238,6 +241,8 @@ export const scanWorkspace = (
       takeId(id);
       taskDirs.set(id, folder.path);
       taskTexts.set(id, text);
+      const type = read.frontmatter["type"];
+      if (typeof type === "string") types.set(id, type);
       const ownFiles = (plugin: Plugin) => {
         const texts = new Map<string, string>();
         for (const [name, read] of folder.owned) {
@@ -367,6 +372,7 @@ export const scanWorkspace = (
     missingId,
     tree,
     kindFiles,
+    types,
   };
 };
 

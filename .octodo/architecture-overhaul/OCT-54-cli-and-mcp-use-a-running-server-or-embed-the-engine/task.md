@@ -29,3 +29,14 @@ Decision `docs/decisions/0002-server-preferred-topology.md`. Today every surface
 - The CLI end to end on a scratch workspace (`OCTODO_HOME=<tmp> bin/octo ...`) gives identical files and output with a server running and without one.
 - The contract test table from the catalog task runs in both modes.
 - Same checks as the rest of this list.
+
+## From OCT-53
+
+- `Api` is in `@octodo/contract/api`, so a Node client can use `HttpApiClient.make(Api)` (the Effect runtime is fine outside the browser) or `createClient` from `@octodo/contract/client`, keyed `"METHOD /api/path"`.
+- Detect a server with `GET /api/health`: `{ version, capabilities: { operations, mcp, openapi } }`. Compare `version` for the mismatch report.
+- The `workspace` path parameter is a registered workspace id only. MCP and the CLI also take a folder path, so `connect()` resolves a path to its registered id (or registers it) before calling HTTP.
+- Errors are `{ _tag, ...fields, message }` with the status from `httpApiStatus` on HTTP and the same body in MCP tool errors; decode them with `wireError` from `@octodo/contract` to get the tagged error back, so CLI messages stay identical in both modes.
+- Query encoding: `null` is the string `"null"` (for example `?list=null`) and arrays repeat their key.
+- Four endpoints are still HTTP only and should become catalog operations once OCT-56 lands: add and remove a workspace, reorder statuses, fix-all (decision 0015). `octo doctor --fix` and `workspace remove` need them in server mode.
+- `startServer({ home, port, webDir })` from `@octodo/server` is unchanged and closes open connections (SSE) on `close()`.
+- `packages/cli/test/surfaces.test.ts` already runs every catalog call over HTTP against `startServer`; the server-mode CLI can reuse its `httpSurface`.

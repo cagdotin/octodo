@@ -1,7 +1,7 @@
 ---
 id: OCT-53
 title: Replace Hono with Effect HttpApi, endpoints generated from the catalog
-status: todo
+status: done
 priority: medium
 tags:
   - architecture

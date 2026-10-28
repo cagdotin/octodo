@@ -18,6 +18,11 @@ instead of keeping the code because it exists.
 
 ## The on-disk model
 
+- `.octodo/` holds `config.json`, the folder of each section and dot bookkeeping; anything else at
+  its top is a `misplaced` diagnostic. Tasks is the built-in section: `.octodo/tasks/` is the root
+  list, and everything below about tasks and lists happens inside it
+  ([0027](docs/decisions/0027-plugins-add-sections-tasks-is-the-built-in-one.md)). `octo init`
+  makes `tasks/`.
 - `.octodo/config.json`: workspace `name`, id `key` (`HM` → ids `HM-1`, `HM-2`, ...) and `statuses`
   (id, display name, category). Categories have a fixed order (backlog, unstarted, started,
   completed, canceled, archived); the array only orders statuses within a category. Reordering
@@ -48,7 +53,7 @@ instead of keeping the code because it exists.
 - A task folder inside a task folder is a subtask, the same shape all the way down. Every other file
   in a task folder is an attachment of that task (`images/plan.png`).
 - A folder with `list.md` (`name`, `order`; the body describes the list) is a list, nested up to
-  three levels. `.octodo/` is the root list. A list id is its folder names joined by `/`
+  three levels. `.octodo/tasks/` is the root list. A list id is its folder names joined by `/`
   (`garden/seeds`), so moving a list to another parent changes its id.
 - Folder names carry no meaning for the scanner; they are for people: `<id>-<slug>` for a task, the
   slug for a list. Anything else (a loose `.md`, a folder with neither marker or both, a symlink,

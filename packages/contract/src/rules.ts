@@ -101,7 +101,7 @@ export const taskSubtree = (
   return subtree;
 };
 
-/** Where a task sits: in a list (or `.octodo/` for null), or under a parent task in that list. */
+/** Where a task sits: in a list (or `.octodo/tasks/` for null), or under a parent task in that list. */
 export interface Container {
   readonly list: string | null;
   readonly parent: string | null;

@@ -23,8 +23,8 @@ const fresh = async (files: Record<string, string>) => {
   mkdirSync(root);
   await run(initWorkspace(root));
   for (const [file, content] of Object.entries(files)) {
-    mkdirSync(dirname(join(root, ".octodo", file)), { recursive: true });
-    writeFileSync(join(root, ".octodo", file), content);
+    mkdirSync(dirname(join(root, ".octodo/tasks", file)), { recursive: true });
+    writeFileSync(join(root, ".octodo/tasks", file), content);
   }
   return root;
 };
@@ -75,7 +75,7 @@ describe("scanWorkspace", () => {
       "both/task.md": "---\nid: HM-6\n---\n",
       "both/list.md": "---\nname: Both\n---\n",
     });
-    symlinkSync("/nonexistent", join(root, ".octodo/home/link"));
+    symlinkSync("/nonexistent", join(root, ".octodo/tasks/home/link"));
 
     const inOrder = await run(scan(root));
     const shuffled = await run(scan(root), shuffledReads);
@@ -83,22 +83,47 @@ describe("scanWorkspace", () => {
       inOrder.snapshot.diagnostics.map((diagnostic) => [diagnostic.path, diagnostic.kind]),
       "the diagnostics come in the order the scan judges the tree",
     ).toEqual([
-      [".octodo/both", "both-markers"],
-      [".octodo/garden/list.md", "invalid-frontmatter"],
-      [".octodo/home/link", "symlink"],
-      [".octodo/garden/HM-5-dig/task.md", "invalid-frontmatter"],
-      [".octodo/garden/empty", "unmarked-folder"],
-      [".octodo/HM-1-paint/task.md", "unknown-priority"],
-      [".octodo/home/kitchen/copy/task.md", "duplicate-id"],
-      [".octodo/HM-1-paint/HM-4-sand/task.md", "invalid-due"],
-      [".octodo/notes.md", "note"],
-      [".octodo/home/stray.md", "loose-markdown"],
-      [".octodo/home/kitchen/HM-3-boxes/task.md", "unknown-status"],
-      [".octodo/home/HM-2-pack/task.md", "broken-link"],
+      [".octodo/tasks/both", "both-markers"],
+      [".octodo/tasks/garden/list.md", "invalid-frontmatter"],
+      [".octodo/tasks/home/link", "symlink"],
+      [".octodo/tasks/garden/HM-5-dig/task.md", "invalid-frontmatter"],
+      [".octodo/tasks/garden/empty", "unmarked-folder"],
+      [".octodo/tasks/HM-1-paint/task.md", "unknown-priority"],
+      [".octodo/tasks/home/kitchen/copy/task.md", "duplicate-id"],
+      [".octodo/tasks/HM-1-paint/HM-4-sand/task.md", "invalid-due"],
+      [".octodo/tasks/notes.md", "note"],
+      [".octodo/tasks/home/stray.md", "loose-markdown"],
+      [".octodo/tasks/home/kitchen/HM-3-boxes/task.md", "unknown-status"],
+      [".octodo/tasks/home/HM-2-pack/task.md", "broken-link"],
     ]);
     expect(shuffled.snapshot, "reads finishing out of order change nothing").toEqual(
       inOrder.snapshot,
     );
+  });
+
+  it("reads only config.json and sections at the top of .octodo/, and takes the ids of the rest", async () => {
+    const root = await fresh({
+      "HM-1-pack/task.md": "---\nid: HM-1\nblocked_by: [HM-12]\n---\n",
+    });
+    const top = (file: string, content: string) => {
+      mkdirSync(dirname(join(root, ".octodo", file)), { recursive: true });
+      writeFileSync(join(root, ".octodo", file), content);
+    };
+    top("HM-12-old/task.md", "---\nid: HM-12\n---\n");
+    top("readme.md", "---\nid: HM-20\n---\n");
+    top("notes.txt", "words\n");
+    symlinkSync("/nonexistent", join(root, ".octodo/linked"));
+
+    const { snapshot, nextIdNumber } = await run(scan(root));
+    expect(snapshot.tasks.map((task) => task.id)).toEqual(["HM-1"]);
+    expect(snapshot.tasks[0]!.blocked, "a blocker that is not read still blocks").toBe(true);
+    expect(snapshot.diagnostics.map((diagnostic) => [diagnostic.path, diagnostic.kind])).toEqual([
+      [".octodo/HM-12-old", "misplaced"],
+      [".octodo/linked", "symlink"],
+      [".octodo/notes.txt", "misplaced"],
+      [".octodo/readme.md", "misplaced"],
+    ]);
+    expect(nextIdNumber, "ids in what is not read are never handed out again").toBe(21);
   });
 
   it("reports a task.md or list.md that is a link without reading its folder", async () => {
@@ -106,11 +131,11 @@ describe("scanWorkspace", () => {
     const target = (name: string) => join(dirname(root), name);
     writeFileSync(target("task.md"), "---\nid: HM-1\ntitle: Linked\n---\n");
     writeFileSync(target("list.md"), "---\nname: Linked\n---\n");
-    mkdirSync(join(root, ".octodo/HM-1-linked"));
-    symlinkSync(target("task.md"), join(root, ".octodo/HM-1-linked/task.md"));
-    mkdirSync(join(root, ".octodo/garden/HM-2-dig"), { recursive: true });
-    symlinkSync(target("list.md"), join(root, ".octodo/garden/list.md"));
-    writeFileSync(join(root, ".octodo/garden/HM-2-dig/task.md"), "---\nid: HM-2\n---\n");
+    mkdirSync(join(root, ".octodo/tasks/HM-1-linked"));
+    symlinkSync(target("task.md"), join(root, ".octodo/tasks/HM-1-linked/task.md"));
+    mkdirSync(join(root, ".octodo/tasks/garden/HM-2-dig"), { recursive: true });
+    symlinkSync(target("list.md"), join(root, ".octodo/tasks/garden/list.md"));
+    writeFileSync(join(root, ".octodo/tasks/garden/HM-2-dig/task.md"), "---\nid: HM-2\n---\n");
 
     const scanned = await run(scan(root));
     expect(scanned.snapshot.tasks).toEqual([]);
@@ -118,15 +143,15 @@ describe("scanWorkspace", () => {
     expect(
       scanned.snapshot.diagnostics.map((diagnostic) => [diagnostic.path, diagnostic.kind]),
     ).toEqual([
-      [".octodo/HM-1-linked/task.md", "symlink"],
-      [".octodo/garden/list.md", "symlink"],
+      [".octodo/tasks/HM-1-linked/task.md", "symlink"],
+      [".octodo/tasks/garden/list.md", "symlink"],
     ]);
     expect(scanned.nextIdNumber, "the ids in the folders it does not read are still taken").toBe(3);
   });
 
   it("reports a folder it can list but not enter as unreadable, in a list and in a task", async () => {
     const root = await fresh({ "HM-1-a/task.md": "---\nid: HM-1\n---\n" });
-    const locked = [join(root, ".octodo/noexec"), join(root, ".octodo/HM-1-a/images")];
+    const locked = [join(root, ".octodo/tasks/noexec"), join(root, ".octodo/tasks/HM-1-a/images")];
     for (const dir of locked) {
       mkdirSync(join(dir, "inner"), { recursive: true });
       chmodSync(dir, 0o644);
@@ -134,8 +159,8 @@ describe("scanWorkspace", () => {
     try {
       const { snapshot } = await run(scan(root));
       expect(snapshot.diagnostics.map((diagnostic) => [diagnostic.path, diagnostic.kind])).toEqual([
-        [".octodo/noexec", "unreadable"],
-        [".octodo/HM-1-a/images", "unreadable"],
+        [".octodo/tasks/noexec", "unreadable"],
+        [".octodo/tasks/HM-1-a/images", "unreadable"],
       ]);
     } finally {
       for (const dir of locked) chmodSync(dir, 0o755);
@@ -144,7 +169,7 @@ describe("scanWorkspace", () => {
 
   it("only reads: a task.md without an id is reported and left as it is", async () => {
     const root = await fresh({ "garden/list.md": "---\nname: Garden\n---\n" });
-    const file = join(root, ".octodo/garden/weeds/task.md");
+    const file = join(root, ".octodo/tasks/garden/weeds/task.md");
     mkdirSync(dirname(file));
     writeFileSync(file, "Pull the weeds\n");
     const refuseWrites = Layer.effect(

@@ -46,21 +46,24 @@ const open = (root: string) =>
     return yield* makeWorkspace("test", root);
   });
 
-/** Every file under `.octodo/` but the config and `.gitignore`, relative to it and sorted. */
+/** Every file under `.octodo/tasks/`, relative to it and sorted. */
 const files = (root: string) =>
-  readdirSync(join(root, ".octodo"), { recursive: true, encoding: "utf8" })
-    .filter(
-      (entry) =>
-        statSync(join(root, ".octodo", entry)).isFile() &&
-        !["config.json", ".gitignore", ".owner-lock"].includes(entry),
-    )
+  readdirSync(join(root, ".octodo/tasks"), { recursive: true, encoding: "utf8" })
+    .filter((entry) => statSync(join(root, ".octodo/tasks", entry)).isFile())
     .toSorted();
 
-const read = (root: string, file: string) => readFileSync(join(root, ".octodo", file), "utf8");
+/**
+ * Where the test's `file` is: config.json and a dot file without a folder in `.octodo/`, anything
+ * else in `.octodo/tasks/`.
+ */
+const at = (root: string, file: string) =>
+  join(root, ".octodo", file === "config.json" || /^\.[^/]+$/.test(file) ? file : `tasks/${file}`);
+
+const read = (root: string, file: string) => readFileSync(at(root, file), "utf8");
 
 const write = (root: string, file: string, content: string) => {
-  mkdirSync(dirname(join(root, ".octodo", file)), { recursive: true });
-  writeFileSync(join(root, ".octodo", file), content);
+  mkdirSync(dirname(at(root, file)), { recursive: true });
+  writeFileSync(at(root, file), content);
 };
 
 const ISO = /^\d{4}-\d\d-\d\dT[\d:.]+Z$/;
@@ -82,7 +85,9 @@ describe("workspace", () => {
       ".gitignore",
       ".owner-lock",
       "config.json",
+      "tasks",
     ]);
+    expect(readdirSync(join(root, ".octodo/tasks"))).toEqual([]);
   });
 
   it("creates each task as a folder with task.md, in the default status, defaults left out", async () => {
@@ -101,7 +106,7 @@ describe("workspace", () => {
       status: "todo",
       list: null,
       parent: null,
-      path: ".octodo/HM-1-first/task.md",
+      path: ".octodo/tasks/HM-1-first/task.md",
     });
     expect(a!.updated).toMatch(ISO);
     expect(b).toMatchObject({ id: "HM-2", priority: "high", body: "Notes\n" });
@@ -136,7 +141,7 @@ describe("workspace", () => {
     expect(result.grandchild).toMatchObject({
       list: "home",
       parent: "HM-2",
-      path: ".octodo/home/HM-1-redo-the-bedroom/HM-2-buy-primer/HM-3-pick-a-shop/task.md",
+      path: ".octodo/tasks/home/HM-1-redo-the-bedroom/HM-2-buy-primer/HM-3-pick-a-shop/task.md",
     });
     expect(result.error).toMatchObject({ _tag: "InvalidRequest" });
   });
@@ -171,7 +176,7 @@ describe("workspace", () => {
       status: "done",
       list: "home",
       parent: "HM-13",
-      path: ".octodo/home/redo-bedroom/primer/tins/task.md",
+      path: ".octodo/tasks/home/redo-bedroom/primer/tins/task.md",
     });
     expect(byId["HM-15"]).toMatchObject({ title: "Milk", body: "Buy oat milk\n", list: null });
     expect(read(root, "milk/task.md")).toBe("---\nid: HM-15\n---\n\nBuy oat milk\n");
@@ -208,15 +213,15 @@ describe("workspace", () => {
       category: "unstarted",
     });
     expect(snapshot.diagnostics.map((diagnostic) => diagnostic.path).toSorted()).toEqual([
-      ".octodo/HM-3-review/task.md",
-      ".octodo/a/b/c/d",
-      ".octodo/both",
-      ".octodo/broken/task.md",
-      ".octodo/home/HM-1-paint-copy/task.md",
-      ".octodo/home/HM-1-paint/shopping",
-      ".octodo/home/notes.md",
-      ".octodo/random",
-      ".octodo/stray.md",
+      ".octodo/tasks/HM-3-review/task.md",
+      ".octodo/tasks/a/b/c/d",
+      ".octodo/tasks/both",
+      ".octodo/tasks/broken/task.md",
+      ".octodo/tasks/home/HM-1-paint-copy/task.md",
+      ".octodo/tasks/home/HM-1-paint/shopping",
+      ".octodo/tasks/home/notes.md",
+      ".octodo/tasks/random",
+      ".octodo/tasks/stray.md",
     ]);
   });
 
@@ -233,10 +238,10 @@ describe("workspace", () => {
     const snapshot = await run(Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot));
     expect(snapshot.tasks).toEqual([]);
     expect(snapshot.diagnostics.map((diagnostic) => diagnostic.path).toSorted()).toEqual([
-      ".octodo/home/list.md",
-      ".octodo/number/task.md",
-      ".octodo/scalar/task.md",
-      ".octodo/sequence/task.md",
+      ".octodo/tasks/home/list.md",
+      ".octodo/tasks/number/task.md",
+      ".octodo/tasks/scalar/task.md",
+      ".octodo/tasks/sequence/task.md",
     ]);
     for (const [file, content] of Object.entries(broken)) expect(read(root, file)).toBe(content);
   });
@@ -245,24 +250,24 @@ describe("workspace", () => {
     const root = fresh();
     await run(initWorkspace(root));
     write(root, "HM-1-ok/task.md", "---\nid: HM-1\n---\n");
-    symlinkSync("/nonexistent/target", join(root, ".octodo/dangling"));
-    mkdirSync(join(root, ".octodo/weird/task.md"), { recursive: true });
+    symlinkSync("/nonexistent/target", join(root, ".octodo/tasks/dangling"));
+    mkdirSync(join(root, ".octodo/tasks/weird/task.md"), { recursive: true });
     write(root, "locked/HM-2-hidden/task.md", "---\nid: HM-2\n---\n");
     write(root, "frozen/task.md", "No id yet\n");
-    chmodSync(join(root, ".octodo/locked"), 0o000);
-    chmodSync(join(root, ".octodo/frozen"), 0o555);
+    chmodSync(join(root, ".octodo/tasks/locked"), 0o000);
+    chmodSync(join(root, ".octodo/tasks/frozen"), 0o555);
     try {
       const snapshot = await run(Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot));
       expect(snapshot.tasks.map((task) => task.id)).toEqual(["HM-1"]);
       expect(snapshot.diagnostics.map((diagnostic) => diagnostic.path).toSorted()).toEqual([
-        ".octodo/dangling",
-        ".octodo/frozen/task.md",
-        ".octodo/locked",
-        ".octodo/weird/task.md",
+        ".octodo/tasks/dangling",
+        ".octodo/tasks/frozen/task.md",
+        ".octodo/tasks/locked",
+        ".octodo/tasks/weird/task.md",
       ]);
     } finally {
-      chmodSync(join(root, ".octodo/locked"), 0o755);
-      chmodSync(join(root, ".octodo/frozen"), 0o755);
+      chmodSync(join(root, ".octodo/tasks/locked"), 0o755);
+      chmodSync(join(root, ".octodo/tasks/frozen"), 0o755);
     }
   });
 
@@ -276,9 +281,9 @@ describe("workspace", () => {
       readDirectory: (dir, options) =>
         Effect.tap(fs.readDirectory(dir, options), () =>
           Effect.sync(() => {
-            if (!armed || dir !== join(root, ".octodo")) return;
+            if (!armed || dir !== join(root, ".octodo/tasks")) return;
             armed = false;
-            renameSync(join(root, ".octodo/HM-2-b"), join(root, ".octodo/HM-2-c"));
+            renameSync(join(root, ".octodo/tasks/HM-2-b"), join(root, ".octodo/tasks/HM-2-c"));
           }),
         ),
     }));
@@ -353,9 +358,8 @@ describe("workspace", () => {
         const root = fresh();
         await run(initWorkspace(root));
         for (const [file, content] of Object.entries(tree)) write(root, file, content);
-        const locked = join(
+        const locked = at(
           root,
-          ".octodo",
           Object.keys(tree).find((file) => file.includes("locked"))!,
         );
         chmodSync(locked, 0o000);
@@ -391,8 +395,8 @@ describe("workspace", () => {
     const outside = join(root, "outside");
     const foreign = join(outside, `.new-${uuid()}`);
     mkdirSync(foreign, { recursive: true });
-    symlinkSync(outside, join(root, ".octodo/linked"));
-    const exists = (file: string) => existsSync(join(root, ".octodo", file));
+    symlinkSync(outside, join(root, ".octodo/tasks/linked"));
+    const exists = (file: string) => existsSync(at(root, file));
     await run(Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot));
     expect(leftover.filter(exists), "a read does not take the lock").toEqual(leftover);
     await run(
@@ -410,8 +414,8 @@ describe("workspace", () => {
       execFileSync("git", args, { cwd, encoding: "utf8" });
     const visibleToGit = [
       "?? .octodo/.gitignore",
-      "?? .octodo/HM-1-a/task.md",
       "?? .octodo/config.json",
+      "?? .octodo/tasks/HM-1-a/task.md",
     ];
     const untracked = (root: string) =>
       git(root, "status", "--porcelain", "--untracked-files=all", ".octodo")
@@ -471,7 +475,7 @@ describe("workspace", () => {
       body: "Notes\n",
       priority: "none",
       extra: { estimate: 3 },
-      path: ".octodo/HM-1-edited/task.md",
+      path: ".octodo/tasks/HM-1-edited/task.md",
     });
     expect(files(root)).toEqual(["HM-1-edited/task.md"]);
     const text = read(root, "HM-1-edited/task.md");
@@ -485,11 +489,11 @@ describe("workspace", () => {
       Effect.gen(function* () {
         const ws = yield* open(root);
         const created = yield* ws.createTask({ title: "Old" });
-        mkdirSync(join(root, ".octodo/HM-1-new"));
+        mkdirSync(join(root, ".octodo/tasks/HM-1-new"));
         return yield* ws.updateTask(created.id, { title: "New" });
       }),
     );
-    expect(task).toMatchObject({ title: "New", path: ".octodo/HM-1-old/task.md" });
+    expect(task).toMatchObject({ title: "New", path: ".octodo/tasks/HM-1-old/task.md" });
   });
 
   it("changes status and order by writing task.md, without moving the folder", async () => {
@@ -587,13 +591,13 @@ describe("workspace", () => {
     expect(result.underTask).toMatchObject({
       list: "home",
       parent: "HM-3",
-      path: ".octodo/home/HM-3-bedroom/HM-1-paint/task.md",
+      path: ".octodo/tasks/home/HM-3-bedroom/HM-1-paint/task.md",
     });
     expect(result.subtask).toMatchObject({ list: "home", parent: "HM-1" });
     expect(result.lifted).toMatchObject({
       list: "home",
       parent: null,
-      path: ".octodo/home/HM-1-paint/task.md",
+      path: ".octodo/tasks/home/HM-1-paint/task.md",
     });
     expect(result.both).toMatchObject({ _tag: "InvalidRequest" });
     expect(files(root)).toEqual([
@@ -612,8 +616,8 @@ describe("workspace", () => {
         yield* ws.createList({ name: "Home" });
         const task = yield* ws.createTask({ title: "Paint" });
         const before = read(root, "HM-1-paint/task.md");
-        chmodSync(join(root, ".octodo/home"), 0o555);
-        chmodSync(join(root, ".octodo"), 0o555);
+        chmodSync(join(root, ".octodo/tasks/home"), 0o555);
+        chmodSync(join(root, ".octodo/tasks"), 0o555);
         try {
           return {
             before,
@@ -623,8 +627,8 @@ describe("workspace", () => {
             ],
           };
         } finally {
-          chmodSync(join(root, ".octodo"), 0o755);
-          chmodSync(join(root, ".octodo/home"), 0o755);
+          chmodSync(join(root, ".octodo/tasks"), 0o755);
+          chmodSync(join(root, ".octodo/tasks/home"), 0o755);
         }
       }),
     );
@@ -717,8 +721,8 @@ describe("workspace", () => {
       }),
     );
     expect(result).toMatchObject([
-      { status: "done", path: ".octodo/home/HM-1-paint/task.md" },
-      { priority: "high", path: ".octodo/HM-2-sand-floors/task.md" },
+      { status: "done", path: ".octodo/tasks/home/HM-1-paint/task.md" },
+      { priority: "high", path: ".octodo/tasks/HM-2-sand-floors/task.md" },
     ]);
   });
 
@@ -730,7 +734,7 @@ describe("workspace", () => {
         yield* ws.createList({ name: "Home" });
         const task = yield* ws.createTask({ title: "Stay" });
         yield* ws.snapshot;
-        rmSync(join(root, ".octodo/home"), { recursive: true });
+        rmSync(join(root, ".octodo/tasks/home"), { recursive: true });
         return [
           yield* Effect.flip(ws.moveTask(task.id, { list: "home" })),
           yield* Effect.flip(ws.createTask({ title: "Lost", list: "home" })),
@@ -741,7 +745,7 @@ describe("workspace", () => {
       result.map((error) => error._tag),
       "the first write fails on the stale read, and the read after it no longer has the list",
     ).toEqual(["StorageError", "InvalidRequest"]);
-    expect(existsSync(join(root, ".octodo/home"))).toBe(false);
+    expect(existsSync(join(root, ".octodo/tasks/home"))).toBe(false);
     expect(files(root)).toEqual(["HM-1-stay/task.md"]);
   });
 
@@ -781,17 +785,17 @@ describe("workspace", () => {
         const task = yield* ws.createTask({ title: "Inside C", list: "c" });
         yield* ws.moveList("c", { before: "a" });
         const reordered = (yield* ws.snapshot).lists.map((list) => list.id);
-        const folders = readdirSync(join(root, ".octodo")).toSorted();
+        const folders = readdirSync(join(root, ".octodo/tasks")).toSorted();
         const moved = yield* ws.moveList("c", { parent: "b" });
         return { reordered, folders, moved, task: yield* ws.getTask(task.id) };
       }),
     );
     expect(result.reordered).toEqual(["c", "a", "b"]);
-    expect(result.folders).toEqual([".gitignore", ".owner-lock", "a", "b", "c", "config.json"]);
+    expect(result.folders).toEqual(["a", "b", "c"]);
     expect(result.moved).toEqual({ id: "b/c", name: "C", parent: "b", folder: "b/c" });
     expect(result.task).toMatchObject({
       list: "b/c",
-      path: ".octodo/b/c/HM-1-inside-c/task.md",
+      path: ".octodo/tasks/b/c/HM-1-inside-c/task.md",
     });
   });
 
@@ -933,9 +937,9 @@ describe("attachments", () => {
       "images/floor plan-2.png",
       "quote",
     ]);
-    expect(result.absolute).toBe(join(root, ".octodo/HM-1-plan/images/floor plan.png"));
+    expect(result.absolute).toBe(join(root, ".octodo/tasks/HM-1-plan/images/floor plan.png"));
     expect(readFileSync(result.absolute, "utf8")).toBe("png");
-    expect(result.topFile).toBe(join(root, ".octodo/HM-1-plan/quote"));
+    expect(result.topFile).toBe(join(root, ".octodo/tasks/HM-1-plan/quote"));
     expect(files(root)).toEqual([
       "HM-1-plan/images/floor plan-2.png",
       "HM-1-plan/images/floor plan.png",
@@ -978,7 +982,7 @@ describe("attachments", () => {
     ]);
     expect(files(root)).toEqual(["HM-1-plan/HM-2-sub/task.md", "HM-1-plan/task.md"]);
     expect(existsSync(join(root, "escape.png"))).toBe(false);
-    expect(existsSync(join(root, ".octodo/escape.png"))).toBe(false);
+    expect(existsSync(join(root, ".octodo/tasks/escape.png"))).toBe(false);
   });
 
   it("refuses task.md and list.md at any depth and in any case, which would make a subtask or list", async () => {
@@ -1012,7 +1016,7 @@ describe("attachments", () => {
       Effect.gen(function* () {
         const ws = yield* open(root);
         const task = yield* ws.createTask({ title: "Plan" });
-        const dir = join(root, ".octodo/HM-1-plan");
+        const dir = join(root, ".octodo/tasks/HM-1-plan");
         symlinkSync(outside, join(dir, "images"));
         symlinkSync(join(outside, "secret.txt"), join(dir, "secret.txt"));
         mkdirSync(join(dir, "notes"));
@@ -1035,7 +1039,7 @@ describe("attachments", () => {
     expect(result.throughLink._tag, "the listing does not follow the link").toBe(
       "AttachmentNotFound",
     );
-    expect(result.allowed.file).toBe(join(root, ".octodo/HM-1-plan/notes/a.txt"));
+    expect(result.allowed.file).toBe(join(root, ".octodo/tasks/HM-1-plan/notes/a.txt"));
     expect(readdirSync(outside)).toEqual(["secret.txt"]);
   });
 
@@ -1048,7 +1052,7 @@ describe("attachments", () => {
         yield* ws.createTask({ title: "Sub", parent: task.id });
         yield* ws.writeAttachment(task.id, "images/plan.png", bytes);
         yield* ws.writeAttachment(task.id, "notes.md", new TextEncoder().encode("# Notes"));
-        const dir = join(root, ".octodo/HM-1-plan");
+        const dir = join(root, ".octodo/tasks/HM-1-plan");
         writeFileSync(join(dir, "images/.cache"), "hidden");
         writeFileSync(join(dir, "HM-2-sub/sub.txt"), "the subtask's");
         symlinkSync(join(dir, "notes.md"), join(dir, "link.md"));
@@ -1079,7 +1083,7 @@ describe("attachments", () => {
       path: "images/plan.png",
       size: 3,
       mediaType: "image/png",
-      file: join(root, ".octodo/HM-1-plan/images/plan.png"),
+      file: join(root, ".octodo/tasks/HM-1-plan/images/plan.png"),
     });
     expect(new Uint8Array(read)).toEqual(bytes);
     expect(result.refused.map((error) => error._tag)).toEqual([
@@ -1099,7 +1103,7 @@ describe("attachments", () => {
         const ws = yield* open(root);
         const task = yield* ws.createTask({ title: "Film" });
         writeFileSync(
-          join(root, ".octodo/HM-1-film/film.mp4"),
+          join(root, ".octodo/tasks/HM-1-film/film.mp4"),
           new Uint8Array(20 * 1024 * 1024 + 1),
         );
         return yield* Effect.flip(ws.readAttachment(task.id, "film.mp4"));
@@ -1116,15 +1120,11 @@ describe("attachments", () => {
         const ws = yield* open(root);
         const task = yield* ws.createTask({ title: "Gone" });
         yield* ws.snapshot;
-        rmSync(join(root, ".octodo/HM-1-gone"), { recursive: true });
+        rmSync(join(root, ".octodo/tasks/HM-1-gone"), { recursive: true });
         return yield* Effect.flip(ws.writeAttachment(task.id, "images/x.png", bytes));
       }),
     );
     expect(error._tag).toBe("StorageError");
-    expect(readdirSync(join(root, ".octodo")).toSorted()).toEqual([
-      ".gitignore",
-      ".owner-lock",
-      "config.json",
-    ]);
+    expect(readdirSync(join(root, ".octodo/tasks"))).toEqual([]);
   });
 });

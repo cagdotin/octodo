@@ -72,12 +72,12 @@ export const DEFAULT_STATUSES: ReadonlyArray<StatusDefinition> = PRESETS[DEFAULT
  * a tree can be built by walking the array once.
  */
 export const List = Schema.Struct({
-  /** The folder names from `.octodo/` down to the list: `garden/seeds`. */
+  /** The folder names from `.octodo/tasks/` down to the list: `garden/seeds`. */
   id: Schema.String,
   /** From `list.md`, or the humanized folder name when it has none. */
   name: Schema.String,
   parent: Schema.NullOr(Schema.String),
-  /** Path of the folder relative to `.octodo/`, e.g. `garden/seeds`. */
+  /** Path of the folder relative to `.octodo/tasks/`, e.g. `garden/seeds`. */
   folder: Schema.String,
 });
 export type List = typeof List.Type;
@@ -98,7 +98,7 @@ export const Task = Schema.Struct({
   status: Schema.String,
   /** The nearest list folder above the task; a subtask is in its parent's list. */
   list: Schema.NullOr(Schema.String),
-  /** The task whose folder holds this one, or null for a task directly in a list or `.octodo/`. */
+  /** The task whose folder holds this one, or null for a task directly in a list or `.octodo/tasks/`. */
   parent: Schema.NullOr(Schema.String),
   priority: Priority,
   tags: Tags,
@@ -212,6 +212,7 @@ export const CoreDiagnosticKind = Schema.Literals([
   "unreadable",
   "symlink",
   "unknown-kind",
+  "misplaced",
 ]);
 export type CoreDiagnosticKind = typeof CoreDiagnosticKind.Type;
 

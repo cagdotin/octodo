@@ -9,7 +9,7 @@ import {
   Scope,
   Stream,
 } from "effect";
-import { TASKS_DIR } from "../layout.ts";
+import { OCTODO_DIR, TASKS_SECTION } from "../layout.ts";
 import { StorageError, WorkspaceBusy, type WorkspaceConfig } from "@octodo/contract";
 import { ignoreBookkeeping, isHidden, removeLeftovers } from "./bookkeeping.ts";
 import { configFile, configText, readConfig, type ConfigRead } from "./config.ts";
@@ -41,7 +41,6 @@ export interface StorageRead {
 /** One workspace's files: the only way into `.octodo/`. */
 export interface Storage {
   readonly root: string;
-  readonly tasksDir: string;
   /** Reads config.json and the tree, rereading only the paths that changed since the last read. */
   readonly read: Effect.Effect<StorageRead>;
   /** Counts the changes so far: what a caller made from a read holds while this stays the same. */
@@ -95,7 +94,7 @@ export const makeStorage = (
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const tasksDir = path.join(root, TASKS_DIR);
+    const dir = path.join(root, OCTODO_DIR);
     const reads = makeTreeReader(options.owned);
     const files = makeFiles(fs, path, root, reads.changed);
     const changes = yield* PubSub.sliding<void>(16);
@@ -116,11 +115,11 @@ export const makeStorage = (
       if (cleaned) return Effect.void;
       cleaned = true;
       return withPlatform(
-        Effect.andThen(removeLeftovers(tasksDir), Effect.ignore(ignoreBookkeeping(tasksDir))),
+        Effect.andThen(removeLeftovers(dir), Effect.ignore(ignoreBookkeeping(dir))),
       );
     });
 
-    const owner = yield* makeOwnerLock(path.join(tasksDir, OWNER_LOCK_FILE), {
+    const owner = yield* makeOwnerLock(path.join(dir, OWNER_LOCK_FILE), {
       wait: options.lockWait ?? "10 seconds",
       onNewHolder: Effect.andThen(forget, cleanUp),
     });
@@ -149,7 +148,7 @@ export const makeStorage = (
                 error instanceof OwnerLockBusy
                   ? new WorkspaceBusy({ workspace: root })
                   : new StorageError({
-                      message: `Could not take the workspace's owner lock (${TASKS_DIR}/${OWNER_LOCK_FILE})`,
+                      message: `Could not take the workspace's owner lock (${OCTODO_DIR}/${OWNER_LOCK_FILE})`,
                       cause: error,
                     }),
               ),
@@ -175,13 +174,13 @@ export const makeStorage = (
       });
 
     if (watching) {
-      yield* fs.watch(tasksDir, { recursive: true }).pipe(
-        Stream.map((event) => path.join(tasksDir, event.path)),
+      yield* fs.watch(dir, { recursive: true }).pipe(
+        Stream.map((event) => path.join(dir, event.path)),
         Stream.filter((changed) => !isHidden(path.basename(changed))),
         Stream.tap((changed) => Effect.sync(() => reads.changed(changed))),
         Stream.debounce("75 millis"),
         Stream.runForEach(() => PubSub.publish(changes, undefined)),
-        Effect.catch((error) => Effect.logWarning(`Stopped watching ${tasksDir}`, error)),
+        Effect.catch((error) => Effect.logWarning(`Stopped watching ${dir}`, error)),
         Effect.ensuring(
           Effect.sync(() => {
             watching = false;
@@ -195,8 +194,7 @@ export const makeStorage = (
 
     return {
       root,
-      tasksDir,
-      read: withPlatform(Effect.all({ config: readConfig(root), tree: reads.read(tasksDir) })),
+      read: withPlatform(Effect.all({ config: readConfig(root), tree: reads.read(dir) })),
       version: reads.version,
       forget,
       refresh,
@@ -211,7 +209,8 @@ export const makeStorage = (
 
 /**
  * Makes `root` a workspace: creates its `.octodo/` folder, with `root` itself if need be, then
- * writes config.json holding the owner lock, whose first hold also writes `.gitignore`.
+ * writes config.json and makes `tasks/` holding the owner lock, whose first hold also writes
+ * `.gitignore`.
  */
 export const createWorkspace = (
   root: string,
@@ -220,7 +219,12 @@ export const createWorkspace = (
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    yield* fs.makeDirectory(path.join(root, TASKS_DIR), { recursive: true });
+    yield* fs.makeDirectory(path.join(root, OCTODO_DIR), { recursive: true });
     const storage = yield* makeStorage(root);
-    yield* storage.write((files) => files.writeFile(configFile(path, root), configText(config)));
+    yield* storage.write((files) =>
+      Effect.andThen(
+        files.writeFile(configFile(path, root), configText(config)),
+        files.ensureFolder(path.join(root, OCTODO_DIR, TASKS_SECTION)),
+      ),
+    );
   }).pipe(Effect.scoped);

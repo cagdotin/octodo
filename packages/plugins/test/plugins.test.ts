@@ -52,7 +52,7 @@ const fresh = async () => {
     );
   const snapshot = () =>
     use(Workspaces.use((workspaces) => Effect.flatMap(workspaces.open(root), (ws) => ws.snapshot)));
-  const file = (path: string) => readFileSync(join(root, ".octodo", path), "utf8");
+  const file = (path: string) => readFileSync(join(root, ".octodo/tasks", path), "utf8");
   return { root, use, enable, call, snapshot, file };
 };
 
@@ -104,12 +104,12 @@ describe("the plugin registry", () => {
 describe("a plugin's kind in a workspace", () => {
   it("reads a task naming a kind the workspace does not enable as a plain task, and refuses its operations", async () => {
     const ws = await fresh();
-    mkdirSync(join(ws.root, ".octodo", "HM-1-water"));
+    mkdirSync(join(ws.root, ".octodo/tasks", "HM-1-water"));
     writeFileSync(
-      join(ws.root, ".octodo", "HM-1-water", "task.md"),
+      join(ws.root, ".octodo/tasks", "HM-1-water", "task.md"),
       "---\nid: HM-1\ntitle: Water\ntype: tally\nstep: 2\n---\n",
     );
-    writeFileSync(join(ws.root, ".octodo", "HM-1-water", "tally.log"), "not a time\n");
+    writeFileSync(join(ws.root, ".octodo/tasks", "HM-1-water", "tally.log"), "not a time\n");
     const snapshot = await ws.snapshot();
     expect(snapshot.plugins).toBeUndefined();
     expect(snapshot.tasks[0]!.kind).toBeUndefined();
@@ -153,7 +153,7 @@ describe("a plugin's kind in a workspace", () => {
     expect(kinds(snapshot)).toEqual([["invalid-config", ".octodo/config.json"]]);
     expect(snapshot.diagnostics[0]!.message).toContain('The plugin "nope" is not one octodo has');
 
-    writeFileSync(join(ws.root, ".octodo", folder, "notes.txt"), "notes");
+    writeFileSync(join(ws.root, ".octodo/tasks", folder, "notes.txt"), "notes");
     const detail = (await ws.call("get_task", { id: "HM-1" })).value as TaskDetail;
     expect(detail.attachments.map((attachment) => attachment.path)).toEqual(["notes.txt"]);
     expect(await ws.call("read_attachment", { id: "HM-1", path: "tally.log" })).toEqual({
@@ -175,18 +175,18 @@ describe("a plugin's kind in a workspace", () => {
     expect(ws.file("HM-1-water-plants/task.md")).toContain("type: tally\nstep: 2\n");
 
     writeFileSync(
-      join(ws.root, ".octodo", "HM-1-water-plants", "task.md"),
+      join(ws.root, ".octodo/tasks", "HM-1-water-plants", "task.md"),
       ws.file("HM-1-water-plants/task.md").replace("step: 2", "step: -1"),
     );
     writeFileSync(
-      join(ws.root, ".octodo", "HM-1-water-plants", "tally.log"),
+      join(ws.root, ".octodo/tasks", "HM-1-water-plants", "tally.log"),
       `${ws.file("HM-1-water-plants/tally.log")}oops\n`,
     );
     const broken = await ws.snapshot();
     expect(broken.tasks[0]!.kind?.fields).toMatchObject({ count: 2 });
     expect(broken.diagnostics.slice(1).map((d) => [d.kind, d.path, d.field, d.fix])).toEqual([
-      ["tally/bad-step", ".octodo/HM-1-water-plants/task.md", "step", null],
-      ["tally/bad-line", ".octodo/HM-1-water-plants/tally.log", null, null],
+      ["tally/bad-step", ".octodo/tasks/HM-1-water-plants/task.md", "step", null],
+      ["tally/bad-line", ".octodo/tasks/HM-1-water-plants/tally.log", null, null],
     ]);
     expect(broken.diagnostics[2]!.message).toBe(
       'Line 3 is "oops", not a time. That line is not counted.',

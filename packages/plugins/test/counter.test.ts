@@ -46,8 +46,9 @@ const fresh = async (enabled: ReadonlyArray<string> = ["counter"]) => {
         ),
       ),
     );
-  const file = (path: string) => readFileSync(join(root, ".octodo", path), "utf8");
-  const write = (path: string, text: string) => writeFileSync(join(root, ".octodo", path), text);
+  const file = (path: string) => readFileSync(join(root, ".octodo/tasks", path), "utf8");
+  const write = (path: string, text: string) =>
+    writeFileSync(join(root, ".octodo/tasks", path), text);
   return { call, file, write };
 };
 
@@ -149,7 +150,7 @@ describe("a counter in a workspace", () => {
     expect(value.map((d: any) => [d.kind, d.path, d.message])).toEqual([
       [
         "counter/bad-line",
-        ".octodo/HM-1-smoked/log.jsonl",
+        ".octodo/tasks/HM-1-smoked/log.jsonl",
         "Line 2 has no event. That line does not count as a reset.",
       ],
     ]);

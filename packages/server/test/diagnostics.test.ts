@@ -16,7 +16,7 @@ const post = (path: string, body?: unknown) =>
   });
 
 const seed = (file: string, content: string) => {
-  const target = join(root, ".octodo", file);
+  const target = join(root, ".octodo/tasks", file);
   mkdirSync(join(target, ".."), { recursive: true });
   writeFileSync(target, content);
 };
@@ -41,7 +41,7 @@ describe("fixing diagnostics over HTTP", () => {
     seed("HOU-1-a/task.md", "---\nid: HOU-1\n---\n");
     seed("HOU-1-b/task.md", "---\nid: HOU-1\n---\n");
     const request = {
-      path: ".octodo/HOU-1-b/task.md",
+      path: ".octodo/tasks/HOU-1-b/task.md",
       kind: "duplicate-id",
       action: "fresh-id",
     };
@@ -51,7 +51,7 @@ describe("fixing diagnostics over HTTP", () => {
     };
     expect(first.fixed.map((diagnostic) => diagnostic.kind)).toEqual(["duplicate-id"]);
     expect(first.diagnostics).toEqual([]);
-    expect(readFileSync(join(root, ".octodo/HOU-2-b/task.md"), "utf8")).toBe(
+    expect(readFileSync(join(root, ".octodo/tasks/HOU-2-b/task.md"), "utf8")).toBe(
       "---\nid: HOU-2\n---\n",
     );
     const again = (await (await post("/diagnostics/fix", request)).json()) as { fixed: [] };
@@ -65,7 +65,9 @@ describe("fixing diagnostics over HTTP", () => {
       fixed: Array<{ kind: string }>;
     };
     expect(result.fixed.map((diagnostic) => diagnostic.kind)).toEqual(["duplicate-id"]);
-    expect(readFileSync(join(root, ".octodo/notes.md"), "utf8")).toBe("---\ntitle: Loose\n---\n");
+    expect(readFileSync(join(root, ".octodo/tasks/notes.md"), "utf8")).toBe(
+      "---\ntitle: Loose\n---\n",
+    );
   });
 
   it("refuses a workspace key that ids cannot use", async () => {

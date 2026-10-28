@@ -106,6 +106,11 @@ export const PROBLEMS = {
       "It reads as a plain task until the plugin is enabled in the workspace's settings (octo plugins enable, MCP enable_plugin) or the type line is removed",
     fixes: [],
   },
+  misplaced: {
+    remedy:
+      "The top of .octodo/ holds only config.json and the folders of sections, such as tasks/; move it into one or delete it. Until then it is not read",
+    fixes: [],
+  },
 } as const satisfies Record<CoreDiagnosticKind, Remedy>;
 
 export const FIX_LABELS: Record<FixAction, string> = {

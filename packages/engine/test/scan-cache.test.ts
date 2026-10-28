@@ -20,8 +20,8 @@ const fresh = () => {
 };
 
 const write = (root: string, file: string, content: string) => {
-  mkdirSync(dirname(join(root, ".octodo", file)), { recursive: true });
-  writeFileSync(join(root, ".octodo", file), content);
+  mkdirSync(dirname(join(root, ".octodo/tasks", file)), { recursive: true });
+  writeFileSync(join(root, ".octodo/tasks", file), content);
 };
 
 const fullScan = (root: string) =>
@@ -76,27 +76,31 @@ const steps: ReadonlyArray<Step> = [
   byApp("create a nested list", (ws) => ws.createList({ name: "Beds", parent: "garden" })),
   byApp("move a list", (ws) => ws.moveList("garden/beds", { parent: null })),
   byHand("edit a task by hand", (root) => {
-    const file = join(root, ".octodo/garden/HM-11-seeds/task.md");
+    const file = join(root, ".octodo/tasks/garden/HM-11-seeds/task.md");
     writeFileSync(file, readFileSync(file, "utf8").replace("status: todo", "status: someday"));
   }),
   byHand("add a task by hand, without an id", (root) =>
     write(root, "garden/weeds/task.md", "Pull the weeds\n"),
   ),
   byHand("copy a task folder by hand", (root) =>
-    cpSync(join(root, ".octodo/garden/HM-11-seeds"), join(root, ".octodo/HM-11-seeds 2"), {
-      recursive: true,
-    }),
+    cpSync(
+      join(root, ".octodo/tasks/garden/HM-11-seeds"),
+      join(root, ".octodo/tasks/HM-11-seeds 2"),
+      {
+        recursive: true,
+      },
+    ),
   ),
   byHand("add a loose markdown file", (root) => write(root, "beds/notes.md", "Loose notes\n")),
   byHand("add a task folder named like a temporary file", (root) =>
     write(root, "backup.tmp/task.md", "---\nid: HM-50\ntitle: Backup\n---\n"),
   ),
   byHand("delete a task folder by hand", (root) =>
-    rmSync(join(root, ".octodo/garden/HM-10-paint"), { recursive: true }),
+    rmSync(join(root, ".octodo/tasks/garden/HM-10-paint"), { recursive: true }),
   ),
   byApp("delete a task", (ws) => ws.deleteTask("HM-11")),
   byHand("delete a list by hand", (root) =>
-    rmSync(join(root, ".octodo/beds"), { recursive: true }),
+    rmSync(join(root, ".octodo/tasks/beds"), { recursive: true }),
   ),
   byApp("create a task after it all", (ws) => ws.createTask({ title: "Last" })),
 ];
@@ -175,7 +179,7 @@ describe("the kept snapshot", () => {
       const root = fresh();
       await run(initWorkspace(root));
       write(root, "HM-1-a/task.md", "---\nid: HM-1\ntitle: Before\n---\n");
-      const file = join(root, ".octodo/HM-1-a/task.md");
+      const file = join(root, ".octodo/tasks/HM-1-a/task.md");
       let armed = false;
       const editedMidRead = Layer.effect(
         FileSystem.FileSystem,

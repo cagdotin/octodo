@@ -44,7 +44,7 @@ interface TaskPlan {
 /** Writes `size` tasks straight to disk in the documented format: 30% at the top, 10% subtasks. */
 const generate = async (root: string, size: number) => {
   await run(initWorkspace(root, { name: "Bench", key: KEY }));
-  const tasksDir = join(root, ".octodo");
+  const tasksDir = join(root, ".octodo", "tasks");
   const next = random(size);
   const pick = <A>(items: ReadonlyArray<A>) => items[Math.floor(next() * items.length)]!;
   for (const [index, list] of LISTS.entries()) {

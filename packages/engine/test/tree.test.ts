@@ -8,7 +8,8 @@ import { CALLS_AT_ONCE, makeTreeReader } from "../src/storage/tree.ts";
 
 /** A `.octodo/` with `count` tasks, half of them in a list, each with a subtask. */
 const workspace = (count: number) => {
-  const tasksDir = join(mkdtempSync(join(tmpdir(), "octodo-")), ".octodo");
+  const dir = join(mkdtempSync(join(tmpdir(), "octodo-")), ".octodo");
+  const tasksDir = join(dir, "tasks");
   mkdirSync(join(tasksDir, "garden"), { recursive: true });
   writeFileSync(join(tasksDir, "garden/list.md"), "---\nname: Garden\n---\n");
   for (let n = 1; n <= count; n++) {
@@ -18,7 +19,7 @@ const workspace = (count: number) => {
     writeFileSync(join(dir, "task.md"), `---\nid: HM-${n + count}\n---\n`);
     writeFileSync(join(dir, "..", "notes.md"), "notes\n");
   }
-  return tasksDir;
+  return dir;
 };
 
 /** A file system that counts the calls in flight, each taking a millisecond or two. */
@@ -65,11 +66,15 @@ describe("the tree reader", () => {
         }).pipe(Effect.provide(layer)),
       );
       expect(counts.most, "the reads fill the cap, so it is what limits them").toBe(CALLS_AT_ONCE);
-      for (const tree of [treeA, treeB])
+      for (const tree of [treeA, treeB]) {
+        const [tasks] = tree.children._tag === "Success" ? tree.children.success : [];
         expect(
-          tree.children._tag === "Success" ? tree.children.success.length : 0,
+          tasks?.type === "tasks" && tasks.children._tag === "Success"
+            ? tasks.children.success.length
+            : 0,
           "each read sees the list, its 75 top-level tasks and nothing else",
         ).toBe(76);
+      }
     },
   );
 });

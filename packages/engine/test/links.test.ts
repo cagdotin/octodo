@@ -29,8 +29,8 @@ const open = (root: string) =>
   });
 
 const write = (root: string, file: string, content: string) => {
-  mkdirSync(dirname(join(root, ".octodo", file)), { recursive: true });
-  writeFileSync(join(root, ".octodo", file), content);
+  mkdirSync(dirname(join(root, ".octodo/tasks", file)), { recursive: true });
+  writeFileSync(join(root, ".octodo/tasks", file), content);
 };
 
 const read = (root: string, file: string) => readFileSync(join(root, file), "utf8");
@@ -41,7 +41,7 @@ const taskFile = (id: string, extra = "", body = "") =>
 const place = {
   list: null,
   parent: null,
-  path: ".octodo/HM-1/task.md",
+  path: ".octodo/tasks/HM-1/task.md",
   folder: "HM-1",
   defaultStatus: "todo",
   updated: null,
@@ -233,9 +233,9 @@ describe("links in a workspace", () => {
     expect(
       snapshot.diagnostics.map(({ path, kind, field, fix }) => [path, kind, field, fix?.action]),
     ).toEqual([
-      [".octodo/HM-2/task.md", "malformed-link", "blocked_by", "normalize-links"],
-      [".octodo/HM-3/task.md", "self-link", "blocked_by", "drop-self-link"],
-      [".octodo/HM-1/task.md", "broken-link", "blocked_by", "drop-unknown-links"],
+      [".octodo/tasks/HM-2/task.md", "malformed-link", "blocked_by", "normalize-links"],
+      [".octodo/tasks/HM-3/task.md", "self-link", "blocked_by", "drop-self-link"],
+      [".octodo/tasks/HM-1/task.md", "broken-link", "blocked_by", "drop-unknown-links"],
     ]);
   });
 

@@ -15,7 +15,7 @@ const task = (fields: Partial<Task> = {}): Task => ({
   updated: null,
   order: "a0",
   body: "",
-  path: ".octodo/HM-1/task.md",
+  path: ".octodo/tasks/HM-1/task.md",
   extra: {},
   blockedBy: [],
   blocks: [],

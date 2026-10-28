@@ -1,14 +1,18 @@
 import { Effect } from "effect";
 import { join } from "node:path";
 import { patchFrontmatter } from "./frontmatter.ts";
-import { LIST_FILE } from "./layout.ts";
+import { LIST_FILE, TASKS_SECTION } from "./layout.ts";
 import type { Container } from "@octodo/contract/rules";
 import { renumbered } from "./place.ts";
 import { fileText, type Scan } from "./scan.ts";
 import type { Files } from "./storage/files.ts";
 
 export const containerDir = ({ dirs, tree }: Scan, { list, parent }: Container): string =>
-  parent !== null ? dirs.tasks.get(parent)! : list !== null ? dirs.lists.get(list)!.dir : tree.path;
+  parent !== null
+    ? dirs.tasks.get(parent)!
+    : list !== null
+      ? dirs.lists.get(list)!.dir
+      : join(tree.path, TASKS_SECTION);
 
 /** Sorted siblings with distinct, ascending order keys, writing new ones when `renumbered` asks. */
 const ensureOrdered = <A extends { readonly order: string }>(

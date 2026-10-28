@@ -36,19 +36,24 @@ const fresh = async (files: Record<string, string>) => {
   return root;
 };
 
+/** Where the test's `file` is: config.json in `.octodo/`, anything else in `.octodo/tasks/`. */
+const shown = (file: string) => (file === "config.json" ? file : `tasks/${file}`);
+
 const write = (root: string, file: string, content: string) => {
-  mkdirSync(dirname(join(root, ".octodo", file)), { recursive: true });
-  writeFileSync(join(root, ".octodo", file), content);
+  mkdirSync(dirname(join(root, ".octodo", shown(file))), { recursive: true });
+  writeFileSync(join(root, ".octodo", shown(file)), content);
 };
 
-const read = (root: string, file: string) => readFileSync(join(root, ".octodo", file), "utf8");
+const read = (root: string, file: string) =>
+  readFileSync(join(root, ".octodo", shown(file)), "utf8");
 
 const ignored = new Set([".gitignore", ".owner-lock"]);
 
-/** Every file under `.octodo/` but its `.gitignore` and owner lock, relative to it and sorted. */
+/** Every file under `.octodo/` but its `.gitignore` and owner lock, as the test names it, sorted. */
 const files = (root: string) =>
   readdirSync(join(root, ".octodo"), { recursive: true, encoding: "utf8" })
     .filter((entry) => statSync(join(root, ".octodo", entry)).isFile() && !ignored.has(entry))
+    .map((entry) => entry.replace(/^tasks\//, ""))
     .toSorted();
 
 const inWorkspace = <A>(root: string, use: (ws: Workspace) => Effect.Effect<A, unknown>) =>
@@ -87,7 +92,7 @@ const one = (
   kind: DiagnosticKind,
   field: string | null,
   fix: FixAction | null,
-): ReturnType<typeof summary> => ({ path: `.octodo/${path}`, kind, field, fix });
+): ReturnType<typeof summary> => ({ path: `.octodo/${shown(path)}`, kind, field, fix });
 
 describe("file health", () => {
   it("reports bad optional fields, keeps the task with their defaults, and offers no fix", async () => {
@@ -106,7 +111,7 @@ describe("file health", () => {
     ]);
     const before = read(root, "HM-1-a/task.md");
     const result = await fixTwice(root, {
-      path: ".octodo/HM-1-a/task.md",
+      path: ".octodo/tasks/HM-1-a/task.md",
       kind: "invalid-due",
       action: "normalize-links",
     });
@@ -180,7 +185,7 @@ describe("file health", () => {
       one("HM-1-paint-copy/task.md", "duplicate-id", "id", "fresh-id"),
     ]);
     const result = await fixTwice(root, {
-      path: ".octodo/HM-1-paint-copy/task.md",
+      path: ".octodo/tasks/HM-1-paint-copy/task.md",
       kind: "duplicate-id",
       action: "fresh-id",
     });
@@ -204,7 +209,7 @@ describe("file health", () => {
       "HM-10-x/task.md": "---\nid: HM-1\ntitle: X\n---\n",
     });
     await fixTwice(root, {
-      path: ".octodo/HM-10-x/task.md",
+      path: ".octodo/tasks/HM-10-x/task.md",
       kind: "duplicate-id",
       action: "fresh-id",
     });
@@ -220,8 +225,8 @@ describe("file health", () => {
       "HM-2-copy-of-tile/task.md": "---\nid: HM-2\ntitle: Tile\n---\n",
     });
     expect((await snapshot(root)).tasks.map((task) => [task.id, task.path])).toEqual([
-      ["HM-1", ".octodo/HM-1-old-name 2/task.md"],
-      ["HM-2", ".octodo/HM-2-copy-of-tile/task.md"],
+      ["HM-1", ".octodo/tasks/HM-1-old-name 2/task.md"],
+      ["HM-2", ".octodo/tasks/HM-2-copy-of-tile/task.md"],
     ]);
     expect(await diagnostics(root)).toEqual([
       one("HM-1-paint-walls/task.md", "duplicate-id", "id", "fresh-id"),
@@ -245,11 +250,11 @@ describe("file health", () => {
     expect(
       (await snapshot(root)).tasks.map((task) => [task.id, task.parent, task.path, task.body]),
     ).toEqual([
-      ["HM-1", null, ".octodo/HM-1-a/task.md", ""],
-      ["HM-8", "HM-9", ".octodo/HM-9-x/HM-8-sub/task.md", "Original.\n"],
-      ["HM-9", null, ".octodo/HM-9-x/task.md", "One.\n"],
-      ["HM-10", null, ".octodo/HM-10-x 2/task.md", "Two.\n"],
-      ["HM-11", "HM-10", ".octodo/HM-10-x 2/HM-11-sub/task.md", "Copy.\n"],
+      ["HM-1", null, ".octodo/tasks/HM-1-a/task.md", ""],
+      ["HM-8", "HM-9", ".octodo/tasks/HM-9-x/HM-8-sub/task.md", "Original.\n"],
+      ["HM-9", null, ".octodo/tasks/HM-9-x/task.md", "One.\n"],
+      ["HM-10", null, ".octodo/tasks/HM-10-x 2/task.md", "Two.\n"],
+      ["HM-11", "HM-10", ".octodo/tasks/HM-10-x 2/HM-11-sub/task.md", "Copy.\n"],
     ]);
   });
 
@@ -286,7 +291,7 @@ describe("file health", () => {
     ]);
     expect(read(root, "config.json"), "reading never adds it").toBe(config);
     await fixTwice(root, {
-      path: ".octodo/HM-1-a/task.md",
+      path: ".octodo/tasks/HM-1-a/task.md",
       kind: "unknown-status",
       action: "add-status",
     });
@@ -302,8 +307,8 @@ describe("file health", () => {
     const root = await fresh({ "HM-1-a/task.md": "---\nid: HM-1\nstatus: in-review\n---\n" });
     write(root, "config.json", '{ "name": 3, "key": "HM" }');
     expect(await diagnostics(root)).toEqual([
-      one("HM-1-a/task.md", "unknown-status", "status", null),
       one("config.json", "invalid-config", null, null),
+      one("HM-1-a/task.md", "unknown-status", "status", null),
     ]);
     expect(read(root, "config.json")).toBe('{ "name": 3, "key": "HM" }');
   });
@@ -318,7 +323,7 @@ describe("file health", () => {
       one("home/notes.md", "loose-markdown", null, "wrap-as-task"),
     ]);
     await fixTwice(root, {
-      path: ".octodo/home/notes.md",
+      path: ".octodo/tasks/home/notes.md",
       kind: "loose-markdown",
       action: "wrap-as-task",
     });
@@ -361,7 +366,7 @@ describe("file health", () => {
       one("HM-1-a.md", "loose-markdown", null, "remove-copy"),
     ]);
     await fixTwice(root, {
-      path: ".octodo/HM-1-a.md",
+      path: ".octodo/tasks/HM-1-a.md",
       kind: "loose-markdown",
       action: "remove-copy",
     });
@@ -392,7 +397,7 @@ describe("file health", () => {
       "home/HM-1-paint/task 2.md": "---\nid: HM-1\ntitle: Paint\n---\nThree coats.\n",
     });
     expect((await snapshot(root)).tasks.map((task) => task.path)).toEqual([
-      ".octodo/home/HM-1-paint/task.md",
+      ".octodo/tasks/home/HM-1-paint/task.md",
     ]);
     expect(await diagnostics(root)).toEqual([
       one("home/list 2.md", "loose-markdown", null, "wrap-as-task"),
@@ -408,7 +413,7 @@ describe("file health", () => {
     write(root, "HM-1-a.md", "---\nid: HM-1\ntitle: B\n---\n");
     const stale = await inWorkspace(root, (ws) =>
       ws.fixDiagnostic({
-        path: ".octodo/HM-1-a.md",
+        path: ".octodo/tasks/HM-1-a.md",
         kind: "loose-markdown",
         action: "remove-copy",
       }),
@@ -422,11 +427,11 @@ describe("file health", () => {
 
   it("reports a task it cannot give an id, and gives it one on the next read that can", async () => {
     const root = await fresh({ "frozen/task.md": "No id yet\n" });
-    chmodSync(join(root, ".octodo/frozen"), 0o555);
+    chmodSync(join(root, ".octodo/tasks/frozen"), 0o555);
     try {
       expect(await diagnostics(root)).toEqual([one("frozen/task.md", "missing-id", "id", null)]);
     } finally {
-      chmodSync(join(root, ".octodo/frozen"), 0o755);
+      chmodSync(join(root, ".octodo/tasks/frozen"), 0o755);
     }
     expect(await diagnostics(root)).toEqual([]);
     expect(read(root, "frozen/task.md")).toBe("---\nid: HM-1\n---\n\nNo id yet\n");
@@ -442,7 +447,7 @@ describe("file health", () => {
       one("HM-1-a/task.md", "broken-link", "blocked_by", "drop-unknown-links"),
     ]);
     const result = await fixTwice(root, {
-      path: ".octodo/HM-1-a/task.md",
+      path: ".octodo/tasks/HM-1-a/task.md",
       kind: "broken-link",
       action: "drop-unknown-links",
     });
@@ -484,7 +489,7 @@ describe("file health", () => {
       one("HM-1-a/task.md", "self-link", "blocked_by", "drop-self-link"),
     ]);
     const result = await fixTwice(root, {
-      path: ".octodo/HM-1-a/task.md",
+      path: ".octodo/tasks/HM-1-a/task.md",
       kind: "self-link",
       action: "drop-self-link",
     });
@@ -555,9 +560,9 @@ describe("file health", () => {
       "home/list.md": "",
       "HM-1-a/task.md": "---\nid: HM-1\n---\n",
     });
-    symlinkSync(outside, join(root, ".octodo/home/linked"));
-    symlinkSync(join(outside, "loose.md"), join(root, ".octodo/home/notes.md"));
-    symlinkSync(join(outside, "HM-5-away"), join(root, ".octodo/HM-1-a/HM-5-away"));
+    symlinkSync(outside, join(root, ".octodo/tasks/home/linked"));
+    symlinkSync(join(outside, "loose.md"), join(root, ".octodo/tasks/home/notes.md"));
+    symlinkSync(join(outside, "HM-5-away"), join(root, ".octodo/tasks/HM-1-a/HM-5-away"));
     expect((await snapshot(root)).tasks.map((task) => task.id)).toEqual(["HM-1"]);
     expect(await diagnostics(root)).toEqual([
       one("HM-1-a/HM-5-away", "symlink", null, null),
@@ -605,7 +610,7 @@ describe("file health", () => {
     });
     const stale = await inWorkspace(root, (ws) =>
       ws.fixDiagnostic({
-        path: ".octodo/HM-1-a/task.md",
+        path: ".octodo/tasks/HM-1-a/task.md",
         kind: "duplicate-id",
         action: "fresh-id",
       }),

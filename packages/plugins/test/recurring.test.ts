@@ -169,8 +169,9 @@ const fresh = async (enabled = true) => {
         ),
       ),
     );
-  const file = (path: string) => readFileSync(join(root, ".octodo", path), "utf8");
-  const write = (path: string, text: string) => writeFileSync(join(root, ".octodo", path), text);
+  const file = (path: string) => readFileSync(join(root, ".octodo/tasks", path), "utf8");
+  const write = (path: string, text: string) =>
+    writeFileSync(join(root, ".octodo/tasks", path), text);
   return { call, file, write };
 };
 
@@ -271,8 +272,8 @@ describe("a recurring task in a workspace", () => {
     ws.write("HM-1-water/log.jsonl", `${ws.file("HM-1-water/log.jsonl")}{"at":"soon"}\n`);
     const { value } = await ws.call("list_diagnostics", {});
     expect(value.map((d: any) => [d.kind, d.path, d.field])).toEqual([
-      ["recurring/bad-repeat", ".octodo/HM-1-water/task.md", "repeat"],
-      ["recurring/bad-line", ".octodo/HM-1-water/log.jsonl", null],
+      ["recurring/bad-repeat", ".octodo/tasks/HM-1-water/task.md", "repeat"],
+      ["recurring/bad-line", ".octodo/tasks/HM-1-water/log.jsonl", null],
     ]);
     expect(value[1].message).toBe(
       "Line 2 has no event. That line does not count as an occurrence.",

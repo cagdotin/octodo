@@ -1,6 +1,6 @@
 import { Effect, FileSystem, Option, Path, PlatformError, Result, Semaphore } from "effect";
 import { sep } from "node:path";
-import { LIST_FILE, TASK_FILE } from "../layout.ts";
+import { CONFIG_FILE, LIST_FILE, TASK_FILE, TASKS_SECTION } from "../layout.ts";
 import type { Problem } from "@octodo/contract";
 import { MAX_LIST_DEPTH } from "@octodo/contract/rules";
 import { isNotFound } from "./files.ts";
@@ -58,15 +58,25 @@ export interface Unread {
 export type TaskChild = TaskFolder | Markdown | Unread;
 export type ListChild = TaskFolder | ListFolder | Markdown | Unread;
 
-/** `.octodo/`, the root list. It has no `list.md`, so a `list.md` or `task.md` in it is markdown. */
-export interface Tree {
+/** `.octodo/tasks/`, the root list. It has no `list.md`, so a `list.md` or `task.md` in it is markdown. */
+export interface TasksFolder {
+  readonly type: "tasks";
   readonly path: string;
   readonly children: Read<ReadonlyArray<ListChild>>;
 }
 
+export type TopChild = TasksFolder | Unread;
+
+/** `.octodo/`: its sections, and what else is at its top besides config.json and bookkeeping. */
+export interface Tree {
+  readonly path: string;
+  readonly children: Read<ReadonlyArray<TopChild>>;
+}
+
 /** Reads the tree, reading only the paths that changed since the reads that filled it. */
 export interface TreeReader extends Omit<Cache, "read"> {
-  readonly read: (tasksDir: string) => Effect.Effect<Tree, never, Platform>;
+  /** Reads the workspace folder `dir`, `.octodo/`. */
+  readonly read: (dir: string) => Effect.Effect<Tree, never, Platform>;
 }
 
 /**
@@ -98,7 +108,7 @@ type Node =
 
 type Container =
   | { readonly kind: "task" }
-  /** `depth` is how many lists deep the folder is: 0 for `.octodo/`. */
+  /** `depth` is how many lists deep the folder is: 0 for `.octodo/tasks/`. */
   | { readonly kind: "list"; readonly depth: number };
 
 /** Whether `node` holds what is on disk until its path changes: it is there and every read worked. */
@@ -121,7 +131,7 @@ const unread = (path: string, problem: Problem, markdown: ReadonlyArray<string> 
 });
 
 const readWith = (
-  tasksDir: string,
+  dir: string,
   cache: Cache,
   owned: ReadonlyArray<string>,
 ): Effect.Effect<Tree, never, Platform> =>
@@ -301,19 +311,7 @@ const readWith = (
           depth: container.depth + 1,
         });
         return { type: "list" as const, name, path: at, file: list.text, children };
-      }).pipe(
-        Effect.catch((error) =>
-          Effect.succeed(
-            isNotFound(error)
-              ? null
-              : unread(at, {
-                  kind: "unreadable",
-                  field: null,
-                  detail: `Could not read it: ${String(error)}`,
-                }),
-          ),
-        ),
-      );
+      }).pipe(unreadOnError(at));
     };
 
     /** The children of the folder `dir`; a task's or list's own marker is not one. */
@@ -330,22 +328,87 @@ const readWith = (
       }).pipe(Effect.map((found) => Result.succeed(found.filter((child) => child !== null))));
     };
 
-    const names = yield* Effect.result(
-      cache.read(tasksDir, "names", call(fs.readDirectory(tasksDir))),
-    );
-    const children = yield* childrenOf(tasksDir, names, { kind: "list", depth: 0 });
-    return { path: tasksDir, children };
+    /** What is at `at` at the top of `.octodo/`, which is not a section: never read. */
+    const misplaced = (at: string, node: Node) =>
+      Effect.gen(function* () {
+        const text = node.type === "file" && at.endsWith(".md") ? yield* textAt(at) : null;
+        const markdown =
+          text === null
+            ? yield* markdownUnder(at, node)
+            : Result.isSuccess(text)
+              ? [text.success]
+              : [];
+        return unread(
+          at,
+          {
+            kind: "misplaced",
+            field: null,
+            detail: "This is neither config.json nor the folder of a section",
+          },
+          markdown,
+        );
+      });
+
+    /** The entry `name` at the top of `.octodo/`; null for config.json. */
+    const top = (name: string): Effect.Effect<TopChild | null> => {
+      const at = path.join(dir, name);
+      return Effect.gen(function* () {
+        if (name === CONFIG_FILE) return null;
+        const node = yield* nodeAt(at);
+        if (node === null) return null;
+        if (node.type === "symlink")
+          return unread(at, {
+            kind: "symlink",
+            field: null,
+            detail: `This is a link to ${node.target}`,
+          });
+        if (node.type !== "folder" || name !== TASKS_SECTION) return yield* misplaced(at, node);
+        const children = yield* childrenOf(at, node.names, { kind: "list", depth: 0 });
+        return { type: "tasks" as const, path: at, children };
+      }).pipe(unreadOnError(at));
+    };
+
+    const names = yield* Effect.result(cache.read(dir, "names", call(fs.readDirectory(dir))));
+    if (Result.isFailure(names)) return { path: dir, children: Result.fail(names.failure) };
+    const children = yield* Effect.forEach(visible(names.success), top, {
+      concurrency: ENTRIES_AT_ONCE,
+    });
+    return { path: dir, children: Result.succeed(children.filter((child) => child !== null)) };
   });
+
+/** What an entry whose read failed is: nothing when it is gone, otherwise unreadable. */
+const unreadOnError =
+  (at: string) =>
+  <A, E>(effect: Effect.Effect<A | null, E>): Effect.Effect<A | Unread | null> =>
+    Effect.catch(effect, (error) =>
+      Effect.succeed(
+        isNotFound(error)
+          ? null
+          : unread(at, {
+              kind: "unreadable",
+              field: null,
+              detail: `Could not read it: ${String(error)}`,
+            }),
+      ),
+    );
 
 /** `owned` names the files at the top of a task folder that plugins own, which it reads too. */
 export const makeTreeReader = (owned: ReadonlyArray<string> = []): TreeReader => {
   const cache = makeCache();
   return {
-    read: (tasksDir) => readWith(tasksDir, cache, owned),
+    read: (dir) => readWith(dir, cache, owned),
     changed: cache.changed,
     clear: cache.clear,
     version: cache.version,
   };
+};
+
+/** What the root list holds: none when `.octodo/tasks/` is missing or not read. */
+const tasksOf = (tree: Tree): Read<ReadonlyArray<ListChild>> => {
+  const tasks = Result.isSuccess(tree.children)
+    ? tree.children.success.find((child) => child.type === "tasks")
+    : undefined;
+  return tasks?.children ?? Result.succeed([]);
 };
 
 const textsByTree = new WeakMap<Tree, ReadonlyMap<string, string>>();
@@ -358,7 +421,7 @@ export const markdownTexts = (tree: Tree): ReadonlyMap<string, string> => {
   const add = (file: string, text: Read<string>) => {
     if (Result.isSuccess(text)) texts.set(file, text.success);
   };
-  const visit = (children: Tree["children"]) => {
+  const visit = (children: Read<ReadonlyArray<ListChild>>) => {
     for (const child of Result.isSuccess(children) ? children.success : []) {
       if (child.type === "markdown") add(child.path, child.text);
       else if (child.type === "task" || child.type === "list") {
@@ -367,14 +430,14 @@ export const markdownTexts = (tree: Tree): ReadonlyMap<string, string> => {
       }
     }
   };
-  visit(tree.children);
+  visit(tasksOf(tree));
   textsByTree.set(tree, texts);
   return texts;
 };
 
 /** The task folders from `dir` down, parents before their subtasks; none when `dir` is not one. */
 export const taskFoldersFrom = (tree: Tree, dir: string): Array<string> => {
-  const find = (children: Tree["children"]): TaskFolder | undefined => {
+  const find = (children: Read<ReadonlyArray<ListChild>>): TaskFolder | undefined => {
     for (const child of Result.isSuccess(children) ? children.success : []) {
       if (child.type !== "task" && child.type !== "list") continue;
       if (child.path === dir) return child.type === "task" ? child : undefined;
@@ -388,7 +451,7 @@ export const taskFoldersFrom = (tree: Tree, dir: string): Array<string> => {
       child.type === "task" ? down(child) : [],
     ),
   ];
-  const found = find(tree.children);
+  const found = find(tasksOf(tree));
   return found === undefined ? [] : down(found);
 };
 

@@ -3,8 +3,9 @@ import { join, relative } from "node:path";
 import {
   CONFIG_FILE,
   LIST_FILE,
+  OCTODO_DIR,
   TASK_FILE,
-  TASKS_DIR,
+  TASKS_SECTION,
   folderIdNumber,
   idNumber,
 } from "./layout.ts";
@@ -32,7 +33,14 @@ import {
   type TaskPlace,
 } from "./tasks/task-file.ts";
 import type { StorageRead } from "./storage/storage.ts";
-import { markdownTexts, type ListFolder, type TaskFolder, type Tree } from "./storage/tree.ts";
+import {
+  markdownTexts,
+  type ListFolder,
+  type TaskFolder,
+  type TasksFolder,
+  type Tree,
+  type Unread,
+} from "./storage/tree.ts";
 
 /** A snapshot plus where its lists and tasks are on disk, which is nobody else's business. */
 export interface Scan {
@@ -98,7 +106,8 @@ export const scanWorkspace = (
   { config: { config, fallback, problems: configProblems }, tree }: StorageRead,
   installed: ReadonlyArray<Plugin> = [],
 ): Scan => {
-  const tasksDir = join(root, TASKS_DIR);
+  const configFile = join(root, OCTODO_DIR, CONFIG_FILE);
+  const tasksDir = join(root, OCTODO_DIR, TASKS_SECTION);
   const rel = (absolute: string) => relative(root, absolute);
   const diagnostics: Array<Diagnostic> = [];
   const report = <K extends CoreDiagnosticKind>(
@@ -119,15 +128,14 @@ export const scanWorkspace = (
     return null;
   };
 
-  for (const { kind, detail, field } of configProblems)
-    report(kind, join(tasksDir, CONFIG_FILE), detail, { field });
+  for (const { kind, detail, field } of configProblems) report(kind, configFile, detail, { field });
   const configured = config.statuses ?? DEFAULT_STATUSES;
   const fallbackStatus = defaultStatus(configured)?.id ?? "todo";
   const { enabled, unknown: unknownPlugins } = enabledPlugins(installed, config.plugins);
   for (const plugin of unknownPlugins)
     report(
       "invalid-config",
-      join(tasksDir, CONFIG_FILE),
+      configFile,
       `The plugin ${JSON.stringify(plugin)} is not one octodo has, so it is ignored`,
       { field: "plugins" },
     );
@@ -274,14 +282,16 @@ export const scanWorkspace = (
     }
     for (const child of readAhead(folder.path, folder.children) ?? []) {
       if (child.type === "task") readTask(child, list, id);
-      else if (child.type === "unread") {
-        report(child.problem.kind, child.path, child.problem.detail);
-        takeIds(child.markdown);
-      }
+      else if (child.type === "unread") reportUnread(child);
     }
   };
 
-  const readList = (folder: Tree | ListFolder, list: string | null) => {
+  const reportUnread = (child: Unread) => {
+    report(child.problem.kind, child.path, child.problem.detail);
+    takeIds(child.markdown);
+  };
+
+  const readList = (folder: TasksFolder | ListFolder, list: string | null) => {
     const children: Array<{
       name: string;
       order: string;
@@ -290,10 +300,8 @@ export const scanWorkspace = (
       list: List;
     }> = [];
     for (const child of readAhead(folder.path, folder.children) ?? []) {
-      if (child.type === "unread") {
-        report(child.problem.kind, child.path, child.problem.detail);
-        takeIds(child.markdown);
-      } else if (child.type === "markdown") {
+      if (child.type === "unread") reportUnread(child);
+      else if (child.type === "markdown") {
         if (Result.isFailure(child.text)) continue;
         const text = child.text.success;
         strays.push({ file: child.path, text });
@@ -336,7 +344,10 @@ export const scanWorkspace = (
     }
   };
 
-  readList(tree, null);
+  for (const child of readAhead(tree.path, tree.children) ?? []) {
+    if (child.type === "tasks") readList(child, null);
+    else reportUnread(child);
+  }
   for (let next = waiting.shift(); next !== undefined; next = waiting.shift()) serveTask(next);
 
   for (const stray of strays) reportStray(stray);

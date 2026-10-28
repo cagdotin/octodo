@@ -102,7 +102,7 @@ const ROWS: ReadonlyArray<Row> = [
     input: { id: "HM-1" },
     argv: ["show", "HM-1", "--json"],
     before: (root) => {
-      const folder = join(root, ".octodo", "garden", "HM-1-paint");
+      const folder = join(root, ".octodo/tasks", "garden", "HM-1-paint");
       mkdirSync(join(folder, "images"));
       writeFileSync(join(folder, "images", "plan.png"), PNG);
       writeFileSync(join(folder, "notes.txt"), "two coats");
@@ -134,12 +134,12 @@ const ROWS: ReadonlyArray<Row> = [
     name: "list_diagnostics",
     input: {},
     before: (root) =>
-      writeFileSync(join(root, ".octodo", "loose.md"), "---\ntitle: Loose\n---\nA plan\n"),
+      writeFileSync(join(root, ".octodo/tasks", "loose.md"), "---\ntitle: Loose\n---\nA plan\n"),
   },
   { name: "get_workspace", input: {} },
   {
     name: "fix_diagnostic",
-    input: { path: ".octodo/loose.md", kind: "loose-markdown", action: "wrap-as-task" },
+    input: { path: ".octodo/tasks/loose.md", kind: "loose-markdown", action: "wrap-as-task" },
   },
   { name: "delete_task", input: { id: "HM-3" }, argv: ["delete", "HM-3", "--json"] },
   { name: "list_plugins", input: {}, argv: ["plugins", "list", "--json"] },

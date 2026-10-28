@@ -1,7 +1,7 @@
 ---
 id: OCT-54
 title: CLI and MCP use a running server, or embed the engine
-status: todo
+status: done
 priority: medium
 tags:
   - architecture

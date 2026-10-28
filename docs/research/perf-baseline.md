@@ -154,3 +154,25 @@ on the same machine, load average 2.3 to 3.1. Median and range of 7 runs.
   include it. A CLI write command still pays it once.
 - Status change, rename and hand edit seen are within their ranges. A hold of the owner lock by
   the process that held it last costs about 12 µs.
+
+## After OCT-48
+
+Measured at commit `df4030a` against `9dc25e2` (master before OCT-48), alternating in one session
+on the same machine, two rounds of 5 runs each at 5,000 tasks, load average 2.2 to 3.4. Median of
+each round.
+
+| Operation      | Before, ms | After, ms |
+| -------------- | ---------- | --------- |
+| cold open      | 581, 572   | 516, 502  |
+| status change  | 141, 132   | 76, 85    |
+| rename         | 126, 132   | 89, 77    |
+| create         | 139, 132   | 91, 91    |
+| hand edit seen | 233, 224   | 200, 188  |
+
+- Every write got about 50 ms faster and cold open about 65 ms. The full `pnpm bench` at
+  `df4030a` agrees: 83 ms for a status change and 508 ms for cold open at 5,000 tasks.
+- The cause is inferred from the diff, not profiled. Each rescan used to look up every task's
+  `task.md` twice more through the cache: once to ask whether the marker was a link, once as a
+  child entry of its folder. Now the folder's own read holds the marker, and the scan never visits
+  it as a child. The file system calls per task on a cold read stay the same: the `lstat` of
+  `task.md` moved into the folder's read.

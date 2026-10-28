@@ -60,11 +60,7 @@ const kinds = (snapshot: WorkspaceSnapshot) => snapshot.diagnostics.map((d) => [
 
 describe("the plugin registry", () => {
   it("installs the first-party plugins, and the plain task registers through it", () => {
-    expect(plugins.map((plugin) => plugin.shared.id)).toEqual([
-      "recurring",
-      "counter",
-      "anniversary",
-    ]);
+    expect(plugins.map((plugin) => plugin.shared.id)).toEqual(["recurring", "counters"]);
     expect(Object.keys(makeRegistry([]).operations)).toEqual(Object.keys(plainTask.operations));
   });
 

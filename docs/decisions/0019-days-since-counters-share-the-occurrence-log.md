@@ -1,7 +1,14 @@
 # 0019. Days-since counters share the occurrence log, and completing one closes it
 
-- Status: accepted
+- Status: accepted, amended by 0027
 - Date: 2026-10-28
+
+> Amended by [0027](0027-plugins-add-sections-tasks-is-the-built-in-one.md) (OCT-89): a days-since counter is no longer a task. It is a `since` counter in
+> the counters section, `.octodo/counters/<id>-<slug>/counter.md` with `type: since`, and has no
+> status, so "completing one closes it" no longer applies: a counter is deleted instead. The log
+> (`log.jsonl`, its line format and `log.ts`) and the four operations stay, renamed under
+> `octo counters` (`reset`, `unreset`, `history`). Its fields are `since` and `last`; `resets`,
+> `longest` and `recent` went with the small design, since `list_resets` has the whole history.
 
 ## Context
 

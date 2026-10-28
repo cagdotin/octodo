@@ -1,4 +1,5 @@
 import type {
+  EntryNotFound,
   FixResult,
   InvalidRequest,
   PluginNotEnabled,
@@ -15,6 +16,7 @@ import type { Effect } from "effect";
 export type ClientError =
   | OperationError<OperationName>
   | PluginNotEnabled
+  | EntryNotFound
   | WorkspaceNotFound
   | InvalidRequest
   | StorageError

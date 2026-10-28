@@ -1,5 +1,6 @@
 import type {
   AttachmentContent,
+  EntryDay,
   TaskDetail,
   TaskSummary,
   WorkspaceOverview,
@@ -12,7 +13,13 @@ import {
   type FileSuccess,
   type OperationName,
 } from "@octodo/contract/catalog";
-import { isClosedCategory, isDueBy, localDay, type DayContext } from "@octodo/contract/rules";
+import {
+  entriesDueBy,
+  isClosedCategory,
+  isDueBy,
+  localDay,
+  type DayContext,
+} from "@octodo/contract/rules";
 import { Effect, type Schema } from "effect";
 import type { Workspace } from "./workspace.ts";
 import { Workspaces } from "./workspaces.ts";
@@ -92,13 +99,17 @@ const listTasks = (
     all,
   }: Omit<OperationInput<"list_tasks">, "workspace">,
   days: DayContext,
-): Array<TaskSummary> => {
+): Array<TaskSummary | EntryDay> => {
   const closed = new Set(
     snapshot.statuses.filter((known) => isClosedCategory(known.category)).map((known) => known.id),
   );
   const order = new Map(snapshot.statuses.map((known, index) => [known.id, index]));
   const needle = query?.toLowerCase();
-  return snapshot.tasks
+  const matches = (item: { readonly title: string; readonly body: string }) =>
+    needle === undefined ||
+    item.title.toLowerCase().includes(needle) ||
+    item.body.toLowerCase().includes(needle);
+  const tasks = snapshot.tasks
     .filter(
       (task) =>
         (status === undefined
@@ -109,9 +120,7 @@ const listTasks = (
         (tag === undefined || task.tags.includes(tag)) &&
         (ready !== true || task.ready) &&
         (due_by === undefined || isDueBy(task, due_by.slice(0, 10), days)) &&
-        (needle === undefined ||
-          task.title.toLowerCase().includes(needle) ||
-          task.body.toLowerCase().includes(needle)),
+        matches(task),
     )
     .toSorted((a, b) => (order.get(a.status) ?? 0) - (order.get(b.status) ?? 0))
     .map(({ id, title, status, list, parent, priority, tags, due, blocked, ready, kind }) => ({
@@ -127,6 +136,12 @@ const listTasks = (
       ready,
       ...(kind === undefined ? {} : { kind }),
     }));
+  const onlyTasks = [status, list, parent, tag].some((filter) => filter !== undefined) || ready;
+  if (due_by === undefined || onlyTasks === true) return tasks;
+  return [
+    ...tasks,
+    ...entriesDueBy((snapshot.entries ?? []).filter(matches), due_by.slice(0, 10), days),
+  ];
 };
 
 /** Every catalog operation's engine function, by name. */
@@ -139,7 +154,7 @@ export const handlers: { readonly [K in OperationName]: Handler<K> } = {
     Effect.map(ws.snapshot, (snapshot) =>
       listTasks(snapshot, filters, {
         today: localDay(),
-        kindDay: (kind) => ws.plugins.find((plugin) => plugin.shared.id === kind)?.shared.day,
+        pluginDay: (id) => ws.plugins.find((plugin) => plugin.shared.id === id)?.shared.day,
       }),
     ),
   get_task: (ws, { id }) => detail(ws, id),

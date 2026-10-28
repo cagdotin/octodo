@@ -15,6 +15,7 @@ octo.pipe(
   Command.run({ version: VERSION }),
   Effect.catchTags({
     TaskNotFound: (error) => fail(error.message),
+    EntryNotFound: (error) => fail(error.message),
     WorkspaceNotFound: (error) => fail(`${error.message}. Run \`octo init\` or pass --workspace.`),
     InvalidRequest: (error) => fail(error.message),
     AttachmentNotFound: (error) => fail(error.message),

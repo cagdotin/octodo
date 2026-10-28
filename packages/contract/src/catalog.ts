@@ -10,6 +10,7 @@ import {
   CreateTaskInput,
   Diagnostic,
   DueDate,
+  EntryDay,
   FixRequest,
   FixResult,
   InvalidRequest,
@@ -155,7 +156,7 @@ export const catalog = {
   },
   list_tasks: {
     description:
-      "List tasks in board order (by status, then their order), optionally filtered. Leaves out tasks in closed statuses unless all is true or status names one. Returns summaries without bodies; use get_task for the full task.",
+      "List tasks in board order (by status, then their order), optionally filtered. Leaves out tasks in closed statuses unless all is true or status names one. Returns summaries without bodies; use get_task for the full task. With due_by, the entries of other sections due by then follow the tasks.",
     readonly: true,
     input: Schema.Struct({
       workspace: WorkspaceField,
@@ -177,14 +178,14 @@ export const catalog = {
       }),
       due_by: Schema.optionalKey(DueDate).annotate({
         description:
-          "Only tasks due on or before this day, YYYY-MM-DD, overdue ones included: today's date for what is due today, as the app's Today lists it. A plain task is due on its due; a recurring task on its next day, an anniversary on its next occurrence, and a days-since counter never.",
+          "Only tasks due on or before this day, YYYY-MM-DD, overdue ones included: today's date for what is due today, as the app's Today lists it. A plain task is due on its due, a recurring task on its next day. Entries of other sections that give a day by then follow the tasks, each { id, section, title, day }: a yearly counter on its next occurrence. They are read-only rows; change them with their section's operations. status, list, parent, tag and ready leave them out.",
       }),
       all: Schema.optionalKey(Schema.Boolean).annotate({
         description: "Include tasks in closed statuses (done, canceled, archived)",
         ...cli({ alias: "a" }),
       }),
     }),
-    success: Schema.Array(TaskSummary),
+    success: Schema.Array(Schema.Union([TaskSummary, EntryDay])),
     error: inWorkspace(),
     http: { method: "GET", path: "/workspaces/:workspace/tasks" },
     cli: {
@@ -196,7 +197,8 @@ export const catalog = {
         { command: "octo list --ready", description: "Open tasks that are not blocked" },
         {
           command: "octo list --due-by 2026-11-01",
-          description: "Open tasks due by November 1, overdue ones and chores included",
+          description:
+            "Open tasks due by November 1, overdue ones, chores and yearly counters included",
         },
       ],
     },

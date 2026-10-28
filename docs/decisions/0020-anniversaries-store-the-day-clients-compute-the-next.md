@@ -1,7 +1,14 @@
 # 0020. Anniversaries store the day, clients compute the next one, and lists keep their order
 
-- Status: accepted
+- Status: accepted, amended by 0027
 - Date: 2026-10-28
+
+> Amended by [0027](0027-plugins-add-sections-tasks-is-the-built-in-one.md) (OCT-89): an anniversary is no longer a task. It is a `yearly` counter in the
+> counters section, `counter.md` with `type: yearly` and `date`, created and changed with
+> `create_counter` and `update_counter`. The data rule stands: `date` is the only stored value,
+> `nextOccurrence` (now in `counters/count.ts`) computes the next one from today where the code
+> runs, and February 29 comes back on the 28th. The "Order" section no longer applies: counters
+> are not in task lists.
 
 ## Context
 

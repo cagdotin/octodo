@@ -156,6 +156,21 @@ export const Entry = Schema.Struct({
 });
 export type Entry = typeof Entry.Type;
 
+/**
+ * An entry of a section on the day it gives, as Today, Next 7 days and `list_tasks`' `due_by` list
+ * it beside the tasks: a yearly counter on its next occurrence. Read-only; its section's own
+ * operations change it, and `id` opens it (decisions 0025, 0027).
+ */
+export const EntryDay = Schema.Struct({
+  id: Schema.String,
+  /** The section it is in: the id of the plugin that adds it, the app's route to it. */
+  section: Schema.String,
+  title: Schema.String,
+  /** The day it gives, `YYYY-MM-DD`. */
+  day: Schema.String,
+});
+export type EntryDay = typeof EntryDay.Type;
+
 /** What `list_tasks` gives for each task: no body, no frontmatter beyond the attributes. */
 export const TaskSummary = Schema.Struct({
   id: Schema.String,
@@ -452,6 +467,17 @@ export class TaskNotFound extends Schema.TaggedError<TaskNotFound>()(
 ) {
   override get message(): string {
     return `No task with id ${this.id}`;
+  }
+}
+
+/** No entry of the section `section` has the id. */
+export class EntryNotFound extends Schema.TaggedError<EntryNotFound>()(
+  "EntryNotFound",
+  { id: Schema.String, section: Schema.String },
+  { httpApiStatus: 404 },
+) {
+  override get message(): string {
+    return `No entry in ${this.section} with id ${this.id}`;
   }
 }
 

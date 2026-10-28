@@ -1,6 +1,6 @@
 import type { Schema } from "effect";
 import type { Operation } from "./catalog.ts";
-import type { KindDay } from "./rules.ts";
+import type { PluginDay } from "./rules.ts";
 
 /**
  * A section a plugin adds: its entries are the folders in `.octodo/<plugin id>/` that hold
@@ -49,9 +49,9 @@ export interface PluginShared {
    */
   readonly label?: (fields: never) => string;
   /**
-   * The day a task of its kind is due on, from its `kind.fields` and today, or none: what
-   * `list_tasks`' `due_by` and the app's Today read in place of `due` (decision 0025). A plain
-   * function from a module the web half imports too, as its `PluginWeb.day`.
+   * The day a task of its kind is due on, or an entry of its section falls on, from its fields and
+   * today, or none: what `list_tasks`' `due_by` and the app's Today read (decisions 0025, 0027). A
+   * plain function from a module the web half imports too, as its web half's `day`.
    */
-  readonly day?: KindDay;
+  readonly day?: PluginDay;
 }

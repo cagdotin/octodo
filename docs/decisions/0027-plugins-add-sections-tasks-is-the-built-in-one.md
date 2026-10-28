@@ -108,10 +108,40 @@ Building phase 1 settled what the decision left open, keeping to two ideas one l
   folders. A `blocked_by` that names an entry is a `broken-link`: links name tasks only.
 - **The plugin API.** A plugin's reader gets `{ entry, keys, files }`, where `entry` is what every
   task and entry has (a task is passed whole). A section plugin's handlers create an entry with
-  `createInSection(input, keys)`; editing and deleting entries come with the first plugin that
-  needs them (counters, OCT-89).
+  `createInSection(input, keys)`, read them with `entriesInSection` and `getInSection(id)`,
+  change one with `editInSection(id, { title, body, keys, files })` (renaming its folder for a
+  new title) and remove one with `deleteInSection(id)`, which first takes its id out of every
+  task's links, as deleting a task does; entries hold no links of their own. Each writes under
+  the owner lock, and an id that is not an entry of the plugin's own section is `EntryNotFound`
+  (OCT-89).
 - What is neither `config.json`, a section folder nor dot bookkeeping at the top of `.octodo/`, and
   what is not an entry in a section's folder, is a `misplaced` diagnostic.
+
+### How counters are built (amended by OCT-89)
+
+- **Stored and computed.** `counter.md` holds `type` and, for a yearly counter, `date`; a since
+  counter's resets are `log.jsonl`. The reader's `fields` are `{ type, since, last, date }`, every
+  value absolute, so the cached snapshot is right after midnight (0019, 0020). What depends on
+  today (`daysSince`; `next`, `daysUntil` and `years`) is `countOf(fields, today)` in
+  `counters/count.ts`, a plain module: each counter operation returns the entry with `count`
+  computed where it ran, and the app and the CLI's label call the same function with their own
+  today. A `type` the plugin does not know is `counters/bad-type`, a yearly counter without a
+  readable day `counters/bad-date`; both count nothing.
+- **Operations**, `octo counters ...`: `create_counter` (`create`, with `--type since|yearly`, and
+  `--date` for yearly only), `update_counter` (`update`: title, body, a yearly counter's date; the
+  type stays), `reset_counter` (`reset`, since only, `--at` for an earlier time), `remove_reset`
+  (`unreset`), `list_resets` (`history`), `delete_counter` (`delete`) and `list_counters` (`list`,
+  `ls`). There is no `get_counter`: `list_counters` gives every counter whole, body and
+  `mentionedIn` included.
+- **Today rows.** `PluginShared.day` is any plugin's, for a task of its kind or an entry of its
+  section. The snapshot carries nothing new: an entry's day comes from its `fields` and today, as
+  a kind's does. `entriesDueBy(entries, last, context)` in `@octodo/contract/rules` makes the rows,
+  `EntryDay = { id, section, title, day }`, sorted by day; `list_tasks` with `due_by` appends them
+  after the tasks, and a filter only tasks have (status, list, parent, tag, ready) leaves them out.
+  The app renders the same rows from its snapshot, and `section` plus `id` is the link to the
+  entry's page. A section's web half names its `day` in `webSections`.
+- The CLI prints any operation's entry, or list of entries, as an entry line with its plugin's
+  `label`, as it prints a task line for a task.
 
 ## Consequences
 

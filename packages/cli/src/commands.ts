@@ -1,4 +1,4 @@
-import { Task, type AttachmentContent } from "@octodo/contract";
+import { Task, type AttachmentContent, type Entry } from "@octodo/contract";
 import {
   FileSuccess,
   type CliCommand,
@@ -8,7 +8,7 @@ import {
 import type { Registry } from "@octodo/engine";
 import { Console, Effect, FileSystem, Option, Schema, type PlatformError } from "effect";
 import { Command, Flag } from "effect/cli";
-import { line, renderers, type KindLabel } from "./render.ts";
+import { entryLine, line, renderers, type KindLabel } from "./render.ts";
 import { schemaFlags } from "./schema-flags.ts";
 
 /** Runs an operation by name on its decoded input, without the `workspace` field. */
@@ -60,10 +60,31 @@ const kindLabel =
 
 type Render = (result: unknown, label: KindLabel) => ReadonlyArray<string>;
 
-/** The operation's own renderer, or a task line for any operation, a plugin's too, giving a task. */
-const rendererOf = (name: string, operation: Operation): Render | undefined =>
-  (renderers[name as OperationName] as Render | undefined) ??
-  (operation.success === Task ? (task, label) => [line(task as Task, label)] : undefined);
+/** Whether a schema is a struct with a `section`: an entry of a plugin's section. */
+const isEntry = (schema: unknown) =>
+  Schema.isSchema(schema) &&
+  "fields" in schema &&
+  typeof schema.fields === "object" &&
+  schema.fields !== null &&
+  "section" in schema.fields;
+
+/**
+ * The operation's own renderer, or for any operation, a plugin's too, a task line for a task and
+ * an entry line for each entry.
+ */
+const rendererOf = (name: string, operation: Operation): Render | undefined => {
+  const own = renderers[name as OperationName] as Render | undefined;
+  const { success } = operation;
+  if (own !== undefined) return own;
+  if (success === Task) return (task, label) => [line(task as Task, label)];
+  if (isEntry(success)) return (entry, label) => [entryLine(entry as Entry, label)];
+  if (Schema.isSchema(success) && "value" in success && isEntry(success.value))
+    return (entries, label) => {
+      const all = entries as ReadonlyArray<Entry>;
+      return all.length === 0 ? ["None"] : all.map((entry) => entryLine(entry, label));
+    };
+  return undefined;
+};
 
 /**
  * Prints a success: the renderer's lines, or JSON when there is none or `--json` asks for it. The

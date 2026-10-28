@@ -30,17 +30,14 @@ const recurring = { id: "recurring", fields: { repeat: "daily", next: null, last
 
 describe("creatableKinds", () => {
   it("offers the kinds the workspace enables, in config order, and none without plugins", () => {
-    expect(creatableKinds({ plugins: ["anniversary", "recurring"] }).map(({ id }) => id)).toEqual([
-      "anniversary",
-      "recurring",
-    ]);
+    expect(creatableKinds({ plugins: ["recurring"] }).map(({ id }) => id)).toEqual(["recurring"]);
     expect(creatableKinds({})).toEqual([]);
   });
 
-  it("skips an enabled id the app has no web half for", () => {
-    expect(creatableKinds({ plugins: ["tally", "counter"] }).map(({ id }) => id)).toEqual([
-      "counter",
-    ]);
+  it("skips an enabled id the app has no kind's web half for, a section's included", () => {
+    expect(
+      creatableKinds({ plugins: ["tally", "counters", "recurring"] }).map(({ id }) => id),
+    ).toEqual(["recurring"]);
   });
 });
 

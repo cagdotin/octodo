@@ -65,7 +65,7 @@ const checkLinks = (snapshot: WorkspaceSnapshot, task: Task, ids: ReadonlyArray<
 };
 
 /** Refuses a change of keys or files that the plugin `id` does not own, or a plugin not enabled. */
-const checkKind = (
+export const checkKind = (
   state: State,
   snapshot: WorkspaceSnapshot,
   id: string,
@@ -142,10 +142,14 @@ export const updateTask = (state: State, taskId: string, given: UpdateTaskInput)
  * The text of each file `change` rewrites in the task's folder, as the scan read it, refusing a
  * file on disk the scan could not read, so a change never builds on a file it has not seen.
  */
-const changedFiles = (state: State, scan: Scan, taskId: string, change: KindChange) =>
+export const changedFiles = (
+  state: State,
+  scan: Scan,
+  { id, dir }: { readonly id: string; readonly dir: string },
+  change: KindChange,
+) =>
   Effect.gen(function* () {
-    const dir = scan.dirs.tasks.get(taskId)!;
-    const read = scan.kindFiles.get(taskId) ?? new Map<string, string>();
+    const read = scan.kindFiles.get(id) ?? new Map<string, string>();
     for (const name of Object.keys(change.files ?? {}))
       if (
         !read.has(name) &&
@@ -157,7 +161,7 @@ const changedFiles = (state: State, scan: Scan, taskId: string, change: KindChan
     return read;
   });
 
-const writeChangedFiles = (
+export const writeChangedFiles = (
   files: Files,
   dir: string,
   change: KindChange,
@@ -184,7 +188,12 @@ export const editKind = (state: State, id: string, taskId: string, change: KindC
       const { snapshot } = scan;
       const task = yield* ofKind(snapshot, id, taskId);
       yield* checkKind(state, snapshot, id, change);
-      const read = yield* changedFiles(state, scan, taskId, change);
+      const read = yield* changedFiles(
+        state,
+        scan,
+        { id: taskId, dir: scan.dirs.tasks.get(taskId)! },
+        change,
+      );
       yield* Effect.gen(function* () {
         yield* writeChangedFiles(files, scan.dirs.tasks.get(taskId)!, change, read);
         if (change.keys !== undefined) {
@@ -245,7 +254,14 @@ export const moveTask = (state: State, taskId: string, input: MoveTaskInput) =>
         return yield* invalid("A task cannot move inside itself or its subtasks");
       const completed = yield* completion(state, snapshot, task, input.status);
       const read =
-        completed === null ? null : yield* changedFiles(state, scan, taskId, completed.change);
+        completed === null
+          ? null
+          : yield* changedFiles(
+              state,
+              scan,
+              { id: taskId, dir: scan.dirs.tasks.get(taskId)! },
+              completed.change,
+            );
       const status = completed?.status ?? input.status;
       yield* Effect.gen(function* () {
         const changes: Record<string, string> = {};
@@ -268,6 +284,29 @@ export const moveTask = (state: State, taskId: string, input: MoveTaskInput) =>
     }),
   );
 
+/**
+ * Takes the ids `isRemoved` accepts out of every other task's links, rewriting only the files that
+ * still have one, so a rerun after a crash finishes the cleanup.
+ */
+export const dropLinks = (files: Files, scan: Scan, isRemoved: (id: string) => boolean) =>
+  Effect.gen(function* () {
+    const { snapshot } = scan;
+    const linking = snapshot.tasks.filter(
+      (task) =>
+        !isRemoved(task.id) && LINK_KINDS.some((kind) => task[kind.forward].some(isRemoved)),
+    );
+    for (const task of linking) {
+      const file = join(snapshot.workspace.root, task.path);
+      const original = yield* fileText(scan, file);
+      let text = original;
+      for (const kind of LINK_KINDS)
+        text =
+          (yield* keepLinks(text, kind.field, (id) => !isRemoved(id), snapshot.workspace.key)) ??
+          text;
+      if (text !== original) yield* files.writeFile(file, text);
+    }
+  });
+
 export const deleteTask = (state: State, taskId: string) =>
   state.write((files) =>
     Effect.gen(function* () {
@@ -275,26 +314,8 @@ export const deleteTask = (state: State, taskId: string) =>
       const { snapshot, dirs } = scan;
       yield* findTask(snapshot, taskId);
       const removed = taskSubtree(snapshot.tasks, taskId);
-      const isRemoved = (id: string) => removed.has(id);
-      const linking = snapshot.tasks.filter(
-        (task) =>
-          !removed.has(task.id) && LINK_KINDS.some((kind) => task[kind.forward].some(isRemoved)),
-      );
       yield* Effect.gen(function* () {
-        for (const task of linking) {
-          const file = join(snapshot.workspace.root, task.path);
-          const original = yield* fileText(scan, file);
-          let text = original;
-          for (const kind of LINK_KINDS)
-            text =
-              (yield* keepLinks(
-                text,
-                kind.field,
-                (id) => !isRemoved(id),
-                snapshot.workspace.key,
-              )) ?? text;
-          if (text !== original) yield* files.writeFile(file, text);
-        }
+        yield* dropLinks(files, scan, (id) => removed.has(id));
         yield* files.remove(dirs.tasks.get(taskId)!);
       }).pipe(storageError("Could not delete the task"));
     }),

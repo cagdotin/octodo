@@ -13,6 +13,7 @@ import {
   type CreateListInput,
   type CreateTaskInput,
   type Entry,
+  type EntryNotFound,
   type FixRequest,
   type FixResult,
   type List,
@@ -40,8 +41,8 @@ import {
   readAttachment,
   writeAttachment,
 } from "./tasks/attachments.ts";
-import { createEntry } from "./entries/operations.ts";
-import type { KindChange, NewEntry, Plugin } from "./plugins/plugin.ts";
+import { createEntry, deleteEntry, editEntry, entryFiles } from "./entries/operations.ts";
+import type { EntryChange, KindChange, NewEntry, Plugin } from "./plugins/plugin.ts";
 import {
   createTask,
   deleteTask,
@@ -84,6 +85,25 @@ export interface Workspace {
     input: NewEntry,
     keys: Readonly<Record<string, unknown>>,
   ) => Effect.Effect<Entry, InvalidRequest | StorageError | WorkspaceBusy>;
+  /**
+   * Writes an entry of the section the plugin `plugin` adds: its title, body, and that plugin's
+   * keys and files. Its plugin's handlers reach it as `editInSection`.
+   */
+  readonly editEntry: (
+    plugin: string,
+    entryId: string,
+    change: EntryChange,
+  ) => Effect.Effect<Entry, EntryNotFound | InvalidRequest | StorageError | WorkspaceBusy>;
+  /** Removes an entry of the section the plugin `plugin` adds, and every task's links to it. */
+  readonly deleteEntry: (
+    plugin: string,
+    entryId: string,
+  ) => Effect.Effect<void, EntryNotFound | StorageError | WorkspaceBusy>;
+  /** The text of the plugin `plugin`'s files in an entry of its section. */
+  readonly entryFiles: (
+    plugin: string,
+    entryId: string,
+  ) => Effect.Effect<ReadonlyMap<string, string>, EntryNotFound | StorageError | WorkspaceBusy>;
   /** The text of the plugin `plugin`'s files in a task of its kind, refusing any other task. */
   readonly kindFiles: (
     plugin: string,
@@ -231,6 +251,9 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     createTask: (input, kind?: NewKind) => createTask(state, input, kind),
     editKind: (plugin, taskId, change) => editKind(state, plugin, taskId, change),
     createEntry: (plugin, input, keys) => createEntry(state, plugin, input, keys),
+    editEntry: (plugin, entryId, change) => editEntry(state, plugin, entryId, change),
+    deleteEntry: (plugin, entryId) => deleteEntry(state, plugin, entryId),
+    entryFiles: (plugin, entryId) => entryFiles(state, plugin, entryId),
     kindFiles: (plugin, taskId) => kindFiles(state, plugin, taskId),
     updateTask: (taskId, input) => updateTask(state, taskId, input),
     moveTask: (taskId, input) => moveTask(state, taskId, input),

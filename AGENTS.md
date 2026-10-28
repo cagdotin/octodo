@@ -44,11 +44,16 @@ instead of keeping the code because it exists.
   ([0014](docs/decisions/0014-one-plugin-api-for-the-plain-task-and-every-plugin.md)). A
   recurring task keeps its rule in `repeat` and one line per time it was done in `log.jsonl`;
   moving it into a completed status logs that line and leaves it in the first unstarted status
-  ([0016](docs/decisions/0016-recurring-tasks-complete-in-place.md)). A days-since counter
-  (`type: counter`) logs each reset in the same `log.jsonl` and closes like a plain task
-  ([0019](docs/decisions/0019-days-since-counters-share-the-occurrence-log.md)). An anniversary
-  keeps the day it first happened in `date`; clients compute its next occurrence from today
-  ([0020](docs/decisions/0020-anniversaries-store-the-day-clients-compute-the-next.md)).
+  ([0016](docs/decisions/0016-recurring-tasks-complete-in-place.md)).
+- Counters are a section, not tasks: `.octodo/counters/<id>-<slug>/counter.md` with `type: since`
+  (its resets in `log.jsonl`, as a recurring task logs, [0019](docs/decisions/0019-days-since-counters-share-the-occurrence-log.md))
+  or `type: yearly` with `date`, the day it first happened
+  ([0020](docs/decisions/0020-anniversaries-store-the-day-clients-compute-the-next.md)). A counter
+  has no status, priority, due, list or subtasks, and is deleted rather than completed. What
+  depends on today (days since, the next occurrence) is computed where it is asked, never stored;
+  a yearly counter's next day shows in Today, Next 7 days and `list_tasks --due-by` as a read-only
+  row `{ id, section, title, day }`
+  ([0027](docs/decisions/0027-plugins-add-sections-tasks-is-the-built-in-one.md)).
 - A link is a frontmatter key holding a list of plain task ids, `blocked_by: [HM-3, HM-7]`;
   `LINK_KINDS` in `contract/src/rules.ts` lists the keys. Only one end stores an edge: the reverse (`blocks`),
   `mentionedIn` (from `[[HM-3]]` in a body, outside code), `blocked` and `ready` (open and not

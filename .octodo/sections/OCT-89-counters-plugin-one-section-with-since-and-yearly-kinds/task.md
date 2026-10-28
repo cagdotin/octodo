@@ -1,7 +1,7 @@
 ---
 id: OCT-89
 title: "Counters plugin: one section with since and yearly kinds"
-status: todo
+status: done
 priority: high
 tags:
   - plugins

@@ -6,11 +6,10 @@ import {
   Priority,
   Tags,
   type CreateTaskInput,
-  type DiagnosticKind,
-  type FixAction,
   type Task,
   type UpdateTaskInput,
 } from "./domain.ts";
+import type { Problem } from "./diagnostics.ts";
 import {
   LINK_KINDS,
   findMentions,
@@ -35,15 +34,6 @@ export interface TaskPlace {
   readonly updated: string | null;
   /** The workspace key, whose ids are task ids even when it is not of the usual shape. */
   readonly key: string;
-}
-
-/** What is wrong with a file, before the scanner says where. */
-export interface Problem {
-  readonly kind: DiagnosticKind;
-  readonly field: string | null;
-  readonly detail: string;
-  /** Null when the kind's fix does not apply to this case. */
-  readonly fix?: FixAction | null;
 }
 
 export type FrontmatterRead<A> =

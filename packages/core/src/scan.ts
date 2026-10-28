@@ -18,10 +18,8 @@ import {
   TASKS_DIR,
   conflictCopyOf,
   defaultStatus,
-  deriveKey,
   humanize,
   idNumber,
-  isWorkspaceKey,
   listDepth,
   sortStatuses,
   taskFolderName,
@@ -328,23 +326,9 @@ export const scanWorkspace = (
       return null;
     };
 
-    const { config, problem } = yield* readConfig(root);
-    if (problem !== null)
-      report(
-        "invalid-config",
-        path.join(tasksDir, CONFIG_FILE),
-        `${problem}; until it is fixed the workspace uses its folder name and the default statuses`,
-      );
-    if (!isWorkspaceKey(config.key)) {
-      const usable = config.key.replace(/[^A-Za-z0-9]/g, "");
-      const suggested = isWorkspaceKey(usable) ? usable : deriveKey(config.name);
-      report(
-        "invalid-config",
-        path.join(tasksDir, CONFIG_FILE),
-        `The key ${JSON.stringify(config.key)} is not letters and digits starting with a letter, so a mention such as [[${config.key}-1]] is not read. Its tasks still load; to fix it, set "key" in config.json to letters and digits such as "${suggested}" and change each id ${config.key}-<n> to ${suggested}-<n>`,
-        { field: "key" },
-      );
-    }
+    const { config, fallback, problems: configProblems } = yield* readConfig(root);
+    for (const { kind, detail, field } of configProblems)
+      report(kind, path.join(tasksDir, CONFIG_FILE), detail, { field });
     const statuses: Array<StatusDefinition> = [...(config.statuses ?? DEFAULT_STATUSES)];
     const fallbackStatus = defaultStatus(statuses)?.id ?? "todo";
 
@@ -651,7 +635,7 @@ export const scanWorkspace = (
         "unknown-status",
         path.join(root, task.path),
         `The status "${task.status}" is not in config.json`,
-        { field: "status", fix: problem === null ? "add-status" : null },
+        { field: "status", fix: fallback ? null : "add-status" },
       );
     }
 

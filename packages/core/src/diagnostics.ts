@@ -1,7 +1,16 @@
 import type { Diagnostic, DiagnosticKind, Fix, FixAction } from "./domain.ts";
 import { MAX_LIST_DEPTH } from "./layout.ts";
 
-interface Problem {
+/** What is wrong with a file, before the reader says where. */
+export interface Problem {
+  readonly kind: DiagnosticKind;
+  readonly field: string | null;
+  readonly detail: string;
+  /** Null when the kind's fix does not apply to this case. */
+  readonly fix?: FixAction | null;
+}
+
+interface Remedy {
   /** What to do about it, appended to the specific finding. */
   readonly remedy: string;
   /** The fixes this kind of problem can have; the scanner picks the one that applies, if any. */
@@ -103,7 +112,7 @@ export const PROBLEMS = {
     remedy: "Check that octodo may read it",
     fixes: [],
   },
-} as const satisfies Record<DiagnosticKind, Problem>;
+} as const satisfies Record<DiagnosticKind, Remedy>;
 
 export const FIX_LABELS: Record<FixAction, string> = {
   "fresh-id": "Give this copy a new id",
@@ -137,7 +146,7 @@ export const diagnostic = <K extends DiagnosticKind>(
   detail: string,
   options: DiagnosticOptions<K> = {},
 ): Diagnostic => {
-  const problem: Problem = PROBLEMS[kind];
+  const problem: Remedy = PROBLEMS[kind];
   const action =
     options.fix === undefined
       ? problem.fixes.length === 1

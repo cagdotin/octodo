@@ -1,7 +1,8 @@
 import { Effect, FileSystem, Path, PlatformError, Schema } from "effect";
+import type { Problem } from "../diagnostics.ts";
 import { WorkspaceConfig } from "../domain.ts";
 import { writeFileAtomic } from "../files.ts";
-import { CONFIG_FILE, TASKS_DIR, deriveKey, humanize } from "../layout.ts";
+import { CONFIG_FILE, TASKS_DIR, deriveKey, humanize, isWorkspaceKey } from "../layout.ts";
 
 const decodeDocument = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)),
@@ -10,11 +11,12 @@ const decodeConfig = Schema.decodeUnknownEffect(WorkspaceConfig);
 
 type Platform = FileSystem.FileSystem | Path.Path;
 
-/** What a workspace runs on, and why config.json could not give it when `problem` is set. */
+/** What a workspace runs on, and what is wrong with config.json. */
 export interface ConfigRead {
   readonly config: WorkspaceConfig;
-  /** Why config.json is unusable; `config` is then the folder-name fallback. */
-  readonly problem: string | null;
+  /** Whether config.json is unusable, so `config` is the folder-name fallback. */
+  readonly fallback: boolean;
+  readonly problems: ReadonlyArray<Problem>;
 }
 
 const configFile = (path: Path.Path, root: string) => path.join(root, TASKS_DIR, CONFIG_FILE);
@@ -31,16 +33,36 @@ const readDocument = (root: string) =>
     return { file, document, config: yield* decodeConfig(document) };
   });
 
+/** A key that ids and mentions such as `[[HM-1]]` cannot be read with. */
+const keyProblem = ({ key, name }: WorkspaceConfig): Problem => {
+  const usable = key.replace(/[^A-Za-z0-9]/g, "");
+  const suggested = isWorkspaceKey(usable) ? usable : deriveKey(name);
+  return {
+    kind: "invalid-config",
+    field: "key",
+    detail: `The key ${JSON.stringify(key)} is not letters and digits starting with a letter, so a mention such as [[${key}-1]] is not read. Its tasks still load; to fix it, set "key" in config.json to letters and digits such as "${suggested}" and change each id ${key}-<n> to ${suggested}-<n>`,
+  };
+};
+
 /** Never fails: a missing, unreadable or invalid config.json reads as the folder-name fallback. */
 export const readConfig = (root: string): Effect.Effect<ConfigRead, never, Platform> =>
   Effect.gen(function* () {
     const path = yield* Path.Path;
     const fallback = (error: unknown): ConfigRead => {
       const name = humanize(path.basename(root));
-      return { config: { name, key: deriveKey(name) }, problem: String(error) };
+      const unusable: Problem = {
+        kind: "invalid-config",
+        field: null,
+        detail: `${String(error)}; until it is fixed the workspace uses its folder name and the default statuses`,
+      };
+      return { config: { name, key: deriveKey(name) }, fallback: true, problems: [unusable] };
     };
     return yield* readDocument(root).pipe(
-      Effect.map(({ config }): ConfigRead => ({ config, problem: null })),
+      Effect.map(({ config }): ConfigRead => ({
+        config,
+        fallback: false,
+        problems: isWorkspaceKey(config.key) ? [] : [keyProblem(config)],
+      })),
       Effect.catch((error) => Effect.succeed(fallback(error))),
     );
   });

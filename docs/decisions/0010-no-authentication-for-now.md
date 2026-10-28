@@ -19,8 +19,10 @@ access actually needs.
 
 ## Consequences
 
-- Clients need nothing but the URL. `server.json` stays as the discovery file
-  ([0002](0002-server-preferred-topology.md)) without a token.
+- Clients need nothing but the URL. The server no longer writes `server.json`; OCT-54 brings it back
+  as the discovery file with `url`, `pid` and `version` ([0002](0002-server-preferred-topology.md)).
+- Effect's `McpServer.layerHttp` still refuses `/mcp` requests whose `Origin` it does not list. That
+  is the library's check, not ours; no octodo client calls `/mcp` from a browser.
 - Known and accepted: a web page open in the same browser can send requests to the local server.
   Without a Host check, a page that rebinds its domain to 127.0.0.1 can read tasks; without an
   origin check, a page can post a form that changes them. OCT-69 starts from this.

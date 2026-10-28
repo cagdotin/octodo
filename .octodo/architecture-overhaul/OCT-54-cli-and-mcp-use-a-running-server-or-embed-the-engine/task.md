@@ -18,7 +18,7 @@ Decision `docs/decisions/0002-server-preferred-topology.md`. Today every surface
 
 ## Scope
 
-- `<home>/server.json` gains `url`, `pid` and `version` next to the token, written with mode 0600. It is a discovery hint; the owner lock is the proof.
+- `<home>/server.json` is written again, with `url`, `pid` and `version` (no secrets, decision 0010). It is a discovery hint; the owner lock is the proof.
 - `@octodo/client` `connect()`: probe `/api/health`; if a compatible server answers, use HTTP; if none is running, embed the engine under the owner lock. Never write behind a server that `server.json` names but that does not answer: report it instead.
 - The CLI and stdio MCP go through `connect()`. Stdio MCP bridges to the server's HTTP MCP when one runs.
 - A version mismatch is reported to the user, not silently replaced.

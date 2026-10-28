@@ -17,8 +17,8 @@ blocked_by: [OCT-54]
 
 ## Scope
 
-- On launch, attach to a running server found through `server.json`. Otherwise spawn one as a child (`ELECTRON_RUN_AS_NODE=1`), pass secrets through stdin or a bootstrap fd (never argv or env), and wait for a ready line or a health probe. Restart with backoff after a crash.
-- The renderer gets the origin and token over IPC, then talks HTTP.
+- On launch, attach to a running server found through `server.json`. Otherwise spawn one as a child (`ELECTRON_RUN_AS_NODE=1`) and wait for a ready line or a health probe. Restart with backoff after a crash.
+- The renderer gets the origin over IPC, then talks HTTP.
 - Packaged builds still work (`electron-builder`); dev (`pnpm dev`) still works.
 - Reference: t3code `apps/desktop/src/backend/DesktopBackendManager.ts`, executor `apps/desktop/src/main/sidecar.ts`.
 

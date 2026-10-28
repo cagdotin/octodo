@@ -77,3 +77,9 @@ export const browseFolders = (
       folders,
     } satisfies FolderListing;
   });
+
+/** `dir` with its links resolved, so two spellings of one folder name it once; `dir` if unreadable. */
+export const realFolder = (dir: string): Effect.Effect<string, never, Platform> =>
+  Effect.flatMap(FileSystem.FileSystem, (fs) =>
+    fs.realPath(dir).pipe(Effect.orElseSucceed(() => dir)),
+  );

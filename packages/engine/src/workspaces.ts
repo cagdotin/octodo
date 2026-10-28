@@ -9,7 +9,12 @@ import {
 } from "@octodo/contract";
 import { slugify } from "@octodo/contract/rules";
 import { hasConfig, readConfig } from "./storage/config.ts";
-import { browseFolders, readRegistry as readRegistryIn, writeRegistry } from "./storage/home.ts";
+import {
+  browseFolders,
+  readRegistry as readRegistryIn,
+  realFolder,
+  writeRegistry,
+} from "./storage/home.ts";
 import { checkPlugins, type Plugin } from "./plugins/plugin.ts";
 import type { Platform } from "./storage/storage.ts";
 import { initWorkspace, makeWorkspace, type Workspace } from "./workspace.ts";
@@ -59,6 +64,7 @@ export class Workspaces extends Context.Service<
         const scope = yield* Scope.Scope;
         const platform = yield* Effect.context<Platform>();
         const lock = yield* Semaphore.make(1);
+        /** By real folder: two unregistered folders can share an id, and one folder can have two paths. */
         const handles = new Map<string, Workspace>();
         const changes = yield* PubSub.sliding<WorkspaceChange>(64);
 
@@ -79,13 +85,14 @@ export class Workspaces extends Context.Service<
 
         const openHandle = (id: string, root: string) =>
           Effect.gen(function* () {
-            const existing = handles.get(id);
+            const folder = yield* withPlatform(realFolder(root));
+            const existing = handles.get(folder);
             if (existing !== undefined) return existing;
             const workspace = yield* makeWorkspace(id, root, {
               watch: options.watch,
               plugins,
             }).pipe(Scope.provide(scope), withPlatform);
-            handles.set(id, workspace);
+            handles.set(folder, workspace);
             yield* workspace.changes.pipe(
               Stream.runForEach(() => PubSub.publish(changes, { workspace: id })),
               Effect.forkIn(scope),

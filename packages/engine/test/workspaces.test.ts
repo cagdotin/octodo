@@ -87,6 +87,27 @@ describe("workspaces", () => {
     }
   });
 
+  it("opens an unregistered folder as itself when a registered workspace has its folder's name", async () => {
+    const base = mkdtempSync(join(tmpdir(), "octodo-open-"));
+    const registered = join(base, "a", "garden");
+    const loose = join(base, "b", "garden");
+    mkdirSync(registered, { recursive: true });
+    mkdirSync(loose, { recursive: true });
+    const roots = await run(
+      Workspaces.use((w) =>
+        Effect.gen(function* () {
+          yield* w.add(registered);
+          yield* initWorkspace(loose);
+          const first = yield* w.open("garden");
+          const second = yield* w.open(loose);
+          return [first.root, second.root, (yield* second.snapshot).workspace.root];
+        }),
+      ),
+      join(base, ".home"),
+    );
+    expect(roots).toEqual([registered, loose, loose]);
+  });
+
   it("lists every workspace when one config.json is unreadable, naming that one after its folder", async () => {
     const base = mkdtempSync(join(tmpdir(), "octodo-list-"));
     const home = join(base, ".home");

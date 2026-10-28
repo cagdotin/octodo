@@ -80,7 +80,7 @@ export function TaskComposer({
       {variant === "row" && (
         <span
           aria-hidden
-          className="box-content hidden shrink-0 pr-2 pl-1 sm:inline"
+          className="box-content hidden shrink-0 pr-2 pl-1 font-mono text-xs sm:inline"
           style={{ width: idWidth }}
         />
       )}

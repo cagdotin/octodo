@@ -1,4 +1,5 @@
 import type {
+  EntryDay,
   List,
   MoveListInput,
   MoveTaskInput,
@@ -11,6 +12,7 @@ import type {
 import {
   defaultStatus,
   destination,
+  entriesDueBy,
   inSubtree,
   isClosedCategory,
   isDueBy,
@@ -122,6 +124,24 @@ export const matchesFilter = (task: Task, filter: TaskFilter) =>
 export const allTags = (tasks: ReadonlyArray<Task>) =>
   [...new Set(tasks.flatMap((task) => task.tags))].sort((a, b) => a.localeCompare(b));
 
+/** The last day a date view lists: today for Today, a week on for Next 7 days. */
+const lastDay = (list: typeof SMART.today | typeof SMART.upcoming, today: string) =>
+  list === SMART.today ? today : format(addDays(parseISO(today), 7), "yyyy-MM-dd");
+
+/**
+ * The entries of sections a date view lists after its tasks, on the day each one's section gives
+ * (`sectionDay`): a yearly counter on its next occurrence (decision 0027). Other views list none.
+ */
+export const dueEntries = (
+  { entries = [] }: Pick<WorkspaceSnapshot, "entries">,
+  list: string | undefined,
+  sectionDay: DayContext["pluginDay"],
+  today: string,
+): ReadonlyArray<EntryDay> =>
+  list === SMART.today || list === SMART.upcoming
+    ? entriesDueBy(entries, lastDay(list, today), { today, pluginDay: sectionDay })
+    : [];
+
 /**
  * The tasks a view shows. Views of a list show top-level tasks, with subtasks inside their parent;
  * the date views show every task due on or before their last day, a task of a kind by its kind's
@@ -140,9 +160,8 @@ export const filterTasks = (
     case undefined:
       return tasks;
     case SMART.today:
-      return dueBy(context.today);
     case SMART.upcoming:
-      return dueBy(format(addDays(parseISO(today), 7), "yyyy-MM-dd"));
+      return dueBy(lastDay(list, today));
     case SMART.ready:
       return all.filter((task) => task.ready);
     case SMART.none:

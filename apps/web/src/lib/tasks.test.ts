@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyMove,
   descendantCount,
+  dueEntries,
   filterTasks,
   listCounts,
   SMART,
@@ -13,6 +14,7 @@ import {
   withBlockedBy,
   withoutSubtree,
 } from "./tasks.ts";
+import { sectionDay } from "../components/section.tsx";
 import { kindDay } from "../components/task-kind.tsx";
 
 const TODAY = format(new Date(), "yyyy-MM-dd");
@@ -267,5 +269,41 @@ describe("due dates", () => {
       "HM-4",
       "HM-10",
     ]);
+  });
+});
+
+describe("entries in the date views", () => {
+  const counter = (id: string, fields: Record<string, unknown>) => ({
+    id,
+    section: "counters",
+    title: id,
+    created: null,
+    updated: null,
+    order: "a0",
+    body: "",
+    path: `.octodo/counters/${id}/counter.md`,
+    extra: {},
+    mentions: [],
+    mentionedIn: [],
+    fields: { type: "yearly", since: null, last: null, date: null, ...fields },
+  });
+  const entries = [
+    counter("HM-20", { date: "1961-11-04" }),
+    counter("HM-21", { date: "1961-10-28" }),
+    counter("HM-22", { date: "1961-12-25" }),
+    counter("HM-23", { type: "since", since: "2026-10-01T10:00:00Z" }),
+  ];
+  const rows = (list: string | undefined) =>
+    dueEntries({ entries }, list, sectionDay, "2026-10-28").map(({ id, day }) => `${id} ${day}`);
+
+  it("lists a yearly counter on its next day in Today and Next 7 days, soonest first", () => {
+    expect(rows(SMART.today)).toEqual(["HM-21 2026-10-28"]);
+    expect(rows(SMART.upcoming)).toEqual(["HM-21 2026-10-28", "HM-20 2026-11-04"]);
+  });
+
+  it("lists no entries in the other views", () => {
+    expect(rows(SMART.all)).toEqual([]);
+    expect(rows(SMART.ready)).toEqual([]);
+    expect(rows("home")).toEqual([]);
   });
 });

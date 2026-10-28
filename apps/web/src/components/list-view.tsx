@@ -1,7 +1,7 @@
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { StatusDefinition, Task, WorkspaceSnapshot } from "@octodo/contract";
+import type { EntryDay, StatusDefinition, Task, WorkspaceSnapshot } from "@octodo/contract";
 import { isClosedCategory } from "@octodo/contract/rules";
 import { Link } from "@tanstack/react-router";
 import { InboxIcon, PlusIcon } from "lucide-react";
@@ -20,6 +20,7 @@ import {
   TagChips,
   TaskDate,
 } from "@/components/task-bits";
+import { enabledSections } from "@/components/section";
 import { TaskComposer } from "@/components/task-composer";
 import { BlockedChip } from "@/components/task-relations";
 import { ParentChip, SubtaskCount } from "@/components/task-subtasks";
@@ -37,6 +38,8 @@ import {
   EmptyTitle,
 } from "@octodo/ui/components/empty";
 import { ScrollArea } from "@octodo/ui/components/scroll-area";
+import { useToday } from "@octodo/ui/hooks/use-today";
+import { dueInfo } from "@octodo/ui/lib/dates";
 import { cn } from "@octodo/ui/lib/utils";
 import { listViewOrder, subtaskProgress, type Progress } from "@/lib/tasks";
 
@@ -51,6 +54,8 @@ interface Props {
   /** The status whose group has the new-task row open, if any. */
   composing: string | null;
   onCompose: (status: string | null) => void;
+  /** Entries of sections the date views list after the tasks, read-only (decision 0027). */
+  entries: ReadonlyArray<EntryDay>;
 }
 
 /** A small filled disclosure triangle, like Linear's. */
@@ -78,6 +83,7 @@ export function ListView({
   list,
   composing,
   onCompose,
+  entries,
 }: Props) {
   // Remember toggles per status id; untouched groups use the category default.
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -88,9 +94,9 @@ export function ListView({
     (status) => tasks.some((task) => task.status === status.id) || status.id === composing,
   );
   // Ids line up in a column as wide as the longest one.
-  const idWidth = `${Math.max(4, ...tasks.map((task) => task.id.length))}ch`;
+  const idWidth = `${Math.max(4, ...[...tasks, ...entries].map((row) => row.id.length))}ch`;
 
-  if (groups.length === 0) {
+  if (groups.length === 0 && entries.length === 0) {
     return (
       <Empty>
         <EmptyHeader>
@@ -171,8 +177,86 @@ export function ListView({
             </StatusGroup>
           );
         })}
+        {enabledSections(snapshot).map(({ id, web }) => {
+          const rows = entries.filter((entry) => entry.section === id);
+          return rows.length === 0 ? null : (
+            <section key={id} aria-label={web.label} className="flex flex-col">
+              <h2 className="flex h-9 items-center gap-2.5 pl-1 md:pl-[23px]">
+                <span className="font-mono text-xs text-muted-foreground lowercase">
+                  {web.label}
+                </span>
+                <span className="font-mono text-xs text-muted-foreground/70">{rows.length}</span>
+              </h2>
+              <ul className="flex flex-col">
+                {rows.map((entry) => {
+                  const fields = snapshot.entries?.find(({ id }) => id === entry.id)?.fields;
+                  return (
+                    <EntryDayRow
+                      key={entry.id}
+                      workspace={workspace}
+                      entry={entry}
+                      icon={
+                        fields === undefined ? (
+                          <web.Icon className="size-3.5" />
+                        ) : (
+                          <web.EntryIcon fields={fields} className="size-3.5" />
+                        )
+                      }
+                      idWidth={idWidth}
+                    />
+                  );
+                })}
+              </ul>
+            </section>
+          );
+        })}
       </div>
     </ScrollArea>
+  );
+}
+
+/** An entry of a section on its day: no checkbox, its section's icon, and a link to its page. */
+function EntryDayRow({
+  workspace,
+  entry,
+  icon,
+  idWidth,
+}: {
+  workspace: string;
+  entry: EntryDay;
+  icon: ReactNode;
+  idWidth: string;
+}) {
+  const due = dueInfo(entry.day, useToday());
+  return (
+    <li className="group/row relative flex h-9 items-center gap-1.5 rounded-md pr-3 pl-1.5 transition-colors hover:bg-row-hover md:pl-[18px]">
+      <span className="flex size-6 shrink-0 items-center justify-center text-muted-foreground">
+        {icon}
+      </span>
+      <span
+        className="box-content hidden shrink-0 pr-2 pl-1 font-mono text-xs text-muted-foreground sm:inline"
+        style={{ width: idWidth }}
+      >
+        {entry.id}
+      </span>
+      <Link
+        to="/w/$workspace/$section"
+        params={{ workspace, section: entry.section }}
+        search={{ entry: entry.id }}
+        draggable={false}
+        className="min-w-0 flex-1 truncate pl-1 outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:ring-2 focus-visible:after:ring-ring/50"
+      >
+        {entry.title}
+      </Link>
+      <span
+        className={cn(
+          "w-14 shrink-0 text-right font-mono text-xs text-foreground/80",
+          due?.today && "text-foreground",
+        )}
+      >
+        {due?.label}
+      </span>
+    </li>
   );
 }
 

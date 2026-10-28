@@ -143,6 +143,43 @@ Building phase 1 settled what the decision left open, keeping to two ideas one l
 - The CLI prints any operation's entry, or list of entries, as an entry line with its plugin's
   `label`, as it prints a task line for a task.
 
+### How the app shows sections (amended by OCT-90)
+
+- **The rail** shows Tasks, then one icon per section the workspace enables, in config.json's
+  order, then Settings. The calendar placeholder is gone. It reads `snapshot.plugins`, so enabling
+  or disabling a plugin anywhere shows or hides its icon as soon as the change feed brings the
+  snapshot. On a phone, where the rail is hidden, the sidebar sheet lists the same sections.
+- **The route** is `/w/$workspace/$section`, beside Tasks at `/w/$workspace` and settings at
+  `/w/$workspace/settings`, with `?entry=<id>` for the open entry. A section id is its plugin id,
+  so the URL is `/w/home/counters`. It renders the plugin's view only while the workspace enables
+  the plugin; otherwise, and the moment a disable reaches the snapshot, it lands on Tasks.
+- **`SectionWeb`** is what a section's web half gives the app:
+
+  | Member      | What                                                                 |
+  | ----------- | -------------------------------------------------------------------- |
+  | `label`     | Its name in the rail and the toolbar: "Counters"                     |
+  | `noun`      | One entry, as "New counter" and "Delete counter" name it             |
+  | `Icon`      | The rail's icon                                                      |
+  | `EntryIcon` | One entry's icon, its kind's, in Today's rows and the entry panel    |
+  | `View`      | The section's page: its entries, the open one, and its new-entry row |
+  | `Panel`     | Its part of the entry panel, below the body                          |
+  | `edit`      | Calls its update operation with a new title or body                  |
+  | `remove`    | Calls its delete operation                                           |
+  | `day`       | The day Today and Next 7 days list an entry on                       |
+
+- **The app owns the entry panel's frame**, as it owns the task panel's: the title, the body in
+  the app's markdown editor, the file path, the save state and delete. Every entry has a title
+  and a body (above), and the editor reads mentions from the snapshot and lives in the app, while
+  `@octodo/ui` imports no octodo package ([0017](0017-the-ui-kit-is-a-package-plugins-type-their-own-client.md)).
+  The plugin adds `Panel`, like a kind's: a since counter's resets, each with a way to take it
+  back, and a yearly counter's day. Title and body edits are optimistic, as a task's are; the
+  plugin's own calls (create, reset, a new day) wait for the change feed, which lands within a
+  few hundred milliseconds.
+- **Today and Next 7 days** list `entriesDueBy` rows after the tasks, one group per section,
+  as `list_tasks` appends them: no checkbox, the entry's icon and its day, and a link to its page.
+  The board view lists tasks only. The sidebar's counts of those views include them.
+- An entry's attachments are not shown yet: the files endpoints take task ids only.
+
 ## Consequences
 
 - The tree reader learns sections: it reads `.octodo/<section>/` for each section the workspace

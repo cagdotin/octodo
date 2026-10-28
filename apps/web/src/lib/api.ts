@@ -12,7 +12,7 @@ import type {
 import { createClient } from "@octodo/contract/client";
 import type { PresetId } from "@octodo/contract/presets";
 import { sortStatuses } from "@octodo/contract/rules";
-import type { KindCreate, NewTask } from "@octodo/plugins/web";
+import type { EntryPatch, KindCreate, NewTask, SectionWeb } from "@octodo/plugins/web";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { attachmentName, attachmentPath, type Attachments } from "@/lib/attachments";
@@ -275,3 +275,27 @@ export const taskAttachments = (workspace: string, id: string): Attachments => (
     return saved.path;
   },
 });
+
+/** Changes an entry's title or body through its section plugin's own operation. */
+export const useEditEntry = (ws: string, section: Pick<SectionWeb<never>, "edit">) =>
+  useSnapshotMutation(
+    ws,
+    ({ id, patch }: { id: string; patch: EntryPatch }) => section.edit(ws, id, patch),
+    (snapshot, { id, patch }) => ({
+      ...snapshot,
+      entries: (snapshot.entries ?? []).map((entry) =>
+        entry.id === id ? { ...entry, ...patch } : entry,
+      ),
+    }),
+  );
+
+/** Deletes an entry through its section plugin's own operation. */
+export const useDeleteEntry = (ws: string, section: Pick<SectionWeb<never>, "remove">) =>
+  useSnapshotMutation(
+    ws,
+    (id: string) => section.remove(ws, id),
+    (snapshot, id) => ({
+      ...snapshot,
+      entries: (snapshot.entries ?? []).filter((entry) => entry.id !== id),
+    }),
+  );

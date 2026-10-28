@@ -24,3 +24,4 @@ supersedes the old one and mark the old one's status.
 | [0016](0016-recurring-tasks-complete-in-place.md)                      | Recurring tasks complete in place, through a hook on the move                                            | accepted |
 | [0017](0017-the-ui-kit-is-a-package-plugins-type-their-own-client.md)  | The UI kit is the `@octodo/ui` package, and a plugin's web half types its client from its own operations | accepted |
 | [0018](0018-connect-finds-the-server-through-server-json.md)           | The CLI and stdio MCP find the server through server.json, and embed the engine only when none answers   | accepted |
+| [0019](0019-days-since-counters-share-the-occurrence-log.md)           | Days-since counters share the occurrence log, and completing one closes it                               | accepted |

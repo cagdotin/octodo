@@ -147,9 +147,10 @@ const reserved = (name: string) =>
   name.includes("/") || name.includes("\\") || isHidden(name) || name.endsWith(".md");
 
 /**
- * Throws on a set of plugins that cannot all be installed: two with one id, a key, a file or an
- * operation name that two claim (the plain task included), a file a task folder cannot hold as
- * plugin data, an operation that does not run in a workspace, or a handler missing.
+ * Throws on a set of plugins that cannot all be installed: two with one id, a key or an operation
+ * name that two claim (the plain task included), a file a task folder cannot hold as plugin data,
+ * an operation that does not run in a workspace, or a handler missing. Files are not claimed: a
+ * plugin's file is its data only in tasks of its kind, so two kinds may own one name.
  */
 export const checkPlugins = (plugins: ReadonlyArray<Plugin>): void => {
   const claims = new Map<string, string>();
@@ -168,7 +169,6 @@ export const checkPlugins = (plugins: ReadonlyArray<Plugin>): void => {
     for (const file of shared.files) {
       if (reserved(file) || MARKERS.includes(file.toLowerCase()))
         throw new Error(`The ${shared.id} plugin cannot own ${file}: name a plain file`);
-      claim(`the file ${file}`, shared.id);
     }
     for (const [name, operation] of Object.entries(shared.operations)) {
       if (!("workspace" in operation.input.fields))

@@ -45,9 +45,10 @@ engine's `Workspace`.
   catalog. Its reader is the one every kind extends, and its problems are the `PROBLEMS` table,
   whose rows can carry fixes.
 - `makeRegistry(plugins)` merges the plain task's and the plugins' operations and runs any of them.
-  It and `Workspaces.layer` throw at startup when two claim one kind, key, file or operation name,
+  It and `Workspaces.layer` throw at startup when two claim one kind, key or operation name,
   when a file is not a plain name (a marker, a `.md`, a hidden name or a path), or when an
-  operation lacks a handler or does not run in a workspace.
+  operation lacks a handler or does not run in a workspace. Two plugins may name the same file
+  (amended by OCT-58): a file is claimed per kind, below.
 
 ### In a workspace
 
@@ -93,7 +94,10 @@ engine's `Workspace`.
 - Listing every installed operation, against `EnabledWhen` per MCP session, keeps one tool list
   per process, the same on MCP, the CLI and the skill, and the contract test table simple.
 - Reserving a plugin's files only in its own tasks lets a plain task keep an attachment named
-  `log.jsonl`, and makes a task's kind the one thing that decides what its folder holds.
+  `log.jsonl`, and makes a task's kind the one thing that decides what its folder holds. For the
+  same reason two plugins may own one name: the kind still picks the one reader of the file, and a
+  task whose `type` changes between them keeps the file
+  ([0019](0019-days-since-counters-share-the-occurrence-log.md)).
 
 ## Consequences
 
@@ -104,9 +108,10 @@ engine's `Workspace`.
   `http` paths, and `PluginNotEnabled` is a 409. Clients are typed from `Api`, the catalog alone; a
   plugin's web half calls its own operations through the same client, typed from them
   ([0017](0017-the-ui-kit-is-a-package-plugins-type-their-own-client.md)).
-- Days-since counters and recurring tasks cannot both own `log.jsonl` as two plugins while file
-  claims are global. [0016](0016-recurring-tasks-complete-in-place.md) keeps them two plugins and
-  has OCT-58 make file claims per kind.
+- Days-since counters and recurring tasks both own `log.jsonl` as two plugins
+  ([0016](0016-recurring-tasks-complete-in-place.md),
+  [0019](0019-days-since-counters-share-the-occurrence-log.md)): file claims were global at first,
+  and OCT-58 made them per kind.
 - `createOfKind` and `editOfKind` are the only writes a plugin has (`filesOfKind` reads its files,
   and `complete` is a change the engine writes with a move, [0016](0016-recurring-tasks-complete-in-place.md)). One that needs another (moving
   its file, writing two tasks) adds it to `PluginWorkspace`, not a way around storage.

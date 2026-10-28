@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { recurring } from "../src/recurring/engine.ts";
-import { readLog, withOccurrence, withoutOccurrence } from "../src/recurring/log.ts";
+import { readLog, withOccurrence, withoutOccurrence } from "../src/log.ts";
 import { nextDue, parseRule, type Rule } from "../src/recurring/rule.ts";
 import { recurringShared } from "../src/recurring/shared.ts";
 
@@ -56,9 +56,9 @@ describe("the repeat rule", () => {
 
 describe("the log", () => {
   it("holds each minute once and keeps lines it cannot read", () => {
-    const once = withOccurrence(null, "2026-10-25T09:12:00Z");
+    const once = withOccurrence(null, "2026-10-25T09:12:00Z", "done");
     expect(once).toBe('{"at":"2026-10-25T09:12:00Z","event":"done"}\n');
-    expect(withOccurrence(once, "2026-10-25T09:12:00Z")).toBe(once);
+    expect(withOccurrence(once, "2026-10-25T09:12:00Z", "reset")).toBe(once);
     const messy = `${once}oops\n{"at":"2026-10-20T08:00:30.5Z","event":"done"}`;
     expect(readLog(messy)).toEqual({
       occurrences: ["2026-10-20T08:00:00Z", "2026-10-25T09:12:00Z"],

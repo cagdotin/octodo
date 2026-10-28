@@ -20,7 +20,9 @@ export interface PluginShared {
   readonly problems: Readonly<Record<string, string>>;
   /**
    * A few words for a task line on the command line, from the task's `kind.fields` as they are
-   * encoded: `every 3 days, next 2026-10-31`. Absolute, since a read is cached across midnight.
+   * encoded: `every 3 days, next 2026-10-31`. It runs when the line is printed, so it may count
+   * from now (`12 days since 2026-10-16`); the fields it reads stay absolute, since a read is
+   * cached across midnight.
    */
   readonly label?: (fields: never) => string;
 }

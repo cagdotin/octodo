@@ -71,7 +71,7 @@ export const makeState = (
     const plugins = options.plugins ?? [];
     const storage = yield* makeStorage(root, {
       ...options,
-      owned: plugins.flatMap((plugin) => plugin.shared.files),
+      owned: [...new Set(plugins.flatMap((plugin) => plugin.shared.files))],
     });
     const lock = yield* Semaphore.make(1);
     const scanned = Effect.map(storage.read, (read) => scanWorkspace(id, root, read, plugins));

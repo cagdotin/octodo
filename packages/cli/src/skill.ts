@@ -1,3 +1,36 @@
+import { catalog, CLI_ANNOTATION, type Operation } from "@octodo/contract/catalog";
+import { SchemaAST } from "effect";
+
+const firstSentence = (text: string) => text.split(/(?<=\.)\s/)[0]!;
+
+/** `octo move <id> [<status>]`: the words and the positional arguments of a command. */
+const usage = (operation: Operation) => {
+  if (operation.cli === undefined) return "no command";
+  const positionals = Object.entries(operation.input.fields).flatMap(([key, field]) => {
+    const annotation = SchemaAST.resolve(field.ast)?.[CLI_ANNOTATION] as
+      | { readonly positional?: boolean }
+      | undefined;
+    if (annotation?.positional !== true) return [];
+    return [SchemaAST.isOptional(field.ast) ? `[<${key}>]` : `<${key}>`];
+  });
+  return `\`${["octo", ...operation.cli.command, ...positionals].join(" ")}\``;
+};
+
+const operations = Object.entries(catalog) as Array<[string, Operation]>;
+
+const list = operations
+  .map(
+    ([name, operation]) =>
+      `- \`${name}\`, ${usage(operation)}: ${firstSentence(operation.description)}`,
+  )
+  .join("\n");
+
+const examples = operations.flatMap(([, operation]) => operation.cli?.examples ?? []);
+const width = Math.max(...examples.map((example) => example.command.length));
+const exampleBlock = examples
+  .map((example) => `${example.command.padEnd(width)}  # ${example.description}`)
+  .join("\n");
+
 /** The agent skill `octo skills export` writes, so agents in a project know how to use its tasks. */
 export const SKILL = `---
 name: octodo
@@ -27,20 +60,14 @@ are the source of truth; the octodo app, CLI and MCP server read and write them.
 ## How to act
 
 Change tasks through the \`octodo\` MCP tools or the CLI, not by editing or moving files: they keep
-ids, order and folders consistent. With MCP, call \`get_workspace\` first, then \`list_tasks\`,
-\`get_task\`, \`create_task\`, \`update_task\`, \`move_task\`. Otherwise:
+ids, order and folders consistent. With MCP, call \`get_workspace\` first. Each operation is an MCP
+tool and, where it has one, an \`octo\` command with the same inputs as flags (\`--no-<flag>\`
+clears a value; \`octo <command> --help\` lists them):
+
+${list}
 
 \`\`\`sh
-octo list                          # open tasks in board order, subtasks under their parent
-octo show CT-42                    # one task with its subtasks and body
-octo create "Title" --priority high --tag infra --status todo
-octo create "Buy primer" --parent CT-42   # a subtask
-octo update CT-42 --body "Notes in markdown"
-octo update CT-42 --blocked-by CT-40,CT-41   # waits for both; --blocked-by '' clears
-octo list --ready                  # open tasks that are not blocked
-octo move CT-42 in-progress        # change status
-octo move CT-43 --parent CT-42     # make it a subtask; --no-parent lifts it out
-octo move CT-42 done
+${exampleBlock}
 \`\`\`
 
 If a command warns about a file, run \`octo doctor\`: it lists each problem and what to do about

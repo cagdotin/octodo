@@ -1,19 +1,6 @@
 import { Effect, Option, Schema, SchemaAST } from "effect";
+import { CLI_ANNOTATION, CliField } from "@octodo/contract/catalog";
 import { Argument, CliError, Flag, type Param } from "effect/cli";
-
-/** How a field of an operation's input appears on the command line, beyond its name and type. */
-export const CliField = Schema.Struct({
-  /** An argument taken by position, in field order, instead of a `--flag`. */
-  positional: Schema.optionalKey(Schema.Boolean),
-  /** A one-letter short form: `p` for `-p`. */
-  alias: Schema.optionalKey(Schema.String),
-});
-export type CliField = typeof CliField.Type;
-
-const CLI_ANNOTATION = "octodo/cli";
-
-/** Annotations for a field: `title: Schema.NonEmptyString.annotate(cli({ positional: true }))`. */
-export const cli = (field: CliField) => ({ [CLI_ANNOTATION]: field });
 
 /** What one parsed param holds: none when it was not given. A clear flag holds `null`. */
 type Slot = Option.Option<unknown>;
@@ -158,11 +145,19 @@ const described = <A>(spec: Field, flag: Flag.Flag<A>): Flag.Flag<A> =>
     (self) => (spec.cli.alias === undefined ? self : Flag.withAlias(self, spec.cli.alias)),
   );
 
+/** A list's items come as repeated flags, comma lists or both, which its help says. */
+const asList = (spec: Field): Field => ({
+  ...spec,
+  description: [spec.description, "repeat it or separate with commas"]
+    .filter((part) => part !== undefined)
+    .join("; "),
+});
+
 const flagParam = (spec: Field): SlotParam => {
   const mayBeAbsent = spec.optional || spec.nullable;
   const { kind } = spec;
   if (kind._tag === "list")
-    return described(spec, Flag.String(spec.name)).pipe(
+    return described(asList(spec), Flag.String(spec.name)).pipe(
       Flag.atLeast(0),
       Flag.map((values) =>
         mayBeAbsent && values.length === 0 ? Option.none() : Option.some(values.flatMap(listItems)),
@@ -178,7 +173,7 @@ const flagParam = (spec: Field): SlotParam => {
 const clearParam = (spec: Field): SlotParam =>
   Flag.Boolean(`no-${spec.name}`).pipe(
     Flag.withoutNegation,
-    Flag.withDescription(`Clear --${spec.name}`),
+    Flag.withDescription(spec.cli.clear ?? `Clear --${spec.name}`),
     Flag.withDefault(false),
     Flag.map((clear) => (clear ? Option.some(null) : Option.none())),
   );
@@ -190,7 +185,7 @@ const clearKey = (key: string) => `${key}:clear`;
  * `--no-<name>`), and a decoder from what they parse back through the schema.
  */
 export const schemaFlags = <Fields extends Schema.Struct.Fields>(
-  schema: Schema.Struct<Fields> & Schema.Decoder<Schema.Struct<Fields>["Type"]>,
+  schema: Schema.Struct<Fields>,
 ): SchemaFlags<Schema.Struct<Fields>["Type"]> => {
   const fields = Object.entries(schema.fields).map(([key, member]) => field(key, member.ast));
   const params: Record<string, SlotParam> = {};
@@ -198,7 +193,10 @@ export const schemaFlags = <Fields extends Schema.Struct.Fields>(
     params[spec.key] = spec.cli.positional === true ? positionalParam(spec) : flagParam(spec);
     if (spec.nullable) params[clearKey(spec.key)] = clearParam(spec);
   }
-  const decodeInput = Schema.decodeUnknownEffect(schema);
+  // An operation's input needs no services to decode: it is plain data.
+  const decodeInput = Schema.decodeUnknownEffect(
+    schema as Schema.Struct<Fields> & Schema.Decoder<Schema.Struct<Fields>["Type"]>,
+  );
   const decode = (parsed: Readonly<Record<string, Slot>>) =>
     Effect.gen(function* () {
       const input: Record<string, unknown> = {};

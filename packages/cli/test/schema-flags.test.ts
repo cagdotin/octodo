@@ -4,7 +4,8 @@ import { CliError, Command } from "effect/cli";
 import { ChildProcessSpawner } from "effect/process";
 import { TestConsole } from "effect/testing";
 import { describe, expect, it } from "vitest";
-import { cli, schemaFlags } from "../src/schema-flags.ts";
+import { cli } from "@octodo/contract/catalog";
+import { schemaFlags } from "../src/schema-flags.ts";
 
 const TestLayer = Layer.mergeAll(
   FileSystem.layerNoop({}),

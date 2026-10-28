@@ -74,17 +74,17 @@ instead of keeping the code because it exists.
 
 ## Layout
 
-| Path                | What                                                                                                                       |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `packages/contract` | What every client shares: Effect schemas and errors (`domain.ts`) and `rules.ts`, the plain rules the browser runs too     |
-| `packages/engine`   | Effect v4 domain: storage, scan, markdown round-trip, folder grammar, tasks, lists, statuses, health, `Workspace(s)`       |
-| `packages/mcp`      | MCP toolkit and stdio/HTTP layers on Effect's `McpServer`                                                                  |
-| `packages/server`   | Hono HTTP API at `/api`, MCP at `/mcp`, SSE change feed, serves the built web app; `./client` is the typed Hono RPC client |
-| `packages/cli`      | `octo` CLI on `effect/cli`; run it with `bin/octo`                                                                         |
-| `apps/web`          | Vite + React, TanStack Router/Query, shadcn/ui, XState                                                                     |
-| `apps/desktop`      | Electron shell: starts the server in the main process and opens the web app                                                |
-| `apps/site`         | Static landing page (plain HTML, no build); icons come from `brand/`                                                       |
-| `brand/`            | `glyph.svg` and `build.ts` (`pnpm brand`), which renders every icon, banner and social image                               |
+| Path                | What                                                                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/contract` | What every client shares: Effect schemas and errors (`domain.ts`), the operation catalog (`catalog.ts`) and `rules.ts`, the plain rules the browser runs too |
+| `packages/engine`   | Effect v4 domain: storage, scan, markdown round-trip, folder grammar, tasks, lists, statuses, health, `Workspace(s)`                                         |
+| `packages/mcp`      | MCP tools generated from the operation catalog, and stdio/HTTP layers on Effect's `McpServer`                                                                |
+| `packages/server`   | Hono HTTP API at `/api`, MCP at `/mcp`, SSE change feed, serves the built web app; `./client` is the typed Hono RPC client                                   |
+| `packages/cli`      | `octo` CLI on `effect/cli`, its commands and the bundled agent skill generated from the catalog; run it with `bin/octo`                                      |
+| `apps/web`          | Vite + React, TanStack Router/Query, shadcn/ui, XState                                                                                                       |
+| `apps/desktop`      | Electron shell: starts the server in the main process and opens the web app                                                                                  |
+| `apps/site`         | Static landing page (plain HTML, no build); icons come from `brand/`                                                                                         |
+| `brand/`            | `glyph.svg` and `build.ts` (`pnpm brand`), which renders every icon, banner and social image                                                                 |
 
 Decisions: Hono is the HTTP layer and Effect holds all logic. Use Effect's built-in modules where
 they exist (`effect/ai` McpServer, `effect/cli`, `FileSystem`, `Schema`). Packages depend in one direction,
@@ -92,6 +92,11 @@ they exist (`effect/ai` McpServer, `effect/cli`, `FileSystem`, `Schema`). Packag
 The browser bundle (`apps/web`, the desktop preload) never imports `@octodo/engine` and imports
 only types from `@octodo/contract`; `@octodo/contract/rules` (plain functions, no Effect) is the
 one runtime import it may use. Lint enforces both.
+
+Every operation is one entry in `contract/src/catalog.ts` plus its handler in
+`engine/src/operations.ts`; MCP tools, CLI commands and the skill are generated from it, so never
+write one by hand ([0005](docs/decisions/0005-one-operation-catalog.md)). After changing an entry,
+run `bin/octo skills export` to refresh `.agents/skills/octodo/SKILL.md` (a test compares them).
 
 ## Security
 

@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/domain.ts",
+    "./catalog": "./src/catalog.ts",
     "./rules": "./src/rules.ts"
   },
   "dependencies": {

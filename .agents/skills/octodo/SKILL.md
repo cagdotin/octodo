@@ -26,20 +26,36 @@ are the source of truth; the octodo app, CLI and MCP server read and write them.
 ## How to act
 
 Change tasks through the `octodo` MCP tools or the CLI, not by editing or moving files: they keep
-ids, order and folders consistent. With MCP, call `get_workspace` first, then `list_tasks`,
-`get_task`, `create_task`, `update_task`, `move_task`. Otherwise:
+ids, order and folders consistent. With MCP, call `get_workspace` first. Each operation is an MCP
+tool and, where it has one, an `octo` command with the same inputs as flags (`--no-<flag>`
+clears a value; `octo <command> --help` lists them):
+
+- `list_workspaces`, `octo workspace list`: List the workspaces registered on this machine.
+- `get_workspace`, no command: Describe a workspace: its statuses (in order), lists, task counts and any files it could not read.
+- `list_tasks`, `octo list`: List tasks in board order (by status, then their order), optionally filtered.
+- `get_task`, `octo show <id>`: Read one task, including its markdown body, any extra frontmatter, its parent, its direct subtasks, the tasks it is blocked by and blocks, the tasks it mentions and is mentioned in, and its attachments (read one with read_attachment).
+- `read_attachment`, `octo attachment <id> <path>`: Read one of a task's attachments by its path in the task folder, as get_task lists it.
+- `create_task`, `octo create <title>`: Create a task.
+- `update_task`, `octo update <id>`: Change a task's title, priority, tags, due date (YYYY-MM-DD, null clears it), markdown body or blocked_by (the task ids it waits for, replacing the current ones; [] clears them).
+- `move_task`, `octo move <id> [<status>]`: Move a task to another status, list or parent task (a list or a parent, not both; parent null lifts a subtask into its list).
+- `delete_task`, `octo delete <id>`: Delete a task's file permanently.
+- `create_list`, `octo lists create <name>`: Create a list, last among its siblings.
+- `move_list`, `octo lists move <id>`: Reorder a list among its siblings (before/after another list id) and/or move it under another parent (null for the top level).
+- `list_diagnostics`, no command: List the problems with files in the workspace: each has a path, a kind, the frontmatter field at fault, a message saying what to do, and a fix when octodo can repair it.
+- `fix_diagnostic`, no command: Apply the fix of one diagnostic, given its path, kind and fix action from list_diagnostics.
 
 ```sh
-octo list                          # open tasks in board order, subtasks under their parent
-octo show CT-42                    # one task with its subtasks and body
-octo create "Title" --priority high --tag infra --status todo
-octo create "Buy primer" --parent CT-42   # a subtask
-octo update CT-42 --body "Notes in markdown"
-octo update CT-42 --blocked-by CT-40,CT-41   # waits for both; --blocked-by '' clears
-octo list --ready                  # open tasks that are not blocked
-octo move CT-42 in-progress        # change status
-octo move CT-43 --parent CT-42     # make it a subtask; --no-parent lifts it out
-octo move CT-42 done
+octo list                                                # Open tasks, subtasks under their parent
+octo list --ready                                        # Open tasks that are not blocked
+octo show HM-42                                          # One task
+octo attachment HM-42 images/plan.png --output plan.png  # Save an attachment
+octo create "Book the movers" -p high -t quotes          # A high-priority task
+octo create "Buy primer" --parent HM-12                  # A subtask of HM-12
+octo update HM-4 --body "Notes in markdown"              # A new body
+octo update HM-4 --blocked-by HM-2,HM-3                  # HM-4 waits for both
+octo update HM-4 --blocked-by ''                         # HM-4 waits for nothing
+octo move HM-42 in-progress                              # Change its status
+octo move HM-43 --parent HM-42                           # Make it a subtask; --no-parent lifts it out
 ```
 
 If a command warns about a file, run `octo doctor`: it lists each problem and what to do about

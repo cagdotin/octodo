@@ -71,7 +71,7 @@ Simpler is better unless simpler is wrong.
 
 - Files are the source of truth. Does the change keep frontmatter keys it doesn't manage, including order and comments? Does it write through a temporary sibling and a rename, never in place?
 - Identity is the `id`, never the path. Does anything key on a file path or folder number that a move or a renumber would change?
-- Could a hand edit, a sync tool, or a second writer (app, CLI, MCP) leave the folder in a state this code mishandles?
+- Could another octodo process (app, CLI, MCP) write between this code's read and its write, outside the owner lock? Does a file octodo did not write become a diagnostic, or does the code try to repair or reconcile it?
 - Does the browser bundle import Effect runtime code from `@octodo/core`? Only types and `@octodo/core/layout` are allowed.
 
 ## Security
@@ -79,6 +79,6 @@ Simpler is better unless simpler is wrong.
 For each security finding, trace the input path through the code and show it.
 
 - User input flowing to dangerous sinks (SQL, shell, eval, innerHTML) without sanitization
-- Authentication/authorization gaps in new endpoints. Every `/api` and `/mcp` route needs the token, the Host allowlist, and the cross-origin write check.
+- Anything that exposes the server beyond this computer (a bind off 127.0.0.1, a remote route). It has no authentication by design until OCT-69 (decision 0010).
 - Secrets in code, logs, or error messages
 - TOCTOU (time-of-check-time-of-use) in security-critical paths

@@ -108,7 +108,7 @@ What was actually searched, so the user can judge coverage and redirect:
 
 One or two sentences on overall confidence, e.g.:
 
-> "The core rationale (A) is well-supported by the task body and the commit that closed it. The specific debounce value (150 ms) is inferred from the surrounding context but not documented. Whether it was tuned for iCloud sync could not be answered. No relevant doc content surfaced."
+> "The core rationale (A) is well-supported by the task body and the commit that closed it. The specific debounce value (150 ms) is inferred from the surrounding context but not documented. Whether it was tuned for macOS FSEvents could not be answered. No relevant doc content surfaced."
 
 ---
 

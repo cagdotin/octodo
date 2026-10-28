@@ -58,7 +58,7 @@ Read the leaf skill in full for any principle you apply. Each leaf is `../princi
 - **Type System Discipline.** Designing types or a signature. Make illegal states unrepresentable, brand primitives, parse external data at boundaries.
 - **Make Operations Idempotent.** Commands, lifecycle steps, or loops that run amid crashes and retries. Converge to the same end state. Every file write in this repo is one of these.
 - **Migrate Callers Then Delete Legacy APIs.** A new internal API while old callers exist. Migrate and delete in one wave.
-- **Separate Before Serializing Shared State.** Concurrent actors might write the same file, branch, key, or object. Eliminate the sharing first. The app, the CLI, the MCP server, sync tools, and people all write `.octodo/`.
+- **Separate Before Serializing Shared State.** Concurrent actors might write the same file, branch, key, or object. Eliminate the sharing first. Only octodo's own processes (the app, the CLI, the MCP server) write `.octodo/`, and the owner lock serializes them (decision 0003).
 
 **Verification**
 
@@ -125,7 +125,7 @@ octodo has several surfaces over one set of files. Prove a change on the one its
 - **HTTP API.** `pnpm dev:web` or the server alone, then `curl` `http://127.0.0.1:<port>/api/...`. No credentials: the server has no authentication (decision 0010).
 - **Web app.** `pnpm dev:web`, open the URL it prints, and drive the page with whatever browser tool your harness has. Capture screenshots.
 - **Desktop.** `pnpm dev`, which runs Electron with the server inside.
-- **Files edited by hand or by sync tools.** Write the file directly in the scratch workspace and check that the watcher picks it up.
+- **Files octodo did not write.** Write the file directly in the scratch workspace and check that the watcher notices it and the read reports what is wrong as a diagnostic, without repairing it (decision 0001).
 
 Once a `verify-octodo` skill exists (see **create-verification-skill**), use it instead of this list.
 
@@ -136,7 +136,7 @@ Write the reply clean as you draft it. A cleanup pass after drafting does not re
 - **Short declarative sentences.** One thought per sentence.
 - **No long-dash character anywhere.** Write a file-list bullet as a sentence ("`main.ts` owns persistence and the IPC handlers").
 - **Terse is not an excuse to drop content.** Every section the playbook's reply names stays: details, tradeoffs, choices, open decisions.
-- **Frame impact for the user and the maintainer.** Name who the work is for (someone managing tasks in the app, an agent on the MCP server, a person editing files by hand, the next engineer here) and what changes for them before any implementation detail.
+- **Frame impact for the user and the maintainer.** Name who the work is for (someone managing tasks in the app or the CLI, an agent on the MCP server, the next engineer here) and what changes for them before any implementation detail.
 - **Never fabricate a link, citation, or transcript reference.** Link only artifacts you produced or read this session.
 - **Every claim carries its evidence or its label in the same sentence.** Measured, inferred, or guess. Never hand the user a check you could run.
 
@@ -148,7 +148,7 @@ The code is the documentation. If a reader needs a comment to understand what a 
 
 - Before you write a comment, try to make it unnecessary: a better name, a named type or schema, a smaller function, a structure that makes the invalid case impossible (**principle-model-the-domain**, **principle-type-system-discipline**).
 - Types and schemas are the spec. A public function, service, or schema may get a one-line doc comment, and only when its name and types don't already say what it does.
-- What can stay: the reason for an edge case or a constraint the code cannot show, such as a platform, sync-tool, or library quirk. Keep it to the reason, in one or two lines.
+- What can stay: the reason for an edge case or a constraint the code cannot show, such as a platform or library quirk. Keep it to the reason, in one or two lines.
 - Never narrate the code, leave commented-out code, write changelog comments ("now uses X"), or put phase banners in tests. In a test, the assertion message documents the step.
 - Existing comments came from agents by default, not from a decided style. Don't copy them as a pattern. When you touch code with a comment, ask whether the code can carry it instead.
 - When code changes, delete or fix the comments it made wrong. A stale comment is a bug.

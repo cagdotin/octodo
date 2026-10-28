@@ -9,7 +9,7 @@ export type FrontmatterRead<A> =
   | { readonly _tag: "Read"; readonly value: A }
   | { readonly _tag: "Invalid"; readonly problem: Problem };
 
-const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n?---[ \t]*(?:\r?\n|$)/;
+const FRONTMATTER = /^---\r?\n(?:([\s\S]*?)\r?\n)?---[ \t]*(?:\r?\n|$)/;
 
 export const absent = (value: unknown): boolean =>
   value === undefined || value === null || value === "";

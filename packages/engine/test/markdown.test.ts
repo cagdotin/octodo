@@ -171,6 +171,20 @@ describe("writing task files", () => {
     });
   });
 
+  it("round-trips a title ending in --- with the keys after it", () => {
+    const text = editTaskFile(
+      "---\nid: GA-1\ntitle: Notes ---\ncreated: 2026-10-01T00:00:00.000Z\norder: a0\n---\n\nBody\n",
+      { priority: "high" },
+    );
+    expect(readTask(text)).toMatchObject({
+      title: "Notes ---",
+      priority: "high",
+      created: "2026-10-01T00:00:00.000Z",
+      order: "a0",
+      body: "Body\n",
+    });
+  });
+
   it("adds an id to a hand-written file without touching anything else", () => {
     expect(patchFrontmatter("Just notes\n", { id: assigned("GA-7") })).toBe(
       "---\nid: GA-7\n---\n\nJust notes\n",

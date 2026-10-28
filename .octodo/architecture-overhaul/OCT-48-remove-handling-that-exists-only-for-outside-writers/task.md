@@ -1,7 +1,7 @@
 ---
 id: OCT-48
 title: Remove handling that exists only for outside writers
-status: todo
+status: done
 priority: medium
 tags:
   - core
@@ -28,3 +28,10 @@ Decision `docs/decisions/0001-octodo-is-the-only-writer.md`: octodo's clients ar
 - The inventory and its classification are in the commit message or a short note under `docs/research/`.
 - Tests that pinned deleted behavior are deleted or turned into diagnostic tests; every other test passes unchanged.
 - Same checks as the rest of this list.
+
+## Outcome
+
+- Inventory: `docs/research/2026-10-outside-writer-inventory.md` (16 removed, 15 kept).
+- Removed: `writeFresh`, sync copies of temp names in `isLeftover`, the `conflict-copy` kind and `keep-copy` fix, the ranking of folders with one id, `sameTree`, `conflictCopyOf`, and reading `task.md`/`list.md` through a link (now a `symlink` diagnostic; the folder is not read).
+- Kept: ids in files the scan does not read still count as on disk, so `drop-unknown-links` never drops a link to an unreadable task and a new id never collides with a broken file.
+- Writes at 5,000 tasks got about 50 ms faster (`docs/research/perf-baseline.md`, "After OCT-48").

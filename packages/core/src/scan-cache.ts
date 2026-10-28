@@ -1,5 +1,6 @@
 import { Effect, type FileSystem } from "effect";
 import { basename, dirname, sep } from "node:path";
+import { isHidden } from "./storage/bookkeeping.ts";
 
 /**
  * What scans read from each path, kept between scans until a change at that path, under it or
@@ -26,8 +27,7 @@ export interface ScanCache {
   readonly version: () => number;
 }
 
-/** Dot names (temporary files, the owner lock) are octodo's bookkeeping, which scans never read. */
-export const invisibleToScans = (path: string): boolean => basename(path).startsWith(".");
+export const invisibleToScans = (path: string): boolean => isHidden(basename(path));
 
 export const makeScanCache = (): ScanCache => {
   const byPath = new Map<string, Map<string, unknown>>();

@@ -35,9 +35,7 @@ import {
 import {
   createFolder as createFolderIn,
   freeName as freeNameIn,
-  ignoreBookkeeping,
   isNotFound,
-  removeLeftovers,
   writeFileAtomic,
 } from "./files.ts";
 import {
@@ -68,6 +66,7 @@ import {
 } from "./markdown.ts";
 import { applyFix } from "./fixes.ts";
 import { scanWorkspace, type Scan } from "./scan.ts";
+import { ignoreBookkeeping, isHidden, removeLeftovers } from "./storage/bookkeeping.ts";
 import { createConfig, editConfig, hasConfig } from "./storage/config.ts";
 import {
   OWNER_LOCK_FILE,
@@ -674,7 +673,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       const segments = relativePath.split(/[\\/]/).filter((part) => part !== "" && part !== ".");
       if (path.isAbsolute(relativePath) || segments.length === 0)
         return yield* invalid("Give a path relative to the task folder");
-      if (segments.some((part) => part.startsWith(".")))
+      if (segments.some(isHidden))
         return yield* invalid("Attachment paths cannot leave the task folder or name hidden files");
       if (segments.some((part) => MARKERS.has(part.toLowerCase())))
         return yield* invalid(

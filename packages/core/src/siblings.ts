@@ -6,7 +6,6 @@ import { renumbered, type Container } from "./place.ts";
 import { fileText, type Scan } from "./scan.ts";
 import type { Files } from "./storage/files.ts";
 
-/** The folder that holds a container's tasks and lists. */
 export const containerDir = ({ dirs, tree }: Scan, { list, parent }: Container): string =>
   parent !== null ? dirs.tasks.get(parent)! : list !== null ? dirs.lists.get(list)!.dir : tree.path;
 

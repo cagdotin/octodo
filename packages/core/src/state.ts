@@ -38,7 +38,6 @@ export const storageError =
 
 export const readBack = storageError("Could not read the workspace back after writing it");
 
-/** The next new task id, past every id on disk. */
 export const nextId = (ids: Ids, { nextIdNumber, snapshot }: Scan): AssignedId =>
   ids.next(snapshot.workspace.key, nextIdNumber);
 

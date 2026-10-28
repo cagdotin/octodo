@@ -1,7 +1,6 @@
 /**
  * The desktop app: starts the octodo server (API, MCP endpoint and web app) inside the Electron
- * main process and shows the web app in a window. The same server stays reachable from a browser,
- * so a phone on the tailnet can use it while the app is open.
+ * main process and shows the web app in a window.
  */
 import { defaultHome } from "@octodo/core";
 import { DEFAULT_PORT, startServer, type RunningServer } from "@octodo/server";
@@ -21,14 +20,7 @@ const webDir = () =>
     : fileURLToPath(new URL("../../web/dist", import.meta.url));
 
 const start = async (): Promise<RunningServer> => {
-  const options = {
-    home,
-    host: process.env["OCTODO_HOST"] ?? "127.0.0.1",
-    webDir: webDir(),
-    allowedHosts: (process.env["OCTODO_ALLOW_HOSTS"] ?? "")
-      .split(",")
-      .filter((host) => host.length > 0),
-  };
+  const options = { home, webDir: webDir() };
   try {
     return await startServer({
       ...options,
@@ -132,7 +124,7 @@ const createWindow = async (running: RunningServer) => {
 
   const base = devUrl ?? running.url;
   if (devUrl !== undefined) await waitFor(devUrl);
-  await window.loadURL(`${base}/api/pair?token=${encodeURIComponent(running.token)}&next=/`);
+  await window.loadURL(base);
 };
 
 if (!app.requestSingleInstanceLock()) {

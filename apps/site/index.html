@@ -590,29 +590,6 @@
       }
 
       /* 04 private */
-      .qr {
-        display: grid;
-        grid-template-columns: repeat(25, 1fr);
-        gap: 1.5px;
-        width: 176px;
-        margin: 20px auto 8px;
-      }
-      .qr i {
-        aspect-ratio: 1;
-        border-radius: 1.5px;
-        background: var(--line);
-      }
-      .qr i.on {
-        background: var(--fg);
-      }
-      .qr i.acc {
-        background: var(--accent);
-      }
-      .pair {
-        padding: 6px 16px 18px;
-        text-align: center;
-        color: var(--muted);
-      }
       .spec {
         padding: 6px 16px 10px;
       }
@@ -811,10 +788,7 @@
           <p>octodo is a task manager made of plain markdown files.</p>
           <p>Every task is a file, every status a folder, and all of it is yours.</p>
           <p>You plan; your agents pick up the rest over <a href="#agents">MCP</a>.</p>
-          <p>
-            Reach it from your phone over <a href="#private">Tailscale</a>. Nothing leaves your
-            machine.
-          </p>
+          <p>It runs on <a href="#private">your computer</a>. Nothing leaves your machine.</p>
           <p class="links">
             <a href="#files">how it works</a><span>/</span><a href="#">github</a><span>/</span
             ><a href="#roadmap">roadmap</a>
@@ -877,8 +851,8 @@
           <p class="label"><b>03</b>the app <span class="soon">preview</span></p>
           <h2>A calm planner on top of the files.</h2>
           <p class="lede">
-            For your own life and work, closer to TickTick than to an issue tracker. Desktop,
-            browser and phone, all reading the same folder. Try ticking something off.
+            For your own life and work, closer to TickTick than to an issue tracker. Desktop and
+            browser, both reading the same folder. Try ticking something off.
           </p>
         </div>
         <div class="card">
@@ -919,29 +893,17 @@
       <section id="private">
         <div class="col glass">
           <p class="label"><b>04</b>private</p>
-          <h2>Anywhere you are. Still only yours.</h2>
+          <h2>On your computer. Only yours.</h2>
           <p class="lede">
-            No account and no cloud. Run <code>octo serve</code> on your machine and pair your phone
-            over Tailscale; the server only answers to the token it gave you.
+            No account and no cloud. <code>octo serve</code> answers on this machine only; reaching
+            it from your phone comes later.
           </p>
         </div>
-        <div class="grid2">
-          <div class="card">
-            <div class="card-head">
-              <span>pair a device</span><span class="right">100.64.0.7:4520</span>
-            </div>
-            <div class="qr" id="qr" aria-hidden="true"></div>
-            <div class="pair">scan to open octodo on your phone</div>
-          </div>
-          <div class="card">
-            <div class="card-head"><span>octo serve</span><span class="right">defaults</span></div>
-            <div class="spec">
-              <div><b>bind</b><span>127.0.0.1, unless you say otherwise</span></div>
-              <div><b>auth</b><span>a token on every request, or a paired session</span></div>
-              <div><b>hosts</b><span>an allowlist, so DNS rebinding goes nowhere</span></div>
-              <div><b>origin</b><span>cross-site writes are refused</span></div>
-              <div><b>cloud</b><span>none. no account, no telemetry</span></div>
-            </div>
+        <div class="card">
+          <div class="card-head"><span>octo serve</span><span class="right">defaults</span></div>
+          <div class="spec">
+            <div><b>bind</b><span>127.0.0.1, always</span></div>
+            <div><b>cloud</b><span>none. no account, no telemetry</span></div>
           </div>
         </div>
       </section>
@@ -1562,31 +1524,6 @@
           paint();
         });
         paint();
-      })();
-
-      // 04: a pairing grid in the octopus' tiles (decorative, not a real code)
-      (() => {
-        const n = 25;
-        let seed = 7;
-        const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-        const finder = (x, y, ox, oy) => {
-          const dx = x - ox,
-            dy = y - oy;
-          if (dx < 0 || dy < 0 || dx > 6 || dy > 6) return null;
-          return (
-            dx === 0 || dy === 0 || dx === 6 || dy === 6 || (dx > 1 && dx < 5 && dy > 1 && dy < 5)
-          );
-        };
-        let html = "";
-        for (let y = 0; y < n; y++)
-          for (let x = 0; x < n; x++) {
-            let on = finder(x, y, 0, 0) ?? finder(x, y, n - 7, 0) ?? finder(x, y, 0, n - 7);
-            const near = (x < 8 && y < 8) || (x > n - 9 && y < 8) || (x < 8 && y > n - 9);
-            if (on === null) on = near ? false : r() < 0.48;
-            const acc = on && x > 9 && x < 15 && y > 9 && y < 15 && r() < 0.5;
-            html += `<i class="${acc ? "acc" : on ? "on" : ""}"></i>`;
-          }
-        document.getElementById("qr").innerHTML = html;
       })();
     </script>
   </body>

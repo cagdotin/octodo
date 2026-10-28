@@ -21,36 +21,16 @@ let root: string;
 let files: string;
 let taskFolder: string;
 
-const call = (
-  path: string,
-  init: Omit<RequestInit, "headers"> & {
-    headers?: Record<string, string>;
-    token?: string | null;
-  } = {},
-) => {
-  const { token = server.token, headers, ...rest } = init;
-  return fetch(`${server.url}${path}`, {
-    ...rest,
-    headers: { ...(token === null ? {} : { authorization: `Bearer ${token}` }), ...headers },
-  });
-};
+const call = (path: string, init: RequestInit = {}) => fetch(`${server.url}${path}`, init);
 
 /** A GET with the path sent as is; fetch would resolve `..` segments before sending. */
 const rawGet = (path: string) =>
   new Promise<number>((resolve, reject) => {
     const url = new URL(server.url);
-    request(
-      {
-        host: url.hostname,
-        port: url.port,
-        path,
-        headers: { authorization: `Bearer ${server.token}` },
-      },
-      (res) => {
-        res.resume();
-        resolve(res.statusCode ?? 0);
-      },
-    )
+    request({ host: url.hostname, port: url.port, path }, (res) => {
+      res.resume();
+      resolve(res.statusCode ?? 0);
+    })
       .on("error", reject)
       .end();
   });
@@ -127,13 +107,6 @@ describe("task attachments over HTTP", () => {
     expect(existsSync(join(taskFolder, "newsub"))).toBe(false);
   });
 
-  it("needs the token", async () => {
-    expect((await call(`${files}/images/hall.png`, { token: null })).status).toBe(401);
-    expect((await call(`${files}/x.png`, { method: "PUT", body: PNG, token: null })).status).toBe(
-      401,
-    );
-  });
-
   it("refuses paths that leave the task folder or name the task file", async () => {
     expect(await rawGet(`${files}/../../../config.json`), "resolved away by URL parsing").toBe(404);
     expect(await rawGet(`${files}/images/..%2F..%2Ftask.md`)).toBe(400);
@@ -145,15 +118,5 @@ describe("task attachments over HTTP", () => {
     expect((await call(`${files}/images/none.png`)).status).toBe(404);
     const big = new Uint8Array(20 * 1024 * 1024 + 1);
     expect((await call(`${files}/images/big.png`, { method: "PUT", body: big })).status).toBe(413);
-  });
-
-  it("refuses a cookie-carrying upload from another origin", async () => {
-    const put = await call(`${files}/images/csrf.png`, {
-      method: "PUT",
-      body: PNG,
-      token: null,
-      headers: { cookie: `octodo_session=${server.token}`, origin: "https://evil.example" },
-    });
-    expect(put.status).toBe(403);
   });
 });

@@ -3,16 +3,17 @@
 octodo is personal software for getting things done, shared between you and your agents. It sits
 between the old and the new: the storage is as plain as it gets (folders and markdown files), and
 on top of that sit things that are only now becoming normal: AI agents working on the same list
-as you, a server you reach from your phone over Tailscale, and software that extends itself.
+as you, and software that extends itself.
 
 ## What we believe
 
 - **Files are the source of truth.** A task is a markdown file, a status is a folder, a list is a
   folder of folders. Anything that can read a file can read your tasks, and nothing is lost if
   octodo disappears.
-- **Local and private by default.** Your tasks stay on your machine. The server binds to
-  127.0.0.1, every request needs a token, and reaching it from elsewhere (a phone, over Tailscale)
-  is something you switch on, not a cloud you sign up for. octodo should feel trustworthy.
+- **Local and private by default.** Your tasks stay on your machine. octodo is built on the
+  assumption that it runs locally on one computer: the server binds to 127.0.0.1 and nothing else.
+  Any security layer (authentication, remote access, guards) is added later on top, as its own
+  discovery task, and the core is not shaped around it. Everything in today's code is negotiable.
 - **Humans and agents are equal citizens.** You plan; agents pick up work through MCP or the CLI.
   One brain, many arms. octodo's own clients are the only way to change the files; anything else
   that edits them is outside the contract and shows up as a problem to fix

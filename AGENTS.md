@@ -65,16 +65,16 @@ instead of keeping the code because it exists.
 
 ## Layout
 
-| Path              | What                                                                                                                                   |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/core`   | Effect v4 domain: schemas, markdown round-trip, folder rules, `Workspace` and `Workspaces` services                                    |
-| `packages/mcp`    | MCP toolkit and stdio/HTTP layers on Effect's `McpServer`                                                                              |
-| `packages/server` | Hono HTTP API at `/api`, MCP at `/mcp`, SSE change feed, token auth, serves the built web app; `./client` is the typed Hono RPC client |
-| `packages/cli`    | `octo` CLI on `effect/cli`; run it with `bin/octo`                                                                                     |
-| `apps/web`        | Vite + React, TanStack Router/Query, shadcn/ui, XState                                                                                 |
-| `apps/desktop`    | Electron shell: starts the server in the main process and opens the web app                                                            |
-| `apps/site`       | Static landing page (plain HTML, no build); icons come from `brand/`                                                                   |
-| `brand/`          | `glyph.svg` and `build.ts` (`pnpm brand`), which renders every icon, banner and social image                                           |
+| Path              | What                                                                                                                       |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `packages/core`   | Effect v4 domain: schemas, markdown round-trip, folder rules, `Workspace` and `Workspaces` services                        |
+| `packages/mcp`    | MCP toolkit and stdio/HTTP layers on Effect's `McpServer`                                                                  |
+| `packages/server` | Hono HTTP API at `/api`, MCP at `/mcp`, SSE change feed, serves the built web app; `./client` is the typed Hono RPC client |
+| `packages/cli`    | `octo` CLI on `effect/cli`; run it with `bin/octo`                                                                         |
+| `apps/web`        | Vite + React, TanStack Router/Query, shadcn/ui, XState                                                                     |
+| `apps/desktop`    | Electron shell: starts the server in the main process and opens the web app                                                |
+| `apps/site`       | Static landing page (plain HTML, no build); icons come from `brand/`                                                       |
+| `brand/`          | `glyph.svg` and `build.ts` (`pnpm brand`), which renders every icon, banner and social image                               |
 
 Decisions: Hono is the HTTP layer and Effect holds all logic. Use Effect's built-in modules where
 they exist (`effect/ai` McpServer, `effect/cli`, `FileSystem`, `Schema`). The browser bundle imports
@@ -83,11 +83,12 @@ no Effect) is the one runtime import it may use.
 
 ## Security
 
-The server binds to 127.0.0.1 by default. Every `/api` and `/mcp` request needs the token from
-`<home>/server.json`, as `Authorization: Bearer` or the session cookie that `/api/pair` sets. A Host
-allowlist (loopback, IP addresses, `--allow-host` names) blocks DNS rebinding, and cookie-carrying
-writes from another origin are refused. Keep all three when changing the server: the same server is
-meant to be reachable from a phone over Tailscale.
+octodo is built on the assumption that it runs locally on one computer. The server binds to
+127.0.0.1 and has no authentication or request guards
+([0010](docs/decisions/0010-no-authentication-for-now.md)). Any security layer (authentication,
+remote access, guards) is added later on top, as its own discovery task (OCT-69), and the core must
+not be shaped around it. Anything that would expose the server beyond this computer waits for
+OCT-69.
 
 ## Development
 
@@ -95,7 +96,7 @@ meant to be reachable from a phone over Tailscale.
   keep to erasable syntax (no enums, namespaces or parameter properties) and import with `.ts`
   extensions.
 - `pnpm dev`: Vite on 5520 plus Electron, with the server (127.0.0.1:4520) inside Electron.
-- `pnpm dev:web`: API plus Vite, for the browser; open the pairing URL the API prints.
+- `pnpm dev:web`: API plus Vite, for the browser; open the URL the API prints.
 - `pnpm dev:site`: the landing page on 5530.
 - `pnpm check`: format check, lint, typecheck, tests. Lefthook runs format, lint and typecheck on
   commit and `pnpm check` before push.

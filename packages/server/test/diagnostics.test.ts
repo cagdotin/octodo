@@ -8,13 +8,10 @@ let server: RunningServer;
 let root: string;
 let base: string;
 
-const post = (path: string, body?: unknown, token: string | null = server.token) =>
+const post = (path: string, body?: unknown) =>
   fetch(`${server.url}${base}${path}`, {
     method: "POST",
-    headers: {
-      ...(token === null ? {} : { authorization: `Bearer ${token}` }),
-      "content-type": "application/json",
-    },
+    headers: { "content-type": "application/json" },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 
@@ -31,7 +28,7 @@ beforeAll(async () => {
   server = await startServer({ home: join(scratch, "home"), port: 0 });
   const response = await fetch(`${server.url}/api/workspaces`, {
     method: "POST",
-    headers: { authorization: `Bearer ${server.token}`, "content-type": "application/json" },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({ root }),
   });
   base = `/api/workspaces/${((await response.json()) as { id: string }).id}`;
@@ -76,14 +73,13 @@ describe("fixing diagnostics over HTTP", () => {
     mkdirSync(other);
     const response = await fetch(`${server.url}/api/workspaces`, {
       method: "POST",
-      headers: { authorization: `Bearer ${server.token}`, "content-type": "application/json" },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ root: other, key: "MY_K" }),
     });
     expect(response.status).toBe(400);
   });
 
-  it("refuses a request without the token or with an unknown kind", async () => {
-    expect((await post("/diagnostics/fix-all", undefined, null)).status).toBe(401);
+  it("refuses an unknown kind or a missing action", async () => {
     const bad = await post("/diagnostics/fix", {
       path: ".octodo",
       kind: "everything",

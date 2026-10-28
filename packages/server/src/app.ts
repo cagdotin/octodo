@@ -19,10 +19,8 @@ import { Cause, Effect, Exit, Fiber, Option, Schema, Stream, type ManagedRuntime
 import { Hono, type Context } from "hono";
 import { homedir } from "node:os";
 import { bodyLimit } from "hono/body-limit";
-import { setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import { fileResponse, MAX_ATTACHMENT_BYTES } from "./attachments.ts";
-import { SESSION_COOKIE, pairUrl, requireToken, tokenMatches } from "./auth.ts";
 
 type ApiError = TaskNotFound | WorkspaceNotFound | InvalidRequest | StorageError;
 
@@ -57,26 +55,13 @@ const AddWorkspaceInput = Schema.Struct({
   key: Schema.optionalKey(WorkspaceKey),
 });
 
-const PairInput = Schema.Struct({ token: Schema.String });
-
 export interface AppOptions {
   readonly runtime: ManagedRuntime.ManagedRuntime<Workspaces, never>;
-  readonly token: string;
   /** The address the server listens on, known once it has started. */
   readonly serverUrl: () => string;
-  /** Handles `/mcp`; built separately because it runs on Effect's HTTP router. */
-  readonly mcp?: ((request: Request) => Promise<Response>) | undefined;
 }
 
-const pairCookie = (c: Context, token: string) =>
-  setCookie(c, SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "Strict",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 365,
-  });
-
-export const createApi = ({ runtime, token, serverUrl }: AppOptions) => {
+export const createApi = ({ runtime, serverUrl }: AppOptions) => {
   const failed = (c: Context, cause: Cause.Cause<ApiError>) => {
     const failure = Cause.findErrorOption(cause);
     if (Option.isSome(failure)) {
@@ -104,27 +89,10 @@ export const createApi = ({ runtime, token, serverUrl }: AppOptions) => {
   return (
     new Hono()
       .get("/health", (c) => c.json({ ok: true }))
-      // Pairing: a link carrying the token (desktop window, QR code) or a typed-in token.
-      .get("/pair", (c) => {
-        if (!tokenMatches(token, c.req.query("token")))
-          return c.json({ error: "Wrong token" }, 401);
-        pairCookie(c, token);
-        const next = c.req.query("next") ?? "/";
-        return c.redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/");
-      })
-      .post("/pair", body(PairInput), (c) => {
-        if (!tokenMatches(token, c.req.valid("json").token))
-          return c.json({ error: "Wrong token" }, 401);
-        pairCookie(c, token);
-        return c.json({ ok: true }, 200);
-      })
-      .use(requireToken(token))
-      .get("/session", (c) => c.json({ ok: true }))
-      // What an agent or another device needs to connect. Paired clients already hold the token.
+      // What an agent needs to connect.
       .get("/connection", (c) => {
         const url = serverUrl();
-        c.header("Cache-Control", "no-store");
-        return c.json({ url, mcpUrl: `${url}/mcp`, pairUrl: pairUrl(url, token), token }, 200);
+        return c.json({ url, mcpUrl: `${url}/mcp` }, 200);
       })
       // A folder browser for adding workspaces from a client without a native picker.
       .get("/folders", (c) =>

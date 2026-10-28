@@ -121,8 +121,8 @@ Skills here say what to do, not which tool to call. Map the generic terms to you
 octodo has several surfaces over one set of files. Prove a change on the one its user touches, and check the files as well, because the files are the source of truth.
 
 - **Core, CLI, MCP.** `OCTODO_HOME=<tmp> bin/octo ...` against a scratch workspace folder. Read the resulting `.octodo/` files back, frontmatter included. Never point a verification run at a real project's `.octodo/`.
-- **HTTP API.** `pnpm dev:web` or the server alone, then `curl` with the bearer token from `<home>/server.json`. Keep the token, Host-allowlist, and origin checks on.
-- **Web app.** `pnpm dev:web`, open the pairing URL it prints, and drive the page with whatever browser tool your harness has. Capture screenshots.
+- **HTTP API.** `pnpm dev:web` or the server alone, then `curl` `http://127.0.0.1:<port>/api/...`. No credentials: the server has no authentication (decision 0010).
+- **Web app.** `pnpm dev:web`, open the URL it prints, and drive the page with whatever browser tool your harness has. Capture screenshots.
 - **Desktop.** `pnpm dev`, which runs Electron with the server inside.
 - **Files edited by hand or by sync tools.** Write the file directly in the scratch workspace and check that the watcher picks it up.
 

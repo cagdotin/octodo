@@ -2,7 +2,6 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
 import { RefreshCwIcon, ServerOffIcon } from "lucide-react";
-import { PairingGate } from "@/components/pairing-gate";
 import { SyncProvider } from "@/components/sync-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,16 +14,16 @@ import {
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
 import { WindowDragArea } from "@/components/window-drag-area";
-import { sessionQuery } from "@/lib/api";
+import { healthQuery } from "@/lib/api";
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   component: Root,
 });
 
 function Root() {
-  const session = useQuery(sessionQuery);
+  const health = useQuery(healthQuery);
 
-  if (session.isPending) {
+  if (health.isPending) {
     return (
       <div className="flex h-svh items-center justify-center">
         <WindowDragArea />
@@ -33,7 +32,7 @@ function Root() {
     );
   }
 
-  if (session.isError) {
+  if (health.isError) {
     return (
       <Empty className="h-svh">
         <WindowDragArea />
@@ -47,21 +46,12 @@ function Root() {
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
-          <Button variant="outline" onClick={() => void session.refetch()}>
+          <Button variant="outline" onClick={() => void health.refetch()}>
             <RefreshCwIcon data-icon="inline-start" />
             Retry
           </Button>
         </EmptyContent>
       </Empty>
-    );
-  }
-
-  if (!session.data.paired) {
-    return (
-      <>
-        <WindowDragArea />
-        <PairingGate />
-      </>
     );
   }
 

@@ -28,7 +28,7 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
 
 /**
  * Task folders come from git and sync tools, so a file in one is untrusted. The sandbox keeps an
- * SVG or HTML file opened on its own from running script with the session cookie.
+ * SVG or HTML file opened on its own from running script against the API on the same origin.
  */
 const UNTRUSTED_FILE_HEADERS = {
   "Content-Security-Policy":

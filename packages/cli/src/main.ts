@@ -510,17 +510,7 @@ const listsCommand = Command.make("lists").pipe(
 const serveCommand = Command.make(
   "serve",
   {
-    host: Flag.String("host").pipe(
-      Flag.withDescription(
-        "Interface to bind; 0.0.0.0 or a Tailscale IP to reach it from other devices",
-      ),
-      Flag.withDefault("127.0.0.1"),
-    ),
     port: Flag.Int("port").pipe(Flag.withDefault(DEFAULT_PORT)),
-    allowHost: Flag.String("allow-host").pipe(
-      Flag.withDescription("Extra Host name to accept, e.g. mac.tailnet.ts.net"),
-      Flag.atLeast(0),
-    ),
     webDir: Flag.String("web-dir").pipe(
       Flag.withDescription("Built web app to serve"),
       Flag.optional,
@@ -532,19 +522,14 @@ const serveCommand = Command.make(
       Effect.promise(() =>
         startServer({
           home,
-          host: options.host,
           port: options.port,
-          allowedHosts: options.allowHost,
           webDir: optional(options.webDir) ?? defaultWeb,
         }),
       ),
       (running) => Effect.promise(() => running.close()),
     );
     yield* Console.log(`octodo on ${server.url}`);
-    yield* Console.log(`Open and pair: ${server.pairUrl}`);
-    yield* Console.log(
-      `MCP: ${server.mcpUrl} (Authorization: Bearer <token from ${home}/server.json>)`,
-    );
+    yield* Console.log(`MCP: ${server.mcpUrl}`);
     return yield* Effect.never;
   }, Effect.scoped),
 ).pipe(Command.withDescription("Serve the web app, API and MCP endpoint"));

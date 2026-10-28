@@ -10,7 +10,7 @@ Every serious project needs a scripted way to drive the real app and prove behav
 
 ## In this repo
 
-The skill to build is `verify-octodo`. The surfaces are the CLI (`bin/octo`), the HTTP API (token from `<home>/server.json`), the web app (`pnpm dev:web` plus its pairing URL), the desktop app (`pnpm dev`), the MCP server, and the files themselves, which people and sync tools edit by hand. Isolation comes from `OCTODO_HOME=<tmp>` and a scratch workspace folder. Every drive reads the resulting `.octodo/` files back as proof. The starting list is in **Verify on the real surface** in `../octo-mode/SKILL.md`. Once the skill exists, replace that section with a pointer to it.
+The skill to build is `verify-octodo`. The surfaces are the CLI (`bin/octo`), the HTTP API (`curl` on 127.0.0.1, no credentials), the web app (`pnpm dev:web` and the URL it prints), the desktop app (`pnpm dev`), the MCP server, and the files themselves, which people and sync tools edit by hand. Isolation comes from `OCTODO_HOME=<tmp>` and a scratch workspace folder. Every drive reads the resulting `.octodo/` files back as proof. The starting list is in **Verify on the real surface** in `../octo-mode/SKILL.md`. Once the skill exists, replace that section with a pointer to it.
 
 ## 1. Interview the repo, not the user
 

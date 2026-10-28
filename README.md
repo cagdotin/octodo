@@ -63,13 +63,8 @@ Over stdio, for agents that launch it themselves (Claude Code shown):
 claude mcp add octodo -- /path/to/octodo/bin/octo mcp
 ```
 
-Over HTTP while the app or `octo serve` runs: `http://127.0.0.1:4520/mcp` with
-`Authorization: Bearer <token>`, where the token is in `~/.config/octodo/server.json`.
-
-### From your phone
-
-`octo serve --host <tailscale-ip>` (add `--allow-host <name>.ts.net` to use the MagicDNS name).
-Open the URL on the phone and paste the token once, or open the pairing link.
+Over HTTP while the app or `octo serve` runs: `http://127.0.0.1:4520/mcp`. The server answers on
+this computer only and needs no credentials.
 
 ## Develop
 

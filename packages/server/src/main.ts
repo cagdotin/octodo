@@ -10,7 +10,7 @@ const server = await startServer({
 
 const devUrl = process.env["OCTODO_WEB_URL"] ?? "http://localhost:5520";
 console.log(`octodo API on ${server.url}`);
-console.log(`Open ${devUrl}/api/pair?token=${encodeURIComponent(server.token)}&next=/`);
+console.log(`Open ${devUrl}`);
 
 const shutdown = () => void server.close().then(() => process.exit(0));
 process.once("SIGINT", shutdown);

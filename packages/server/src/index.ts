@@ -10,36 +10,29 @@ import { existsSync, readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { join, relative } from "node:path";
 import { createApi } from "./app.ts";
-import { hostGuard, loadToken, pairUrl, tokenMatches } from "./auth.ts";
 
 export type { Api } from "./app.ts";
 
 export interface ServerOptions {
-  /** Where workspaces.json and server.json live. */
+  /** Where workspaces.json lives. */
   readonly home: string;
-  readonly host?: string | undefined;
   readonly port?: number | undefined;
   /** Built web app to serve at `/`. Without it only the API and MCP endpoints are served. */
   readonly webDir?: string | undefined;
-  /** Extra Host names to accept besides loopback and IP addresses, e.g. a Tailscale name. */
-  readonly allowedHosts?: ReadonlyArray<string> | undefined;
 }
 
 export interface RunningServer {
   readonly url: string;
-  readonly token: string;
-  /** Opens the app and signs the browser in. */
-  readonly pairUrl: string;
   readonly mcpUrl: string;
   readonly close: () => Promise<void>;
 }
 
 export const DEFAULT_PORT = 4520;
 
-export const startServer = async (options: ServerOptions): Promise<RunningServer> => {
-  const host = options.host ?? "127.0.0.1";
-  const token = loadToken(options.home);
+/** The only address the server listens on: octodo has no authentication (decision 0010). */
+const LOOPBACK = "127.0.0.1";
 
+export const startServer = async (options: ServerOptions): Promise<RunningServer> => {
   // One memo map so the API runtime and the MCP handler share the same Workspaces instance,
   // and therefore the same caches, locks and file watchers.
   const memoMap = Layer.makeMemoMapUnsafe();
@@ -56,17 +49,8 @@ export const startServer = async (options: ServerOptions): Promise<RunningServer
   );
 
   let url = "";
-  const api = createApi({ runtime, token, serverUrl: () => url });
-  const app = new Hono()
-    .use(hostGuard(options.allowedHosts ?? []))
-    .route("/api", api)
-    .use("/mcp", async (c, next) => {
-      const header = c.req.header("authorization");
-      if (!tokenMatches(token, header?.startsWith("Bearer ") ? header.slice(7) : undefined))
-        return c.json({ error: "MCP over HTTP needs Authorization: Bearer <token>" }, 401);
-      return next();
-    })
-    .all("/mcp", (c) => mcp.handler(c.req.raw));
+  const api = createApi({ runtime, serverUrl: () => url });
+  const app = new Hono().route("/api", api).all("/mcp", (c) => mcp.handler(c.req.raw));
 
   const webDir = options.webDir;
   if (webDir !== undefined && existsSync(join(webDir, "index.html"))) {
@@ -77,17 +61,15 @@ export const startServer = async (options: ServerOptions): Promise<RunningServer
 
   const server = await new Promise<ReturnType<typeof serve>>((resolve) => {
     const instance = serve(
-      { fetch: app.fetch, hostname: host, port: options.port ?? DEFAULT_PORT },
+      { fetch: app.fetch, hostname: LOOPBACK, port: options.port ?? DEFAULT_PORT },
       () => resolve(instance),
     );
   });
   const { port } = server.address() as AddressInfo;
-  url = `http://${host.includes(":") ? `[${host}]` : host}:${port}`;
+  url = `http://${LOOPBACK}:${port}`;
 
   return {
     url,
-    token,
-    pairUrl: pairUrl(url, token),
     mcpUrl: `${url}/mcp`,
     close: async () => {
       // Open event streams never end on their own, so close every connection instead of waiting.

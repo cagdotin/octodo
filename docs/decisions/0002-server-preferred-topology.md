@@ -25,8 +25,7 @@ in-process SDK, t3code's offline CLI writes.
 ## Consequences
 
 - Each client has two paths, so a contract test runs every operation both ways.
-- `server.json` gains `url`, `pid` and `version`. `/api/health` answers without a token and reports
-  the version and capability flags.
-- An always-on server for the phone (a launchd service) is not decided. It is a discovery task in
-  the Architecture overhaul list. No native mobile app is planned. The phone uses the web app over
-  Tailscale.
+- `<home>/server.json` holds `url`, `pid` and `version`. `/api/health` reports the version and
+  capability flags.
+- The server answers on this computer only ([0010](0010-no-authentication-for-now.md)). Reaching it
+  from a phone, and an always-on server for that, wait for OCT-69. No native mobile app is planned.

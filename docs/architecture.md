@@ -23,7 +23,7 @@ Because several processes can write one workspace, every new id is claimed throu
 
 ```mermaid
 flowchart LR
-  web[Web app and phone browser] -->|HTTP + SSE| srv
+  web[Web app] -->|HTTP + SSE| srv
   desk[Desktop window] -->|HTTP + SSE| srv
   cli[octo CLI] -->|server.json found| srv
   mcp[MCP stdio] -->|server.json found| srv
@@ -48,7 +48,7 @@ flowchart LR
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/core`   | Effect domain: schemas, markdown round-trip, folder rules, `Workspace` and `Workspaces`. `@octodo/core/layout` is plain functions the browser also imports. |
 | `packages/mcp`    | MCP tools on Effect's `McpServer`, stdio and HTTP layers                                                                                                    |
-| `packages/server` | Hono HTTP API, MCP mount, SSE change feed, token auth, static web app; `./client` is the typed Hono RPC client                                              |
+| `packages/server` | Hono HTTP API, MCP mount, SSE change feed, static web app on 127.0.0.1; `./client` is the typed Hono RPC client                                             |
 | `packages/cli`    | `octo` on `effect/cli`                                                                                                                                      |
 | `apps/web`        | Vite and React; imports types from core plus `@octodo/core/layout`                                                                                          |
 | `apps/desktop`    | Electron shell                                                                                                                                              |

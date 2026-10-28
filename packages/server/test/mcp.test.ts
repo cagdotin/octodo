@@ -12,7 +12,6 @@ const rpc = (method: string, params: unknown) =>
   fetch(`${server.url}/mcp`, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${server.token}`,
       "content-type": "application/json",
       accept: "application/json, text/event-stream",
       ...(session === undefined ? {} : { "mcp-session-id": session }),
@@ -51,7 +50,7 @@ beforeAll(async () => {
   server = await startServer({ home: join(scratch, "home"), port: 0 });
   await fetch(`${server.url}/api/workspaces`, {
     method: "POST",
-    headers: { authorization: `Bearer ${server.token}`, "content-type": "application/json" },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({ root }),
   });
   const initialized = await rpc("initialize", {

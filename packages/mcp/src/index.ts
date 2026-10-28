@@ -386,16 +386,7 @@ export const stdioLayer = (options: { readonly defaultDir?: string | undefined }
   );
 
 /** Streamable HTTP MCP endpoint registered on an `HttpRouter`. Requires `Workspaces`. */
-export const httpLayer = (options: {
-  readonly path: `/${string}`;
-  readonly allowedOrigins?: ReadonlyArray<string>;
-}) =>
+export const httpLayer = (options: { readonly path: `/${string}` }) =>
   registerTools({}).pipe(
-    Layer.provide(
-      McpServer.layerHttp({
-        ...serverOptions,
-        path: options.path,
-        ...(options.allowedOrigins === undefined ? {} : { allowedOrigins: options.allowedOrigins }),
-      }),
-    ),
+    Layer.provide(McpServer.layerHttp({ ...serverOptions, path: options.path })),
   );

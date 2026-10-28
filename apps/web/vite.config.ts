@@ -9,7 +9,6 @@ const api = `http://127.0.0.1:${process.env["OCTODO_API_PORT"] ?? "4520"}`;
 
 const proxy: ProxyOptions = {
   target: api,
-  changeOrigin: false,
   configure: (server) => {
     server.on("proxyRes", (res, _req, out) => {
       if (!String(res.headers["content-type"]).startsWith("text/event-stream")) return;
@@ -35,7 +34,6 @@ export default defineConfig({
   server: {
     port: 5520,
     strictPort: true,
-    // Same-origin in dev: the server refuses cookie writes whose Origin differs from Host.
     proxy: {
       "/api": proxy,
       "/mcp": proxy,

@@ -41,20 +41,16 @@ export const unwrap = async <R extends AnyResponse>(request: Promise<R>): Promis
 };
 
 export const keys = {
-  session: ["session"] as const,
+  health: ["health"] as const,
   workspaces: ["workspaces"] as const,
   snapshot: (ws: string) => ["workspace", ws] as const,
   connection: ["connection"] as const,
 };
 
-export const sessionQuery = queryOptions({
-  queryKey: keys.session,
-  queryFn: async () => {
-    const res = await api.session.$get();
-    if (res.status === 401) return { paired: false as const };
-    if (!res.ok) throw new ApiError(`Server responded ${res.status}`, res.status);
-    return { paired: true as const };
-  },
+/** Whether the server answers at all; the app shows nothing else until it does. */
+export const healthQuery = queryOptions({
+  queryKey: keys.health,
+  queryFn: () => unwrap(api.health.$get()),
   retry: 1,
   staleTime: Infinity,
 });
@@ -73,7 +69,7 @@ export const foldersQuery = (path: string | undefined) =>
     staleTime: 10_000,
   });
 
-/** The server's MCP endpoint, pairing link and token, for connecting agents and devices. */
+/** The server's MCP endpoint, for connecting agents. */
 export const connectionQuery = queryOptions({
   queryKey: keys.connection,
   queryFn: () => unwrap(api.connection.$get()),
@@ -87,14 +83,6 @@ export const snapshotQuery = (ws: string) =>
   });
 
 const onError = (error: Error) => toast.error(error.message);
-
-export const usePair = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (token: string) => unwrap(api.pair.$post({ json: { token } })),
-    onSuccess: () => queryClient.invalidateQueries(),
-  });
-};
 
 export const useAddWorkspace = () => {
   const queryClient = useQueryClient();

@@ -12,23 +12,20 @@ devices.
 
 ## Decision
 
-Remove authentication: the token, the pairing link, the session cookie and remote hosts. The server
-binds to loopback only and cannot be bound elsewhere.
-
-Keep two checks, because they guard against web pages in the user's own browser, not against other
-people, and they cost a few lines with no UI:
-
-- **Host check.** A request whose `Host` is not a loopback name (`localhost`, `127.0.0.1`, `[::1]`)
-  is refused. Without it, a page can rebind its own domain to 127.0.0.1 and read every task.
-- **Cross-origin writes.** A non-GET request whose `Origin` is not the server's own origin is
-  refused. Without it, any page can send a form post that changes or deletes tasks.
+Remove all of it: the token, the pairing link, the session cookie, remote hosts, and the request
+guards (the Host check and the refusal of cross-origin writes). The server binds to loopback only
+and cannot be bound elsewhere. Security is designed as one piece later, in OCT-69, from what remote
+access actually needs.
 
 ## Consequences
 
 - Clients need nothing but the URL. `server.json` stays as the discovery file
   ([0002](0002-server-preferred-topology.md)) without a token.
-- Attachment download and every other route need no credentials, so an attachment that a browser
-  could run as a page is still served sandboxed ([0006](0006-effect-httpapi-replaces-hono.md)): it
-  is same-origin with the API.
-- Reaching octodo from a phone or another machine is not possible until access is redesigned.
-  OCT-69 holds that work, with executor's daemon as the reference implementation.
+- Known and accepted: a web page open in the same browser can send requests to the local server.
+  Without a Host check, a page that rebinds its domain to 127.0.0.1 can read tasks; without an
+  origin check, a page can post a form that changes them. OCT-69 starts from this.
+- Attachments that a browser could run as a page are still served sandboxed
+  ([0006](0006-effect-httpapi-replaces-hono.md)). That is a response header, not a guard, and it
+  keeps an uploaded HTML file from running as the app.
+- Reaching octodo from a phone or another machine is not possible until access is redesigned in
+  OCT-69, with executor's daemon as the reference implementation.

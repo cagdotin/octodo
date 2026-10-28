@@ -133,16 +133,28 @@ const onOrAfter = (rule: Weekdays | MonthDay, from: Day): Day => {
 };
 
 /**
- * When the task is due next. An interval counts from the day it was last done; a calendar rule
- * names the first matching day after it. A task never done is due on the day it started (or the
- * first matching day from then), and null without that day.
+ * The due day after a calendar rule's task, due on `due`, was done on `done`. Done in the due's
+ * own period, early or late, it is due on the first matching day after both; done in an earlier
+ * period (logged history), the due stays.
  */
-export const nextDue = (rule: Rule, last: Day | null, start: Day | null): Day | null => {
-  if (last === null) {
-    if (start === null) return null;
-    return rule.kind === "interval" ? start : onOrAfter(rule, start);
-  }
-  return rule.kind === "interval" ? after(rule, last) : onOrAfter(rule, addDays(last, 1));
+const dueAfter = (rule: Weekdays | MonthDay, due: Day | null, done: Day): Day => {
+  if (due !== null && onOrAfter(rule, done) < due) return due;
+  return onOrAfter(rule, addDays(due !== null && due > done ? due : done, 1));
+};
+
+/**
+ * When the task is due next, from the days it was done, oldest first. An interval counts from the
+ * day it was last done; a calendar rule moves past the due each time was done for. A task never
+ * done is due on the day it started (or the first matching day from then), and null without that
+ * day.
+ */
+export const nextDue = (rule: Rule, done: ReadonlyArray<Day>, start: Day | null): Day | null => {
+  const last = done.at(-1);
+  if (rule.kind === "interval") return last === undefined ? start : after(rule, last);
+  return done.reduce<Day | null>(
+    (due, day) => dueAfter(rule, due, day),
+    start === null ? null : onOrAfter(rule, start),
+  );
 };
 
 /** The day a recurring task is due on: its `next`, past days included until it is done. */

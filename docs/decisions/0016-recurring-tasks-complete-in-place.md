@@ -27,8 +27,14 @@ it is built on. Three questions were left open:
 - The rule grammar is small: `daily` (and `weekly`, `monthly`, `yearly`), `every [N] day|week|month|year[s]`,
   `every monday[, thursday | and thursday]` (full or three-letter names), and
   `monthly on the 1st` / `every month on the 1st` (a short month uses its last day). An interval
-  counts from the day it was last done; a calendar rule names the first matching day after it. A
-  task never done is due on the day it was created (or the first matching day from then).
+  counts from the day it was last done. A task never done is due on the day it was created (or the
+  first matching day from then).
+- A calendar rule moves past its current due each time it is done for it: the next due is the
+  first matching day after both the due and the day it was done. Done early (Thursday, for a
+  Monday chore) skips to the Monday after; done late, to the first Monday after that day. A time
+  in an earlier period than the due (history logged with `log_occurrence`, or a second completion
+  for a due already moved on) leaves the due where it is. `next` is computed from the whole log,
+  oldest first.
 - `kind.fields` holds `repeat`, `next` (a `YYYY-MM-DD` day, null when the rule cannot be read),
   `last`, `count` and `recent` (the latest ten, newest first). All are absolute: the scan is
   cached until a file changes, so a relative "in 2 days" would go stale across midnight. Clients
@@ -45,7 +51,8 @@ it is built on. Three questions were left open:
   in the first unstarted status instead, in the same write under the owner lock. A move into
   `canceled` or `archived` closes it as usual: that ends the series.
 - `log_occurrence` records an occurrence now or at a given past time without touching the status,
-  for "I did it yesterday". `remove_occurrence` takes one back. `list_occurrences` lists them all
+  for "I did it yesterday". A day alone means its midday here, or now when that midday is still to
+  come today, so "I did it today" works in the morning too. `remove_occurrence` takes one back. `list_occurrences` lists them all
   ([0011](0011-attachments-are-one-operation-plugin-files-are-private.md) promised it).
   `create_recurring` and `set_repeat` refuse a rule the grammar does not read.
 - `move_task`'s description says what a recurring task does, so an agent knows why the task it
@@ -84,6 +91,11 @@ it is built on. Three questions were left open:
   engine applies it with the move, under one lock, and the plugin never sees a `Files`.
 - Minute-precision occurrences make the completion idempotent from the data, not from a guess
   about how close two clicks are.
+- A calendar rule advances past its due, not past the day it was done. Counting from the day it was
+  done (the first version) left a Monday chore done on Thursday due on that same Monday again: the
+  person did it and it stayed due. Someone who takes the bins out early did this week's bins, so the
+  next one is next week's. A completion in an earlier period does not count toward the due, so
+  logging past history or ticking it twice cannot push the due weeks ahead.
 - The date slot is where a row already shows time, and every planned kind (recurring, days-since,
   anniversary) has one date-like thing to show, so the seam is one component, not a second row
   layout.

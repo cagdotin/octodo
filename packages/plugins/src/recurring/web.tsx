@@ -124,7 +124,7 @@ const preview = (repeat: string) => {
   if (repeat.trim() === "") return { error: null, first: null };
   const parsed = parseRule(repeat);
   if ("error" in parsed) return { error: parsed.error, first: null };
-  const first = nextDue(parsed.rule, null, localDay(new Date().toISOString()));
+  const first = nextDue(parsed.rule, [], localDay(new Date().toISOString()));
   return { error: null, first: dueInfo(first)?.label ?? null };
 };
 

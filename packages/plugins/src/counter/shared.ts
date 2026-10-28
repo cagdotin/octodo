@@ -90,7 +90,8 @@ export const counterShared = {
         workspace,
         id,
         at: Schema.optionalKey(DueDate).annotate({
-          description: "When it happened: YYYY-MM-DD (midday) or YYYY-MM-DDTHH:mm; now if omitted",
+          description:
+            "When it happened: YYYY-MM-DD (its midday, or now when that is still to come today) or YYYY-MM-DDTHH:mm; now if omitted",
         }),
       }),
       success: Task,

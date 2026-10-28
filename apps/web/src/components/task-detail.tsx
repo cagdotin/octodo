@@ -52,8 +52,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { useDeleteTask, useMoveTask, useUpdateTask } from "@/lib/api";
-import { taskAttachments } from "@/lib/attachments";
+import { taskAttachments, useDeleteTask, useMoveTask, useUpdateTask } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { dueInfo, formatTimestamp, listLabel, PRIORITIES } from "@/lib/tasks";
 import { changes, editorMachine } from "@/machines/editor";

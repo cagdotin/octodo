@@ -5,10 +5,12 @@
   "type": "module",
   "exports": {
     ".": "./src/domain.ts",
+    "./api": "./src/api.ts",
     "./catalog": "./src/catalog.ts",
+    "./client": "./src/client.ts",
     "./rules": "./src/rules.ts"
   },
   "dependencies": {
-    "effect": "^4.0.6"
+    "effect": "4.0.6"
   }
 }

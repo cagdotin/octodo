@@ -105,6 +105,27 @@
       }
     },
     {
+      "files": ["packages/contract/src/client.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["node:*", "@octodo/engine", "@octodo/engine/*"],
+                "message": "client.ts runs in the browser: no Node modules and no engine (decision 0004)."
+              },
+              {
+                "group": ["effect", "effect/*", "./api.ts", "./catalog.ts", "./domain.ts"],
+                "allowTypeImports": true,
+                "message": "client.ts is the browser's fetch client: it imports the API definition and Effect as types only (decision 0006)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["apps/web/src/**", "apps/desktop/src/preload.ts"],
       "rules": {
         "no-restricted-imports": [
@@ -114,13 +135,28 @@
               {
                 "name": "@octodo/contract",
                 "allowTypeImports": true,
-                "message": "@octodo/contract is Effect Schema code: import only its types here, and values from @octodo/contract/rules."
+                "message": "@octodo/contract is Effect Schema code: import only its types here, values from @octodo/contract/rules and the server client from @octodo/contract/client."
+              },
+              {
+                "name": "@octodo/contract/api",
+                "allowTypeImports": true,
+                "message": "The API definition is Effect code: import only its types here, and call the server through @octodo/contract/client (decision 0006)."
+              },
+              {
+                "name": "@octodo/contract/catalog",
+                "allowTypeImports": true,
+                "message": "The catalog is Effect Schema code: import only its types here (decision 0005)."
               }
             ],
             "patterns": [
               {
                 "group": ["@octodo/engine", "@octodo/engine/*"],
                 "message": "The browser bundle may not hold engine code; talk to the server, and import rules from @octodo/contract/rules (decision 0004)."
+              },
+              {
+                "group": ["effect", "effect/*"],
+                "allowTypeImports": true,
+                "message": "The browser bundle holds no Effect runtime (decision 0006); import Effect types only."
               }
             ]
           }

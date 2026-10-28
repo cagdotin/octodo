@@ -9,6 +9,6 @@
   "dependencies": {
     "@octodo/contract": "workspace:*",
     "@octodo/engine": "workspace:*",
-    "effect": "^4.0.6"
+    "effect": "4.0.6"
   }
 }

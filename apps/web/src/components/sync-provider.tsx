@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useMachine } from "@xstate/react";
 import { createContext, useContext, type ReactNode } from "react";
-import { keys } from "@/lib/api";
+import { api, keys } from "@/lib/api";
 import { syncMachine, type SyncStatus } from "@/machines/sync";
 
 interface SyncState {
@@ -18,7 +18,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [snapshot, send] = useMachine(syncMachine, {
     input: {
-      url: "/api/events",
+      url: api.url("GET /api/events", {}),
       onChange: (workspace) => {
         if (workspace === null) void queryClient.invalidateQueries();
         else void queryClient.invalidateQueries({ queryKey: keys.snapshot(workspace) });

@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { attachmentName, attachmentUrl, imageMarkdown } from "./attachments.ts";
-
-const BASE = "/api/workspaces/hm/tasks/HM-1/files";
+import { attachmentName, attachmentPath, imageMarkdown } from "./attachments.ts";
 
 describe("attachments", () => {
   it("loads paths in the task folder through the server", () => {
-    expect(attachmentUrl(BASE, "images/plan.png")).toBe(`${BASE}/images/plan.png`);
-    expect(attachmentUrl(BASE, "./images/plan.png")).toBe(`${BASE}/images/plan.png`);
+    expect(attachmentPath("images/plan.png")).toBe("images/plan.png");
+    expect(attachmentPath("./images/plan.png")).toBe("images/plan.png");
+    expect(attachmentPath("images/floor%20plan.png")).toBe("images/floor plan.png");
   });
 
   it("leaves everything outside the task folder as source, web images included", () => {
@@ -17,6 +16,7 @@ describe("attachments", () => {
       "../task.md",
       "images/../../x",
       "images/%2e%2e/%2E%2E/x",
+      "images%2F..%2F..%2Fx",
       "/api/workspaces",
       "\\\\host\\share",
       "javascript:alert(1)",
@@ -24,7 +24,7 @@ describe("attachments", () => {
       ".hidden.png",
       "",
     ]) {
-      expect({ src, url: attachmentUrl(BASE, src) }).toEqual({ src, url: null });
+      expect({ src, path: attachmentPath(src) }).toEqual({ src, path: null });
     }
   });
 

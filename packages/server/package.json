@@ -4,20 +4,16 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./client": "./src/client.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "dev": "node --watch-path=src --watch-path=../contract/src --watch-path=../engine/src --watch-path=../mcp/src src/main.ts"
   },
   "dependencies": {
-    "@effect/platform-node": "^4.0.6",
-    "@hono/node-server": "^2.1.5",
-    "@hono/standard-validator": "^0.4.0",
+    "@effect/platform-node": "4.0.6",
     "@octodo/contract": "workspace:*",
     "@octodo/engine": "workspace:*",
     "@octodo/mcp": "workspace:*",
-    "effect": "^4.0.6",
-    "hono": "^4.13.14"
+    "effect": "4.0.6"
   }
 }

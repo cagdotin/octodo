@@ -5,6 +5,7 @@ import {
   readFileSync,
   readdirSync,
   symlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { request } from "node:http";
 import { tmpdir } from "node:os";
@@ -22,6 +23,9 @@ let files: string;
 let taskFolder: string;
 
 const call = (path: string, init: RequestInit = {}) => fetch(`${server.url}${path}`, init);
+
+/** The URL of an attachment: its path in the task folder is one percent-encoded segment. */
+const file = (path: string) => `${files}/${encodeURIComponent(path)}`;
 
 /** A GET with the path sent as is; fetch would resolve `..` segments before sending. */
 const rawGet = (path: string) =>
@@ -62,11 +66,11 @@ afterAll(() => server.close());
 
 describe("task attachments over HTTP", () => {
   it("saves an upload in the task folder and serves it back as an image", async () => {
-    const put = await call(`${files}/images/hall.png`, { method: "PUT", body: PNG });
+    const put = await call(file("images/hall.png"), { method: "PUT", body: PNG });
     expect(await put.json()).toEqual({ path: "images/hall.png" });
     expect(new Uint8Array(readFileSync(join(taskFolder, "images", "hall.png")))).toEqual(PNG);
 
-    const get = await call(`${files}/images/hall.png`);
+    const get = await call(file("images/hall.png"));
     expect(get.status).toBe(200);
     expect(get.headers.get("content-type")).toBe("image/png");
     expect(get.headers.get("content-security-policy")).toContain("sandbox");
@@ -74,19 +78,19 @@ describe("task attachments over HTTP", () => {
   });
 
   it("gives a second upload with the same name a free one", async () => {
-    const put = await call(`${files}/images/twice.png`, { method: "PUT", body: PNG });
-    const again = await call(`${files}/images/twice.png`, { method: "PUT", body: PNG });
+    const put = await call(file("images/twice.png"), { method: "PUT", body: PNG });
+    const again = await call(file("images/twice.png"), { method: "PUT", body: PNG });
     expect(await put.json()).toEqual({ path: "images/twice.png" });
     expect(await again.json()).toEqual({ path: "images/twice-2.png" });
     expect(readdirSync(join(taskFolder, "images"))).toContain("twice-2.png");
   });
 
   it("serves and saves files at the top of the task folder", async () => {
-    const put = await call(`${files}/notes.txt`, { method: "PUT", body: "one" });
-    const again = await call(`${files}/notes.txt`, { method: "PUT", body: "two" });
+    const put = await call(file("notes.txt"), { method: "PUT", body: "one" });
+    const again = await call(file("notes.txt"), { method: "PUT", body: "two" });
     expect(await put.json()).toEqual({ path: "notes.txt" });
     expect(await again.json()).toEqual({ path: "notes-2.txt" });
-    const get = await call(`${files}/notes.txt`);
+    const get = await call(file("notes.txt"));
     expect(get.status).toBe(200);
     expect(await get.text()).toBe("one");
   });
@@ -94,14 +98,14 @@ describe("task attachments over HTTP", () => {
   it("refuses a symlinked folder that points out of the task folder", async () => {
     const outside = mkdtempSync(join(tmpdir(), "octodo-outside-"));
     symlinkSync(outside, join(taskFolder, "linked"));
-    expect((await call(`${files}/linked/x.png`, { method: "PUT", body: PNG })).status).toBe(400);
+    expect((await call(file("linked/x.png"), { method: "PUT", body: PNG })).status).toBe(400);
     expect(readdirSync(outside)).toEqual([]);
-    expect((await call(`${files}/linked/x.png`)).status).toBe(400);
+    expect((await call(file("linked/x.png"))).status).toBe(400);
   });
 
   it("refuses an upload that would make a subtask", async () => {
     for (const path of ["newsub/task.md", "TASK.MD"]) {
-      const put = await call(`${files}/${path}`, { method: "PUT", body: "---\ntitle: x\n---\n" });
+      const put = await call(file(path), { method: "PUT", body: "---\ntitle: x\n---\n" });
       expect({ path, status: put.status }).toEqual({ path, status: 400 });
     }
     expect(existsSync(join(taskFolder, "newsub"))).toBe(false);
@@ -109,14 +113,50 @@ describe("task attachments over HTTP", () => {
 
   it("refuses paths that leave the task folder or name the task file", async () => {
     expect(await rawGet(`${files}/../../../config.json`), "resolved away by URL parsing").toBe(404);
-    expect(await rawGet(`${files}/images/..%2F..%2Ftask.md`)).toBe(400);
-    expect((await call(`${files}/task.md`)).status).toBe(400);
-    expect((await call(`${files}/.hidden`, { method: "PUT", body: PNG })).status).toBe(400);
+    expect(await rawGet(`${files}/images%2F..%2F..%2Ftask.md`)).toBe(400);
+    expect((await call(file("task.md"))).status).toBe(400);
+    expect((await call(file(".hidden"), { method: "PUT", body: PNG })).status).toBe(400);
+  });
+
+  it("serves a file a browser would open as a page as a sandboxed download", async () => {
+    for (const [path, body] of [
+      ["page.html", "<script>parent.alert(1)</script>"],
+      ["drawing.svg", "<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>"],
+    ] as const) {
+      expect((await call(file(path), { method: "PUT", body })).status).toBe(200);
+      const get = await call(file(path));
+      expect({ path, status: get.status }).toEqual({ path, status: 200 });
+      expect(get.headers.get("content-security-policy")).toContain("sandbox");
+      expect(get.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(get.headers.get("content-type")).not.toMatch(/^text\/html/);
+    }
+    const svg = await call(file("drawing.svg"));
+    expect(svg.headers.get("content-type")).toBe("image/svg+xml");
+    expect(svg.headers.get("content-disposition"), "an SVG opened alone is downloaded").toBe(
+      "attachment; filename*=UTF-8''drawing.svg",
+    );
+  });
+
+  it("answers a range of an attachment with its bytes", async () => {
+    const get = await call(file("images/hall.png"), { headers: { range: "bytes=1-3" } });
+    expect(get.status).toBe(206);
+    expect(get.headers.get("content-range")).toBe(`bytes 1-3/${PNG.length}`);
+    expect(new Uint8Array(await get.arrayBuffer())).toEqual(PNG.slice(1, 4));
+  });
+
+  it("serves only what the task lists as attachments, not a file reached through a link", async () => {
+    mkdirSync(join(taskFolder, "notes"));
+    writeFileSync(join(taskFolder, "notes", "a.txt"), "a");
+    symlinkSync(join(taskFolder, "notes"), join(taskFolder, "inside"));
+    expect((await call(file("notes/a.txt"))).status).toBe(200);
+    const linked = await call(file("inside/a.txt"));
+    expect(linked.status).toBe(404);
+    expect(await linked.json()).toMatchObject({ _tag: "AttachmentNotFound", path: "inside/a.txt" });
   });
 
   it("answers 404 for a missing file and refuses an upload over the size cap", async () => {
-    expect((await call(`${files}/images/none.png`)).status).toBe(404);
+    expect((await call(file("images/none.png"))).status).toBe(404);
     const big = new Uint8Array(20 * 1024 * 1024 + 1);
-    expect((await call(`${files}/images/big.png`, { method: "PUT", body: big })).status).toBe(413);
+    expect((await call(file("images/big.png"), { method: "PUT", body: big })).status).toBe(413);
   });
 });

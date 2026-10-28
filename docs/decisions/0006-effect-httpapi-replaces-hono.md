@@ -56,3 +56,36 @@ is no auth middleware and no pairing endpoint.
   the same path.
 - The typed `fetch` client builds URLs for these routes and does not parse their bodies. The web
   app passes the URL to `<img src>`.
+
+## As built (OCT-53)
+
+- The definition lives in `@octodo/contract/api` (`Api`, prefixed `/api`), so the server, the
+  client types and later a Node client (OCT-54) share it. Its endpoints are listed in
+  [0015](0015-http-endpoints-outside-the-catalog.md). OpenAPI is served at `/api/openapi.json`.
+- Errors carry `httpApiStatus` in `domain.ts`: `WorkspaceNotFound`, `TaskNotFound` and
+  `AttachmentNotFound` 404, `InvalidRequest` 400, `AttachmentTooLarge` 413, `StorageError` 500.
+  `wireError(error)` is the codec of the body: the error's encoded fields plus `message`, which a
+  tagged error has only as a getter. A request that fails its schema is an `InvalidRequest`
+  through the `Validation` middleware, and an `/api` path no endpoint has is a JSON 404
+  `{ _tag: "RouteNotFound", message }`, never the web app.
+- MCP tool errors are the same `{ _tag, ...fields, message }` body as HTTP (OCT-52 left the MCP
+  shape open): one shape on every surface, so an agent reading a tool error branches on `_tag`
+  exactly as an HTTP client does.
+- The client is `@octodo/contract/client`: `createClient(base)` gives `request(key, input)` and
+  `url(key, input)`, where `key` is `"METHOD /api/path"` and `input` is `{ params, query, payload }`
+  typed from `typeof Api`. A query `null` is the string `"null"` and an array repeats its key, as
+  the server's codec reads them. It imports only types from Effect and `api.ts`, and lint enforces
+  that for it and for `apps/web`. Built, it is 0.8 KB gzipped; the web bundle has no Effect
+  runtime, and its gzipped JavaScript went from 431 KB to 430 KB.
+- Upload is `PUT .../files/:path` with any content type (a raw handler: the body is the file
+  whatever it says it is). The 20 MB limit is checked on `Content-Length` and while reading, and
+  answers 413 `AttachmentTooLarge`.
+- Download asks the engine for the attachment (`Workspace.attachment`, which looks the path up in
+  the task's listing, so a file reached through a symlink is not served) and then
+  `HttpStaticServer` serves it from disk, with the headers above. Range requests get 206.
+- The change feed sends a `ping` event on open and every 25 seconds, so headers are flushed at once
+  and idle connections stay up; changes are `change` events with `{ workspace }`.
+- The web app is served by `HttpStaticServer` with SPA fallback: a path that is not a file gets
+  `index.html` when the browser asks for HTML and the path has no extension; a missing asset is a 404.
+- `startServer` closes every open connection on shutdown, since an event stream never ends on its
+  own.

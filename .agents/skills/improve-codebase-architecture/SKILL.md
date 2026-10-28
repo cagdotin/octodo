@@ -29,7 +29,7 @@ Read the domain records for the area first. Then walk the code yourself, the way
 - Where were pure functions extracted for testability while the real bugs hide in how they're called (no **locality**)?
 - Where do tightly coupled modules leak across their seams?
 - Which parts are untested, or hard to test through their current interface?
-- In this repo specifically: logic in a Hono route, a CLI command, an MCP tool or a React hook that belongs behind an `@octodo/engine` service or in `@octodo/contract/rules`; folder and frontmatter rules decided in more than one place; types that the server and web app keep in sync by hand.
+- In this repo specifically: logic in an HTTP handler, a CLI command, an MCP tool or a React hook that belongs behind an `@octodo/engine` service or in `@octodo/contract/rules`; folder and frontmatter rules decided in more than one place; types that the server and web app keep in sync by hand.
 
 Apply the **deletion test** to anything you suspect is shallow. Would deleting it concentrate complexity, or just move it? "Concentrates" is the signal you want. Screen each candidate against `../architect/references/design-red-flags.md`.
 

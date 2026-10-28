@@ -12,11 +12,6 @@ const proxy: ProxyOptions = {
   configure: (server) => {
     server.on("proxyRes", (res, _req, out) => {
       if (!String(res.headers["content-type"]).startsWith("text/event-stream")) return;
-      // Node only sends headers with the first body chunk, so an idle SSE stream would never
-      // "open" in the browser. Flush them as soon as the proxy has copied them over.
-      process.nextTick(() => {
-        if ("flushHeaders" in out) out.flushHeaders();
-      });
       // If the API goes away, drop the browser's stream too so EventSource notices and the sync
       // machine can reconnect; otherwise the proxy keeps it open forever.
       res.once("close", () => {

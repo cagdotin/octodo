@@ -9,36 +9,14 @@ import type {
   UpdateTaskInput,
   WorkspaceSnapshot,
 } from "@octodo/contract";
+import { createClient } from "@octodo/contract/client";
 import { sortStatuses } from "@octodo/contract/rules";
-import { createClient } from "@octodo/server/client";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { attachmentName, attachmentPath, type Attachments } from "@/lib/attachments";
 import { applyListMove, applyMove, withBlockedBy, withoutSubtree } from "@/lib/tasks";
 
 export const api = createClient(typeof window === "undefined" ? "" : window.location.origin);
-
-export class ApiError extends Error {
-  readonly status: number;
-  constructor(message: string, status: number) {
-    super(message);
-    this.status = status;
-  }
-}
-
-type AnyResponse = { ok: boolean; status: number; json(): Promise<unknown> };
-type OkBody<R> = R extends { ok: true; json(): Promise<infer T> } ? T : never;
-
-/** Resolves a Hono client call to its success body, or throws an `ApiError` with the server's message. */
-export const unwrap = async <R extends AnyResponse>(request: Promise<R>): Promise<OkBody<R>> => {
-  const res = await request;
-  if (res.ok) return (await res.json()) as OkBody<R>;
-  const body: unknown = await res.json().catch(() => null);
-  const message =
-    typeof body === "object" && body !== null && "error" in body && typeof body.error === "string"
-      ? body.error
-      : `Request failed (${res.status})`;
-  throw new ApiError(message, res.status);
-};
 
 export const keys = {
   health: ["health"] as const,
@@ -50,21 +28,21 @@ export const keys = {
 /** Whether the server answers at all; the app shows nothing else until it does. */
 export const healthQuery = queryOptions({
   queryKey: keys.health,
-  queryFn: () => unwrap(api.health.$get()),
+  queryFn: () => api.request("GET /api/health", {}),
   retry: 1,
   staleTime: Infinity,
 });
 
 export const workspacesQuery = queryOptions({
   queryKey: keys.workspaces,
-  queryFn: () => unwrap(api.workspaces.$get()),
+  queryFn: () => api.request("GET /api/workspaces", {}),
 });
 
 /** Folders on the server's machine, for choosing a workspace folder; no path means home. */
 export const foldersQuery = (path: string | undefined) =>
   queryOptions({
     queryKey: ["folders", path ?? ""] as const,
-    queryFn: () => unwrap(api.folders.$get({ query: path === undefined ? {} : { path } })),
+    queryFn: () => api.request("GET /api/folders", { query: path === undefined ? {} : { path } }),
     retry: false,
     staleTime: 10_000,
   });
@@ -72,14 +50,14 @@ export const foldersQuery = (path: string | undefined) =>
 /** The server's MCP endpoint, for connecting agents. */
 export const connectionQuery = queryOptions({
   queryKey: keys.connection,
-  queryFn: () => unwrap(api.connection.$get()),
+  queryFn: () => api.request("GET /api/connection", {}),
   staleTime: Infinity,
 });
 
 export const snapshotQuery = (ws: string) =>
   queryOptions({
     queryKey: keys.snapshot(ws),
-    queryFn: () => unwrap(api.workspaces[":ws"].$get({ param: { ws } })),
+    queryFn: () => api.request("GET /api/workspaces/:workspace", { params: { workspace: ws } }),
   });
 
 const onError = (error: Error) => toast.error(error.message);
@@ -88,7 +66,7 @@ export const useAddWorkspace = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { root: string; name?: string; key?: string }) =>
-      unwrap(api.workspaces.$post({ json: input })),
+      api.request("POST /api/workspaces", { payload: input }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.workspaces }),
   });
 };
@@ -96,7 +74,8 @@ export const useAddWorkspace = () => {
 export const useRemoveWorkspace = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (ws: string) => unwrap(api.workspaces[":ws"].$delete({ param: { ws } })),
+    mutationFn: (ws: string) =>
+      api.request("DELETE /api/workspaces/:workspace", { params: { workspace: ws } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.workspaces }),
     onError,
   });
@@ -142,14 +121,20 @@ const mapTask = (
 
 export const useCreateTask = (ws: string) =>
   useSnapshotMutation(ws, (input: CreateTaskInput) =>
-    unwrap(api.workspaces[":ws"].tasks.$post({ param: { ws }, json: input })),
+    api.request("POST /api/workspaces/:workspace/tasks", {
+      params: { workspace: ws },
+      payload: input,
+    }),
   );
 
 export const useUpdateTask = (ws: string) =>
   useSnapshotMutation(
     ws,
     ({ id, patch }: { id: string; patch: UpdateTaskInput }) =>
-      unwrap(api.workspaces[":ws"].tasks[":id"].$patch({ param: { ws, id }, json: patch })),
+      api.request("PATCH /api/workspaces/:workspace/tasks/:id", {
+        params: { workspace: ws, id },
+        payload: patch,
+      }),
     (snapshot, { id, patch: { blocked_by, ...fields } }) => {
       const edited = mapTask(snapshot, id, (task) => ({ ...task, ...fields }));
       return blocked_by === undefined ? edited : withBlockedBy(edited, id, blocked_by);
@@ -160,27 +145,39 @@ export const useMoveTask = (ws: string) =>
   useSnapshotMutation(
     ws,
     ({ id, move }: { id: string; move: MoveTaskInput }) =>
-      unwrap(api.workspaces[":ws"].tasks[":id"].move.$post({ param: { ws, id }, json: move })),
+      api.request("POST /api/workspaces/:workspace/tasks/:id/move", {
+        params: { workspace: ws, id },
+        payload: move,
+      }),
     (snapshot, { id, move }) => applyMove(snapshot, id, move),
   );
 
 export const useDeleteTask = (ws: string) =>
   useSnapshotMutation(
     ws,
-    (id: string) => unwrap(api.workspaces[":ws"].tasks[":id"].$delete({ param: { ws, id } })),
+    (id: string) =>
+      api.request("DELETE /api/workspaces/:workspace/tasks/:id", {
+        params: { workspace: ws, id },
+      }),
     (snapshot, id) => ({ ...snapshot, tasks: withoutSubtree(snapshot.tasks, id) }),
   );
 
 export const useCreateList = (ws: string) =>
   useSnapshotMutation(ws, (input: CreateListInput) =>
-    unwrap(api.workspaces[":ws"].lists.$post({ param: { ws }, json: input })),
+    api.request("POST /api/workspaces/:workspace/lists", {
+      params: { workspace: ws },
+      payload: input,
+    }),
   );
 
 export const useMoveList = (ws: string) =>
   useSnapshotMutation(
     ws,
     ({ id, move }: { id: string; move: MoveListInput }) =>
-      unwrap(api.workspaces[":ws"].lists.move.$post({ param: { ws }, json: { id, ...move } })),
+      api.request("POST /api/workspaces/:workspace/lists/move", {
+        params: { workspace: ws },
+        payload: { id, ...move },
+      }),
     (snapshot, { id, move }) => applyListMove(snapshot, id, move),
   );
 
@@ -193,14 +190,19 @@ const reportFixes = (result: FixResult) => {
 
 export const useFixDiagnostic = (ws: string) =>
   useSnapshotMutation(ws, (request: FixRequest) =>
-    unwrap(api.workspaces[":ws"].diagnostics.fix.$post({ param: { ws }, json: request })).then(
-      reportFixes,
-    ),
+    api
+      .request("POST /api/workspaces/:workspace/diagnostics/fix", {
+        params: { workspace: ws },
+        payload: request,
+      })
+      .then(reportFixes),
   );
 
 export const useFixAllDiagnostics = (ws: string) =>
   useSnapshotMutation(ws, () =>
-    unwrap(api.workspaces[":ws"].diagnostics["fix-all"].$post({ param: { ws } })).then(reportFixes),
+    api
+      .request("POST /api/workspaces/:workspace/diagnostics/fix-all", { params: { workspace: ws } })
+      .then(reportFixes),
   );
 
 /** Saves the order of every status; the server keeps categories in their fixed order. */
@@ -208,7 +210,10 @@ export const useReorderStatuses = (ws: string) =>
   useSnapshotMutation(
     ws,
     (order: ReadonlyArray<string>) =>
-      unwrap(api.workspaces[":ws"].statuses.order.$put({ param: { ws }, json: { order } })),
+      api.request("PUT /api/workspaces/:workspace/statuses/order", {
+        params: { workspace: ws },
+        payload: { order },
+      }),
     (snapshot, order) => ({
       ...snapshot,
       statuses: sortStatuses(
@@ -216,3 +221,22 @@ export const useReorderStatuses = (ws: string) =>
       ),
     }),
   );
+
+/** A task's files for the body editor: images load from the server, uploads go under `images/`. */
+export const taskAttachments = (workspace: string, id: string): Attachments => ({
+  url: (src) => {
+    const path = attachmentPath(src);
+    return path === null
+      ? null
+      : api.url("GET /api/workspaces/:workspace/tasks/:id/files/:path", {
+          params: { workspace, id, path },
+        });
+  },
+  upload: async (file) => {
+    const saved = await api.request("PUT /api/workspaces/:workspace/tasks/:id/files/:path", {
+      params: { workspace, id, path: `images/${attachmentName(file)}` },
+      payload: file,
+    });
+    return saved.path;
+  },
+});

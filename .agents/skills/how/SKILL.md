@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Explore the codebase to answer "how does X work?" questions. Produce architectural explanations at the level of a senior engineer onboarding onto a subsystem, enough to build a working mental model, not so much that it reads like annotated source code.
 
-Start from `AGENTS.md`, which describes the on-disk model and the package layout. The usual flow runs from `packages/contract` (schemas in `domain.ts`, the rules the browser shares in `rules.ts`) through `packages/engine` (the folder grammar in `layout.ts`, the markdown round-trip in `frontmatter.ts` and `tasks/task-file.ts`, the `Workspace` and `Workspaces` services) out to the adapters: `packages/server` (Hono), `packages/mcp`, `packages/cli`, and `apps/web` and `apps/desktop`.
+Start from `AGENTS.md`, which describes the on-disk model and the package layout. The usual flow runs from `packages/contract` (schemas in `domain.ts`, the rules the browser shares in `rules.ts`) through `packages/engine` (the folder grammar in `layout.ts`, the markdown round-trip in `frontmatter.ts` and `tasks/task-file.ts`, the `Workspace` and `Workspaces` services) out to the adapters: `packages/server` (Effect HttpApi, from `packages/contract/src/api.ts`), `packages/mcp`, `packages/cli`, and `apps/web` and `apps/desktop`.
 
 ## 1. Assess complexity
 

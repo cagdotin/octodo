@@ -55,20 +55,25 @@ and generates its API, CLI flags and JSON Schema from that declaration, with a t
   makes the commands, from `schema-flags.ts` (the flat-schema-to-flags generator), and
   `render.ts` holds the text each command prints without `--json`. `packages/cli/src/skill.ts`
   lists every operation with its command and its description's first sentence, and the examples.
+  `operationsGroup(entries)` in `packages/contract/src/api.ts` makes an HttpApi endpoint of each
+  entry, typed from the entry, and `packages/server/src/operations.ts` implements them all in one
+  loop over `runOperation`, with the `workspace` path parameter naming a registered workspace.
 - CLI-only flags stay out of the catalog: `--workspace`, `--json` (on a command with a text
   renderer) and `--output` (on a file operation).
 - Tests: `packages/cli/test/surfaces.test.ts` runs a table of calls covering every operation on the
-  engine, over MCP and through the CLI, each on its own scratch workspace, and asserts they give
+  engine, over MCP, over HTTP and through the CLI, each on its own scratch workspace, and asserts they give
   the same result, file or error. `packages/cli/test/catalog.test.ts` checks the HTTP paths and
   that `.agents/skills/octodo/SKILL.md` is what `octo skills export` writes.
 
 ## What the catalog holds today
 
-The operations MCP and the CLI share, plus `read_attachment`. The HTTP routes are still hand-written
-in Hono until OCT-53 generates them from the catalog. Operations that today exist only over HTTP
-(the snapshot, reordering statuses, fix-all, adding and removing a workspace) and the CLI commands
-that are not operations (`init`, `workspace remove`, `doctor`, `serve`, `mcp`, `skills export`)
-are decided there: each one that becomes a catalog entry also becomes an MCP tool.
+The operations MCP, the CLI and HTTP share, plus `read_attachment`. `operationsGroup` in
+`@octodo/contract/api` generates one HttpApi endpoint per entry (OCT-53), and
+`packages/cli/test/surfaces.test.ts` runs every call over HTTP too. The HTTP endpoints that are not
+operations, and the four of them (adding and removing a workspace, reordering statuses, fix-all)
+that are to become catalog entries, are listed in [0015](0015-http-endpoints-outside-the-catalog.md).
+The CLI commands that are not operations (`init`, `workspace remove`, `doctor`, `serve`, `mcp`,
+`skills export`) stay CLI only.
 
 ## Consequences
 

@@ -19,3 +19,4 @@ supersedes the old one and mark the old one's status.
 | [0011](0011-attachments-are-one-operation-plugin-files-are-private.md) | Attachments are read through one operation, and plugin files only through their plugin | accepted |
 | [0012](0012-only-storage-touches-the-disk.md)                          | Only storage touches the disk, and writes go through `Files`                           | accepted |
 | [0013](0013-every-surface-gives-the-operations-result.md)              | Every surface gives an operation's own result                                          | accepted |
+| [0015](0015-http-endpoints-outside-the-catalog.md)                     | HTTP endpoints outside the catalog                                                     | accepted |

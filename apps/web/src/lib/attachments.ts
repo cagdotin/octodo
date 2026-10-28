@@ -19,14 +19,18 @@ const decoded = (segment: string) => {
 };
 
 /**
- * Images load only from the task folder, through the server. Anything that could resolve elsewhere
- * (`/`, `..`, `%2e%2e`, a web or other URL) stays source.
+ * The path in the task folder an image's `src` names, decoded: `images/a%20b.png` is
+ * `images/a b.png`. Anything that could resolve elsewhere (`/`, `..`, `%2e%2e`, a web or other
+ * URL) is null, and stays source.
  */
-export const attachmentUrl = (base: string, src: string): string | null => {
+export const attachmentPath = (src: string): string | null => {
   if (src === "" || SCHEME.test(src) || /^[/\\]/.test(src)) return null;
-  const segments = src.replace(/^\.\//, "").split(/[/\\]/);
-  if (segments.some((segment) => segment === "" || decoded(segment).startsWith("."))) return null;
-  return `${base}/${segments.join("/")}`;
+  const segments = src
+    .replace(/^\.\//, "")
+    .split(/[/\\]/)
+    .flatMap((segment) => decoded(segment).split(/[/\\]/));
+  if (segments.some((segment) => segment === "" || segment.startsWith("."))) return null;
+  return segments.join("/");
 };
 
 const EXTENSIONS: Readonly<Record<string, string>> = {
@@ -49,30 +53,3 @@ export const attachmentName = (file: Pick<File, "name" | "type">): string => {
 
 /** The markdown that shows an attachment saved at `path` in the body. */
 export const imageMarkdown = (path: string) => `![](${/[\s()<>]/.test(path) ? `<${path}>` : path})`;
-
-export const taskAttachments = (workspace: string, task: string): Attachments => {
-  const base = `/api/workspaces/${encodeURIComponent(workspace)}/tasks/${encodeURIComponent(task)}/files`;
-  return {
-    url: (src) => attachmentUrl(base, src),
-    upload: async (file) => {
-      const res = await fetch(`${base}/images/${encodeURIComponent(attachmentName(file))}`, {
-        method: "PUT",
-        body: file,
-        credentials: "include",
-        headers: { "content-type": file.type || "application/octet-stream" },
-      });
-      const body: unknown = await res.json().catch(() => null);
-      if (res.ok && typeof body === "object" && body !== null && "path" in body) {
-        if (typeof body.path === "string") return body.path;
-      }
-      const message =
-        typeof body === "object" &&
-        body !== null &&
-        "error" in body &&
-        typeof body.error === "string"
-          ? body.error
-          : `Upload failed (${res.status})`;
-      throw new Error(message);
-    },
-  };
-};

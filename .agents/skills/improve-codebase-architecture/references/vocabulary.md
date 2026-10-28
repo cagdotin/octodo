@@ -30,7 +30,7 @@ When assessing a candidate, classify each dependency. The category decides how t
 
 1. **In-process.** Pure computation and in-memory state, no I/O. Always deepenable: merge the modules and test through the new interface directly. No adapter.
 2. **Local-substitutable.** Dependencies with a local stand-in. Here that is mostly the file system: a scratch directory, or Effect's `FileSystem` with a test layer. Test the deepened module against the stand-in. The seam stays internal.
-3. **Remote but owned.** Our own code across a process or network hop: the web app talking to the server over the Hono client, the SSE change feed, MCP clients, Electron's main and renderer processes. Put a port at the seam. The deep module owns the logic and the transport is an injected adapter: HTTP in production, in-memory in tests.
+3. **Remote but owned.** Our own code across a process or network hop: the web app talking to the server over the typed fetch client, the SSE change feed, MCP clients, Electron's main and renderer processes. Put a port at the seam. The deep module owns the logic and the transport is an injected adapter: HTTP in production, in-memory in tests.
 4. **Truly external.** Things we don't control: the OS file watcher, Electron and browser APIs. The deepened module takes them as an injected port, and tests supply a fake.
 
 ## Testing: replace, don't layer

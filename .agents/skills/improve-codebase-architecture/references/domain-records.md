@@ -40,4 +40,4 @@ Offer a record only when all three hold:
 2. **Surprising without context.** A future reader would wonder why it was done this way.
 3. **A real trade-off.** There were genuine alternatives, and one was picked for specific reasons.
 
-Good examples: the architectural shape, integration between packages, technology with lock-in, scope decisions (the explicit no's count), deliberate departures from the obvious path, constraints the code doesn't show, and rejected alternatives whose rejection isn't obvious. Small decisions that already fit in `AGENTS.md` (such as "Hono is the HTTP layer and Effect holds all logic") can stay there.
+Good examples: the architectural shape, integration between packages, technology with lock-in, scope decisions (the explicit no's count), deliberate departures from the obvious path, constraints the code doesn't show, and rejected alternatives whose rejection isn't obvious. Small decisions that already fit in `AGENTS.md` (such as "Effect holds all logic") can stay there.

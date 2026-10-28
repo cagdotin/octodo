@@ -16,7 +16,7 @@ These come from `AGENTS.md` and the toolchain. Break one and the code doesn't ru
 - **Erasable syntax only.** Node runs the TypeScript sources directly. No `enum`, no `namespace`, no parameter properties. Use `as const` arrays plus `Schema.Literals`, as `STATUS_CATEGORIES` (`packages/contract/src/rules.ts`) and `StatusCategory` (`domain.ts`) do.
 - **Import with the `.ts` extension.** `import { TASK_FILE } from "./layout.ts"`.
 - **The browser bundle imports only types from `@octodo/contract`**, plus `@octodo/contract/rules`, which is plain functions with no Effect, and never `@octodo/engine`. Lint fails anything else, since a value import from `domain.ts` pulls the Effect runtime into the web app.
-- **Effect holds the logic, Hono stays thin.** Route handlers parse, call a service, and map the result. Domain rules live in `packages/engine`, and the ones the browser shares in `packages/contract/src/rules.ts`.
+- **Effect holds the logic, the HTTP layer stays thin.** HttpApi handlers call a service or `runOperation` and return its result; the API definition decodes the request. Domain rules live in `packages/engine`, and the ones the browser shares in `packages/contract/src/rules.ts`.
 - **Use Effect's built-in modules where they exist**: `Schema`, `FileSystem`, `Path`, `effect/cli`, the `effect/ai` MCP server.
 
 ## Rules

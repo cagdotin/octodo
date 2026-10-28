@@ -1,5 +1,12 @@
 import { NodeServices } from "@effect/platform-node";
-import { catalog, inOneWorkspace, type OperationName } from "@octodo/contract/catalog";
+import {
+  catalog,
+  FileSuccess,
+  inOneWorkspace,
+  pathParams,
+  type OperationName,
+} from "@octodo/contract/catalog";
+import { ApiError, createClient, type JsonRouteKey, type RouteKey } from "@octodo/contract/client";
 import { runOperation, Workspaces, type OperationInput } from "@octodo/engine";
 import { startServer, type RunningServer } from "@octodo/server";
 import { Effect, Layer, Schema } from "effect";
@@ -220,11 +227,53 @@ const mcpSurface = async (): Promise<Surface> => {
       if (result === undefined)
         return { error: error!.message.replace(`Invalid parameters for tool '${name}': `, "") };
       const [block] = result["content"] as Array<Record<string, string>>;
-      if (result["isError"] === true) return { error: JSON.parse(block!["text"]!).error };
+      if (result["isError"] === true) return { error: JSON.parse(block!["text"]!).message };
       if (block!["type"] === "image") return { base64: block!["data"]! };
       if (name === "read_attachment")
         return { base64: Buffer.from(block!["text"]!).toString("base64") };
       return { value: result["structuredContent"] ?? JSON.parse(block!["text"]!) };
+    },
+  };
+};
+
+let httpServer: RunningServer | undefined;
+
+/** Calls each operation at its generated route, through the browser's typed client. */
+const httpSurface = async (): Promise<Surface> => {
+  const { home, root } = await workspaceFor("http");
+  httpServer = await startServer({ home, port: 0 });
+  const client = createClient(httpServer.url);
+  return {
+    root,
+    run: async ({ name, input }) => {
+      const { http } = catalog[name];
+      const inPath = pathParams(http);
+      const values: Record<string, unknown> = { workspace: "house", ...input };
+      // A path parameter cannot be left out of a URL.
+      if (inPath.some((key) => values[key] === undefined)) return null;
+      const params = Object.fromEntries(inPath.map((key) => [key, values[key]]));
+      const rest = Object.fromEntries(
+        Object.entries(values).filter(([key]) => !inPath.includes(key) && key !== "workspace"),
+      );
+      const key = `${http.method} /api${http.path}` as RouteKey;
+      const request = {
+        params,
+        ...(Object.keys(rest).length === 0
+          ? {}
+          : http.method === "GET"
+            ? { query: rest }
+            : { payload: rest }),
+      } as never;
+      try {
+        if (catalog[name].success !== FileSuccess)
+          return { value: await client.request(key as JsonRouteKey, request) };
+        const response = await fetch(client.url(key, request));
+        if (!response.ok) throw new ApiError(response.status, await response.json());
+        return { base64: toBase64(new Uint8Array(await response.arrayBuffer())) };
+      } catch (error) {
+        if (error instanceof ApiError) return { error: error.message };
+        throw error;
+      }
     },
   };
 };
@@ -276,13 +325,18 @@ const comparable = (outcome: Outcome, root: string) =>
       .replaceAll(/"(created|updated)":"[^"]+"/g, '"$1":"<time>"'),
   );
 
-let surfaces: Record<"engine" | "mcp" | "cli", Surface>;
+let surfaces: Record<"engine" | "mcp" | "http" | "cli", Surface>;
 
 beforeAll(async () => {
-  surfaces = { engine: await engineSurface(), mcp: await mcpSurface(), cli: await cliSurface() };
+  surfaces = {
+    engine: await engineSurface(),
+    mcp: await mcpSurface(),
+    http: await httpSurface(),
+    cli: await cliSurface(),
+  };
 });
 
-afterAll(() => server?.close());
+afterAll(() => Promise.all([server?.close(), httpServer?.close()]));
 
 describe("every operation on every surface", () => {
   it("covers every catalog operation, and every command, in the table", () => {
@@ -297,10 +351,11 @@ describe("every operation on every surface", () => {
     ).toEqual([]);
   });
 
-  it("gives the same result, file or error on the engine, over MCP and from the CLI", async () => {
+  it("gives the same result, file or error on the engine, over MCP, over HTTP and from the CLI", async () => {
     const seen = {
       engine: [] as Array<unknown>,
       mcp: [] as Array<unknown>,
+      http: [] as Array<unknown>,
       cli: [] as Array<unknown>,
     };
     for (const row of ROWS) {
@@ -311,12 +366,13 @@ describe("every operation on every surface", () => {
         row.before?.(root);
         let outcome = await run(row);
         // The server learns of a hand-made change from its file watcher, a moment later.
-        for (let wait = 0; surface === "mcp" && row.before !== undefined && wait < 20; wait++) {
+        const served = surface === "mcp" || surface === "http";
+        for (let wait = 0; served && row.before !== undefined && wait < 20; wait++) {
           if (isDeepStrictEqual(comparable(outcome!, root), seen.engine.at(-1))) break;
           await new Promise((resolve) => setTimeout(resolve, 100));
           outcome = await run(row);
         }
-        seen[surface].push(outcome === null ? { step, cli: "none" } : comparable(outcome, root));
+        seen[surface].push(outcome === null ? { step, none: surface } : comparable(outcome, root));
       }
     }
     const steps = ROWS.map((row) => `${row.name} ${JSON.stringify(row.input)}`);
@@ -324,12 +380,19 @@ describe("every operation on every surface", () => {
     const on = (surface: keyof typeof seen) =>
       seen[surface].map((outcome, index) => ({ step: steps[index], outcome }));
     expect(on("mcp")).toEqual(expected);
-    expect(on("cli")).toEqual(
+    const without = (surface: string, absent: (row: Row) => boolean) =>
       expected.map((entry, index) =>
-        ROWS[index]!.argv === undefined
-          ? { step: entry.step, outcome: { step: entry.step, cli: "none" } }
+        absent(ROWS[index]!)
+          ? { step: entry.step, outcome: { step: entry.step, none: surface } }
           : entry,
+      );
+    expect(on("http")).toEqual(
+      without("http", (row) =>
+        pathParams(catalog[row.name].http).some(
+          (key) => key !== "workspace" && row.input[key] === undefined,
+        ),
       ),
     );
+    expect(on("cli")).toEqual(without("cli", (row) => row.argv === undefined));
   });
 });

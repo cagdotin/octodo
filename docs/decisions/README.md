@@ -15,3 +15,4 @@ supersedes the old one and mark the old one's status.
 | [0007](0007-first-party-plugins-per-workspace.md)      | Task kinds are first-party plugins, enabled per workspace                | accepted            |
 | [0008](0008-statuses-per-workspace-presets-as-data.md) | Statuses belong to the workspace, and presets are data                   | accepted            |
 | [0009](0009-recurring-task-is-one-folder.md)           | A recurring task is one folder with a log of occurrences                 | accepted            |
+| [0010](0010-no-authentication-for-now.md)              | No authentication while octodo runs on one computer                      | accepted            |

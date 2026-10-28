@@ -7,16 +7,17 @@ tags:
   - discovery
   - server
 created: 2026-10-28T07:40:34.380Z
-order: aI
+order: a5
+blocked_by: [OCT-69]
 ---
 
 ## Not decided
 
-Do not build this yet. Today the phone reaches octodo over Tailscale only while the desktop app or `octo serve` runs. Related: [[OCT-2]] (QR pairing).
+Do not build this yet. octodo has no remote access for now (decision 0010); a phone first needs [[OCT-69]].
 
 ## The question
 
-Should octodo offer an opt-in service (`octo service install`: launchd on macOS) that keeps a server up after login, so the phone works without the desktop window open?
+Should octodo offer an opt-in service (`octo service install`: launchd on macOS) that keeps a server up after login, so other devices and timed features work without the desktop window open?
 
 ## What we know (docs/research/2026-10-architecture-survey.md)
 

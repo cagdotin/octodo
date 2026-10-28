@@ -287,6 +287,11 @@
                 "group": ["effect", "effect/*"],
                 "allowTypeImports": true,
                 "message": "The browser bundle holds no Effect runtime (decision 0006); import Effect types only."
+              },
+              {
+                "group": ["./shared", "./shared.ts"],
+                "allowTypeImports": true,
+                "message": "A plugin's shared half is Effect Schema code: import only its types here, and put plain functions the web half runs in a module of their own (decision 0017)."
               }
             ]
           }

@@ -9,8 +9,8 @@ import { cn } from "@octodo/ui/lib/utils";
 import { HistoryIcon, RotateCcwIcon, TimerResetIcon, XIcon } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import type { KindProps, PluginWeb, TaskOf } from "../web.ts";
-import { daysText } from "./days.ts";
-import { counted, type CounterFields, type counterShared } from "./shared.ts";
+import { counted, daysText } from "./days.ts";
+import type { CounterFields, counterShared } from "./shared.ts";
 
 const api = createClient<ServedApi<typeof counterShared.operations>>("");
 

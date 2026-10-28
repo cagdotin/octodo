@@ -10,7 +10,7 @@ import {
 import { cli } from "@octodo/contract/catalog";
 import type { PluginShared } from "@octodo/contract/plugin";
 import { Schema } from "effect";
-import { daysBetween, daysText, localDay } from "./days.ts";
+import { counted, daysText, localDay } from "./days.ts";
 
 const workspace = Schema.optionalKey(Schema.String).annotate({
   description: "Registered workspace id or absolute path. Omit to use the current project.",
@@ -40,12 +40,6 @@ export const CounterFields = Schema.Struct({
   recent: Schema.Array(Schema.String),
 });
 export type CounterFields = typeof CounterFields.Encoded;
-
-/** The current run and the best one, in calendar days up to `now`. */
-export const counted = (fields: CounterFields, now = new Date()) => {
-  const current = fields.since === null ? null : daysBetween(fields.since, now);
-  return { current, best: Math.max(fields.longest, current ?? 0) };
-};
 
 const { title, due: _due, ...createFields } = CreateTaskInput.fields;
 

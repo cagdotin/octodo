@@ -1,5 +1,7 @@
 /** Calendar days where the code runs: the engine's on the person's computer, the app's in the browser. */
 
+import type { CounterFields } from "./shared.ts";
+
 const dayNumber = (date: Date) =>
   Math.round(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000);
 
@@ -16,4 +18,10 @@ export const localDay = (instant: string) => {
   const date = new Date(instant);
   const pad = (value: number, width = 2) => String(value).padStart(width, "0");
   return `${pad(date.getFullYear(), 4)}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
+/** The current run and the best one, in calendar days up to `now`. */
+export const counted = (fields: CounterFields, now = new Date()) => {
+  const current = fields.since === null ? null : daysBetween(fields.since, now);
+  return { current, best: Math.max(fields.longest, current ?? 0) };
 };

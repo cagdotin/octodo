@@ -6,8 +6,8 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { counted, counterShared, type CounterFields } from "../src/counter/shared.ts";
-import { daysBetween } from "../src/counter/days.ts";
+import { counterShared, type CounterFields } from "../src/counter/shared.ts";
+import { counted, daysBetween } from "../src/counter/days.ts";
 import { plugins } from "../src/index.ts";
 import { readLog } from "../src/log.ts";
 

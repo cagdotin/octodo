@@ -1,7 +1,7 @@
 ---
 id: OCT-47
 title: One reader of the folder grammar; the scan only reads (storage/tree.ts)
-status: todo
+status: done
 priority: medium
 tags:
   - core

@@ -16,7 +16,6 @@ interface FixContext {
   /** Where the diagnostic points, as an absolute path. */
   readonly target: string;
   readonly diagnostic: Diagnostic;
-  /** A task id no task has and no other call hands out. */
   readonly newId: () => AssignedId;
 }
 
@@ -113,7 +112,7 @@ const FIXES: Record<FixAction, Handler> = {
   },
 };
 
-/** Applies the fix a fresh scan found for `diagnostic`, inside the write `files` and `newId` belong to. */
+/** Applies the fix a fresh scan found for `diagnostic`; nothing when it has none. */
 export const applyFix = (
   storage: Storage,
   files: Files,

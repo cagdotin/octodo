@@ -85,7 +85,6 @@ export const makeFiles = (
   root: string,
   changed: (path: string) => void,
 ): Files => {
-  /** Runs `change`, then reports the paths `touched` names for its result, or for its failure. */
   const reporting = <A>(
     change: Change<A>,
     touched: (result: A | undefined) => ReadonlyArray<string>,

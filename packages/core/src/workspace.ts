@@ -189,7 +189,6 @@ export const makeWorkspace = Effect.fnUntraced(function* (
 
   const scanned = Effect.map(storage.read, (read) => scanWorkspace(id, root, read));
 
-  /** The next task id; past every id on disk, of tasks read or not. */
   const nextId = (ids: Ids, { nextIdNumber, snapshot }: Scan) =>
     ids.next(snapshot.workspace.key, nextIdNumber);
 
@@ -332,7 +331,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
       (list) => path.join(list.dir, LIST_FILE),
     );
 
-  /** Serialises this process's reads and writes of the workspace; storage serialises the rest. */
+  /** Writes take turns with this workspace's reads, which share the kept scan. */
   const write = <A, E>(change: (files: Files, ids: Ids) => Effect.Effect<A, E>) =>
     lock.withPermits(1)(storage.write(change));
 

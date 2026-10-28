@@ -219,7 +219,6 @@ const invalidFrontmatter = (error: string) => ({
   problem: { kind: "invalid-frontmatter" as const, field: null, detail: error },
 });
 
-/** New frontmatter values by key. An `id` is only ever one the owner-lock holder assigned. */
 type FrontmatterChanges = Readonly<Record<string, unknown>> & { readonly id?: AssignedId };
 
 /**

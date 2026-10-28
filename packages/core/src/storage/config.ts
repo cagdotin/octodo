@@ -21,7 +21,6 @@ export interface ConfigRead {
 export const configFile = (path: Path.Path, root: string): string =>
   path.join(root, TASKS_DIR, CONFIG_FILE);
 
-/** config.json's text for `document`. */
 export const configText = (document: object): string => `${JSON.stringify(document, null, 2)}\n`;
 
 /** The whole JSON object, unknown keys included, and the part of it octodo reads. */

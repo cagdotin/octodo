@@ -17,7 +17,7 @@ import { makeFiles, type Files } from "./files.ts";
 import { OWNER_LOCK_FILE, OwnerLockBusy, OwnerLockFailed, makeOwnerLock } from "./owner-lock.ts";
 import { makeTreeReader, type Tree } from "./tree.ts";
 
-/** What storage runs on. Only `storage/` uses it; everyone else goes through a `Storage`. */
+/** What storage runs on. Other modules only hand it on to `storage/`. */
 export type Platform = FileSystem.FileSystem | Path.Path;
 
 declare const assigned: unique symbol;
@@ -25,7 +25,7 @@ declare const assigned: unique symbol;
 /** A task id the owner-lock holder handed out: the only kind a write puts into frontmatter. */
 export type AssignedId = string & { readonly [assigned]: true };
 
-/** Hands out task ids during a write: past every id on disk, and never one twice in a process. */
+/** Hands out task ids during a write, never one twice in a process. */
 export interface Ids {
   /** The next id with `key`, numbered `atLeast` or past the last one handed out, if that is higher. */
   readonly next: (key: string, atLeast: number) => AssignedId;
@@ -46,7 +46,6 @@ export interface Storage {
   readonly read: Effect.Effect<StorageRead>;
   /** Counts the changes so far: what a caller made from a read holds while this stays the same. */
   readonly version: () => number;
-  /** Forgets every read, so the next one reads every file again. */
   readonly forget: Effect.Effect<void>;
   readonly readText: (file: string) => Effect.Effect<string, PlatformError.PlatformError>;
   readonly exists: (path: string) => Effect.Effect<boolean, PlatformError.PlatformError>;

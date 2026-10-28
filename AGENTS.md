@@ -21,11 +21,14 @@ instead of keeping the code because it exists.
 - `.octodo/config.json`: workspace `name`, id `key` (`HM` → ids `HM-1`, `HM-2`, ...) and `statuses`
   (id, display name, category). Categories have a fixed order (backlog, unstarted, started,
   completed, canceled, archived); the array only orders statuses within a category. Reordering
-  statuses changes only this file.
+  statuses changes only this file. `plugins` lists the plugins the workspace enables.
 - A folder with `task.md` is a task. Its frontmatter holds every attribute: `id`, `title`,
   `status`, `order` (fractional, among siblings), `priority`, `due`, `tags`, `created`. `updated`
   comes from the file's mtime; `list` and `parent` are never stored. Changing status is one write of
-  `task.md`.
+  `task.md`. `type: recurring` makes it a task of an enabled plugin's kind, which owns more keys
+  and files in its folder; no `type` is the plain task, and a `type` the workspace does not enable
+  reads as a plain task with an `unknown-kind` diagnostic
+  ([0014](docs/decisions/0014-one-plugin-api-for-the-plain-task-and-every-plugin.md)).
 - A link is a frontmatter key holding a list of plain task ids, `blocked_by: [HM-3, HM-7]`;
   `LINK_KINDS` in `contract/src/rules.ts` lists the keys. Only one end stores an edge: the reverse (`blocks`),
   `mentionedIn` (from `[[HM-3]]` in a body, outside code), `blocked` and `ready` (open and not
@@ -74,28 +77,31 @@ instead of keeping the code because it exists.
 
 ## Layout
 
-| Path                | What                                                                                                                                                         |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `packages/contract` | What every client shares: Effect schemas and errors (`domain.ts`), the operation catalog (`catalog.ts`) and `rules.ts`, the plain rules the browser runs too |
-| `packages/engine`   | Effect v4 domain: storage, scan, markdown round-trip, folder grammar, tasks, lists, statuses, health, `Workspace(s)`                                         |
-| `packages/mcp`      | MCP tools generated from the operation catalog, and stdio/HTTP layers on Effect's `McpServer`                                                                |
-| `packages/server`   | Hono HTTP API at `/api`, MCP at `/mcp`, SSE change feed, serves the built web app; `./client` is the typed Hono RPC client                                   |
-| `packages/cli`      | `octo` CLI on `effect/cli`, its commands and the bundled agent skill generated from the catalog; run it with `bin/octo`                                      |
-| `apps/web`          | Vite + React, TanStack Router/Query, shadcn/ui, XState                                                                                                       |
-| `apps/desktop`      | Electron shell: starts the server in the main process and opens the web app                                                                                  |
-| `apps/site`         | Static landing page (plain HTML, no build); icons come from `brand/`                                                                                         |
-| `brand/`            | `glyph.svg` and `build.ts` (`pnpm brand`), which renders every icon, banner and social image                                                                 |
+| Path                | What                                                                                                                                                                                                |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/contract` | What every client shares: Effect schemas and errors (`domain.ts`), the operation catalog (`catalog.ts`), a plugin's shared shape (`plugin.ts`) and `rules.ts`, the plain rules the browser runs too |
+| `packages/engine`   | Effect v4 domain: storage, scan, markdown round-trip, folder grammar, tasks, lists, statuses, health, `Workspace(s)`                                                                                |
+| `packages/plugins`  | First-party plugins (none yet), each a folder with `shared`, `engine` and `web` halves; `plugins` is the list every process gives `Workspaces.layer`                                                |
+| `packages/mcp`      | MCP tools generated from the operation catalog, and stdio/HTTP layers on Effect's `McpServer`                                                                                                       |
+| `packages/server`   | Hono HTTP API at `/api`, MCP at `/mcp`, SSE change feed, serves the built web app; `./client` is the typed Hono RPC client                                                                          |
+| `packages/cli`      | `octo` CLI on `effect/cli`, its commands and the bundled agent skill generated from the catalog; run it with `bin/octo`                                                                             |
+| `apps/web`          | Vite + React, TanStack Router/Query, shadcn/ui, XState                                                                                                                                              |
+| `apps/desktop`      | Electron shell: starts the server in the main process and opens the web app                                                                                                                         |
+| `apps/site`         | Static landing page (plain HTML, no build); icons come from `brand/`                                                                                                                                |
+| `brand/`            | `glyph.svg` and `build.ts` (`pnpm brand`), which renders every icon, banner and social image                                                                                                        |
 
 Decisions: Hono is the HTTP layer and Effect holds all logic. Use Effect's built-in modules where
 they exist (`effect/ai` McpServer, `effect/cli`, `FileSystem`, `Schema`). Packages depend in one direction,
-`contract` ← `engine` ← `server` ([0004](docs/decisions/0004-packages-by-dependency-direction.md)).
+`contract` ← `engine` ← `plugins` ← `server` ([0004](docs/decisions/0004-packages-by-dependency-direction.md)).
 The browser bundle (`apps/web`, the desktop preload) never imports `@octodo/engine` and imports
 only types from `@octodo/contract`; `@octodo/contract/rules` (plain functions, no Effect) is the
 one runtime import it may use. Lint enforces both.
 
 Every operation is one entry in `contract/src/catalog.ts` plus its handler in
 `engine/src/operations.ts`; MCP tools, CLI commands and the skill are generated from it, so never
-write one by hand ([0005](docs/decisions/0005-one-operation-catalog.md)). After changing an entry,
+write one by hand ([0005](docs/decisions/0005-one-operation-catalog.md)). A plugin's operations are
+entries in its `shared` half and handlers in its `engine` half; `makeRegistry(plugins)` merges them
+with the catalog and `registry.run` runs any of them. After changing an entry,
 run `bin/octo skills export` to refresh `.agents/skills/octodo/SKILL.md` (a test compares them).
 
 ## Security

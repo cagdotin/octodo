@@ -1,6 +1,6 @@
 import type { AttachmentContent } from "@octodo/contract";
-import { catalog, FileSuccess, type Operation, type OperationName } from "@octodo/contract/catalog";
-import { runOperation, Workspaces, type Workspace } from "@octodo/engine";
+import { FileSuccess, type Operation } from "@octodo/contract/catalog";
+import { makeRegistry, Workspaces, type Registry, type Workspace } from "@octodo/engine";
 import { Context, Effect, Layer, Logger, Schema } from "effect";
 import { McpProtocol, McpSchema, McpServer, Tool, Toolkit } from "effect/ai";
 import { pathToFileURL } from "node:url";
@@ -21,35 +21,32 @@ const ToolFailure = Schema.Struct({ error: Schema.String });
 
 const toFailure = (error: { readonly message: string }) => ({ error: error.message });
 
-const entries = Object.entries(catalog) as Array<[OperationName, Operation]>;
-
 const annotated = <T extends Tool.Any>(tool: T, operation: Operation): T =>
   tool
     .annotate(Tool.Readonly, operation.readonly)
     .annotate(Tool.Destructive, operation.destructive ?? false)
     .annotate(Tool.Idempotent, operation.idempotent ?? false) as T;
 
-/** One tool per catalog operation whose success is a value; a file is not a toolkit result. */
-const valueTools = entries.flatMap(([name, operation]) =>
-  operation.success === FileSuccess
-    ? []
-    : [
-        annotated(
-          Tool.make(name, {
-            description: operation.description,
-            ...(Object.keys(operation.input.fields).length === 0
-              ? {}
-              : { parameters: operation.input }),
-            success: operation.success as Schema.Top,
-            failure: ToolFailure,
-            failureMode: "return",
-          }),
-          operation,
-        ),
-      ],
-);
-
-export const TasksToolkit = Toolkit.make(...valueTools);
+/** One tool per operation whose success is a value; a file is not a toolkit result. */
+const valueTools = (operations: Registry["operations"]) =>
+  Object.entries(operations).flatMap(([name, operation]) =>
+    operation.success === FileSuccess
+      ? []
+      : [
+          annotated(
+            Tool.make(name, {
+              description: operation.description,
+              ...(Object.keys(operation.input.fields).length === 0
+                ? {}
+                : { parameters: operation.input }),
+              success: operation.success as Schema.Top,
+              failure: ToolFailure,
+              failureMode: "return",
+            }),
+            operation,
+          ),
+        ],
+  );
 
 /**
  * Opens the workspace a call names. `defaultDir` is where a call without one looks: the directory
@@ -65,35 +62,39 @@ const opener =
   };
 
 const run = (
-  name: OperationName,
+  registry: Registry,
+  name: string,
   input: unknown,
   open: ReturnType<typeof opener>,
 ): Effect.Effect<unknown, { error: string }, Workspaces> =>
-  (
-    runOperation(name, input as never, open) as Effect.Effect<
-      unknown,
-      { readonly error: string } | { readonly message: string },
-      Workspaces
-    >
-  ).pipe(Effect.mapError((error) => ("error" in error ? error : toFailure(error))));
+  registry
+    .run(name, input, open)
+    .pipe(Effect.mapError((error) => ("error" in error ? error : toFailure(error))));
 
-export const toolkitLayer = (options: { readonly defaultDir?: string | undefined }) =>
-  TasksToolkit.toLayer(
-    Effect.gen(function* () {
-      const workspaces = yield* Workspaces;
-      const open = opener(workspaces, options.defaultDir);
-      const handlers = Object.fromEntries(
-        valueTools.map((tool) => [
+/** The tools of the operations whose success is a value, as one toolkit layer. */
+const toolkitTools = (
+  registry: Registry,
+  options: { readonly defaultDir?: string | undefined },
+) => {
+  const tools = valueTools(registry.operations);
+  const toolkit = Toolkit.make(...tools);
+  const handlers = Effect.gen(function* () {
+    const workspaces = yield* Workspaces;
+    const open = opener(workspaces, options.defaultDir);
+    return toolkit.of(
+      Object.fromEntries(
+        tools.map((tool) => [
           tool.name,
           (input: unknown) =>
-            run(tool.name as OperationName, input, open).pipe(
+            run(registry, tool.name, input, open).pipe(
               Effect.provideService(Workspaces, workspaces),
             ),
         ]),
-      );
-      return TasksToolkit.of(handlers as never);
-    }),
-  );
+      ) as never,
+    );
+  });
+  return McpServer.toolkit(toolkit).pipe(Layer.provide(toolkit.toLayer(handlers)));
+};
 
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 
@@ -118,13 +119,13 @@ const failed = (error: { readonly error: string }) =>
   });
 
 /** Registers each operation whose success is a file, answering with `fileContent`. */
-const fileTools = (options: { readonly defaultDir?: string | undefined }) =>
+const fileTools = (registry: Registry, options: { readonly defaultDir?: string | undefined }) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
       const server = yield* McpServer.McpServer;
       const workspaces = yield* Workspaces;
       const open = opener(workspaces, options.defaultDir);
-      for (const [name, operation] of entries) {
+      for (const [name, operation] of Object.entries(registry.operations)) {
         if (operation.success !== FileSuccess) continue;
         const decode = Schema.decodeUnknownEffect(operation.input) as (
           input: unknown,
@@ -157,7 +158,7 @@ const fileTools = (options: { readonly defaultDir?: string | undefined }) =>
                   }),
               ),
               Effect.flatMap((input) =>
-                run(name, input, open).pipe(
+                run(registry, name, input, open).pipe(
                   Effect.map(
                     (file) =>
                       new McpSchema.CallToolResult({
@@ -181,13 +182,20 @@ const serverOptions = {
   protocols: [McpProtocol.v2025_11_25, McpProtocol.v2025_06_18, McpProtocol.v2025_03_26] as const,
 };
 
-/** The tools are built from the catalog at runtime, so their layer's requirements are stated here. */
+/**
+ * The tools of every operation of the plugins `Workspaces` has, built at runtime, so their layer's
+ * requirements are stated here.
+ */
 const registerTools = (options: {
   readonly defaultDir?: string | undefined;
 }): Layer.Layer<never, never, McpServer.McpServer | Workspaces> =>
-  Layer.mergeAll(
-    McpServer.toolkit(TasksToolkit).pipe(Layer.provide(toolkitLayer(options))),
-    fileTools(options),
+  Layer.unwrap(
+    Workspaces.use((workspaces) => {
+      const registry = makeRegistry(workspaces.plugins);
+      return Effect.succeed(
+        Layer.mergeAll(toolkitTools(registry, options), fileTools(registry, options)),
+      );
+    }),
   ) as Layer.Layer<never, never, McpServer.McpServer | Workspaces>;
 
 /**

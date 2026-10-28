@@ -105,7 +105,12 @@
       }
     },
     {
-      "files": ["apps/web/src/**", "apps/desktop/src/preload.ts"],
+      "files": [
+        "apps/web/src/**",
+        "apps/desktop/src/preload.ts",
+        "packages/plugins/src/*/web.ts",
+        "packages/plugins/src/*/web.tsx"
+      ],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -119,8 +124,38 @@
             ],
             "patterns": [
               {
-                "group": ["@octodo/engine", "@octodo/engine/*"],
-                "message": "The browser bundle may not hold engine code; talk to the server, and import rules from @octodo/contract/rules (decision 0004)."
+                "group": [
+                  "@octodo/engine",
+                  "@octodo/engine/*",
+                  "@octodo/plugins",
+                  "@octodo/plugins/*/engine",
+                  "./engine",
+                  "./engine.ts"
+                ],
+                "message": "The browser bundle may not hold engine code; talk to the server, and import rules from @octodo/contract/rules and a plugin's own shared and web entries (decision 0004)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/plugins/src/*/shared.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "node:*",
+                  "@octodo/engine",
+                  "@octodo/engine/*",
+                  "@octodo/plugins",
+                  "./engine",
+                  "./engine.ts"
+                ],
+                "message": "A plugin's shared entry runs in every client: no Node modules and no engine (decision 0014)."
               }
             ]
           }

@@ -2,10 +2,13 @@ import { NodeServices } from "@effect/platform-node";
 import type { Task, TaskDetail, WorkspaceSnapshot } from "@octodo/contract";
 import { definePlugin, makeRegistry, plainTask, Workspaces } from "@octodo/engine";
 import { Effect, Layer, Schema } from "effect";
+import { Command } from "effect/cli";
+import { TestConsole } from "effect/testing";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { operationCommands } from "../../cli/src/commands.ts";
 import { plugins } from "../src/index.ts";
 import { tally } from "./tally/engine.ts";
 import { tallyShared } from "./tally/shared.ts";
@@ -183,5 +186,32 @@ describe("a plugin's kind in a workspace", () => {
     expect(broken.diagnostics[2]!.message).toBe(
       'Line 3 is "oops", not a time. That line is not counted.',
     );
+  });
+
+  it("runs a plugin's operation as a generated command", async () => {
+    const ws = await fresh();
+    ws.enable("tally");
+    const workspace = Workspaces.use((workspaces) => workspaces.open(ws.root));
+    const octo = Command.make("octo").pipe(
+      Command.withSubcommands([
+        Command.make("tally").pipe(
+          Command.withSubcommands(
+            operationCommands(registry, workspace)
+              .filter(({ words }) => words[0] === "tally")
+              .map(({ command }) => command),
+          ),
+        ),
+      ]),
+    );
+    const lines = await ws.use(
+      Command.runWith(octo, { version: "0" })(["tally", "create", "Water", "--step", "3"]).pipe(
+        Effect.andThen(TestConsole.logLines),
+        Effect.provide(TestConsole.layer),
+      ) as Effect.Effect<ReadonlyArray<unknown>, unknown, Workspaces | NodeServices.NodeServices>,
+    );
+    expect(JSON.parse(lines.join("\n")).kind).toEqual({
+      id: "tally",
+      fields: { count: 0, last: null },
+    });
   });
 });

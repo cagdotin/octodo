@@ -17,7 +17,7 @@ Packages may depend only in one direction:
 | ---------- | ----------------------------------------------------------------------------------- | ------------------------------------------------ |
 | `contract` | schemas, the operation catalog, `rules.ts` (pure functions)                         | everyone; the browser takes types and rules only |
 | `engine`   | storage, tasks, lists, statuses, health, plugin registry, `Workspace`, `Workspaces` | server, client (embedded mode)                   |
-| `plugins`  | first-party plugins, each with `shared`, `engine` and `web` entry points            | engine (`engine`), web (`web`)                   |
+| `plugins`  | first-party plugins, each with `shared`, `engine` and `web` entry points            | server, cli, mcp (`engine`), web (`web`)         |
 | `server`   | HTTP API, MCP over HTTP, change feed, auth                                          | cli, desktop                                     |
 | `client`   | typed client and `connect()`: a running server, or the engine in-process            | cli, mcp                                         |
 | `cli`      | commands generated from the catalog                                                 |                                                  |
@@ -34,3 +34,6 @@ anything. A lint rule forbids web and desktop renderer code from importing `engi
   names, task id formats, folder names) and `place.ts` the order keys. Of `place.ts`, only
   `destination`, which the web's optimistic move needs, moved into `rules.ts`.
 - A plugin's UI half cannot import its engine half. Shared types live in its `shared` entry.
+- `plugins` depends on `engine`, not the reverse: a plugin's handlers need the engine's
+  `Workspace`, and the processes hand the plugin list to the engine
+  ([0014](0014-one-plugin-api-for-the-plain-task-and-every-plugin.md)).

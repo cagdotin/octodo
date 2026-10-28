@@ -1,7 +1,7 @@
 /**
  * The server child the desktop app spawns (`ELECTRON_RUN_AS_NODE=1`). It tells its parent over IPC
  * that it listens, or why it could not, and closes cleanly (removing `server.json`) when the parent
- * asks it to stop or goes away.
+ * asks it to stop or goes away, even while it is still starting.
  */
 import { startServer } from "@octodo/server";
 import type { ChildMessage } from "./backend.ts";
@@ -18,6 +18,13 @@ const send = (message: ChildMessage) =>
     else process.send(message, () => resolve());
   });
 
+const stopAsked = new Promise<void>((resolve) => {
+  process.once("SIGTERM", resolve);
+  process.once("SIGINT", resolve);
+  process.once("disconnect", resolve);
+  if (process.send !== undefined && !process.connected) resolve();
+});
+
 const server = await startServer({
   home: env("OCTODO_HOME"),
   port: Number(env("OCTODO_PORT")),
@@ -27,14 +34,6 @@ const server = await startServer({
   process.exit(1);
 });
 
-let closing = false;
-const close = () => {
-  if (closing) return;
-  closing = true;
-  void server.close().finally(() => process.exit(0));
-};
-process.once("SIGTERM", close);
-process.once("SIGINT", close);
-process.once("disconnect", close);
-
 await send({ listening: server.url });
+await stopAsked;
+await server.close().finally(() => process.exit(0));

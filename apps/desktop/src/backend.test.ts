@@ -1,5 +1,6 @@
 import { startServer } from "@octodo/server";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -71,6 +72,32 @@ describe("the desktop backend", () => {
     expect(named(home).pid).not.toBe(process.pid);
     await app.backend.stop();
     expect(existsSync(serverFile(home))).toBe(false);
+  }, 30_000);
+
+  it("closes a child whose parent goes away while it is still starting", async () => {
+    const home = join(mkdtempSync(join(tmpdir(), "octodo-desktop-")), "home");
+    const child = spawn(process.execPath, [script], {
+      env: { ...process.env, OCTODO_HOME: home, OCTODO_PORT: "0", OCTODO_WEB_DIR: "" },
+      stdio: ["ignore", "ignore", "ignore", "ipc"],
+    });
+    const exited = new Promise((resolve) => child.once("exit", resolve));
+    child.disconnect();
+    await Promise.race([
+      exited,
+      new Promise((_resolve, reject) =>
+        setTimeout(() => reject(new Error("the child outlived its parent")), 15_000),
+      ),
+    ]).finally(() => child.kill("SIGKILL"));
+    expect(existsSync(serverFile(home))).toBe(false);
+  }, 30_000);
+
+  it("spawns no server when it is stopped before it connects", async () => {
+    const app = launch();
+    await app.backend.stop();
+    expect(await app.backend.running).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    expect(app.urls).toEqual([]);
+    expect(existsSync(serverFile(app.home))).toBe(false);
   }, 30_000);
 
   it("shows a server of another version instead of replacing it", async () => {

@@ -166,9 +166,13 @@ export const startBackend = (options: BackendOptions) => {
       });
     });
 
-  /** Attaches to the server `server.json` names, or spawns one; never runs two. */
-  const connect = async (): Promise<Server | Problem> => {
+  /**
+   * Attaches to the server `server.json` names, or spawns one; never runs two. Undefined once
+   * `stop()` was called, so a quit during a lookup spawns nothing.
+   */
+  const connect = async (): Promise<Server | Problem | undefined> => {
     const found = await locate(options.home);
+    if (stopping) return undefined;
     if (isProblem(found)) return found;
     if (found !== null) return { kind: "attached", ...found };
     try {
@@ -177,6 +181,7 @@ export const startBackend = (options: BackendOptions) => {
       if (!(error instanceof SpawnFailed && error.inUse)) throw error;
       // Another octodo may have taken the port since; use it, or any free port if it is not one.
       const again = await locate(options.home);
+      if (stopping) return undefined;
       if (isProblem(again)) return again;
       if (again !== null) return { kind: "attached", ...again };
       return await spawnChild(0);
@@ -207,7 +212,7 @@ export const startBackend = (options: BackendOptions) => {
   const run = async (): Promise<boolean> => {
     let failures = 0;
     while (!stopping) {
-      let found: Server | Problem;
+      let found: Server | Problem | undefined;
       const started = Date.now();
       try {
         found = await connect();
@@ -219,7 +224,7 @@ export const startBackend = (options: BackendOptions) => {
           continue;
         }
       }
-      if (stopping) break;
+      if (found === undefined || stopping) break;
       if (isProblem(found)) {
         failures = 0;
         if (!(await options.onProblem(found))) return false;

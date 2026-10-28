@@ -43,6 +43,7 @@ import {
   deleteTask,
   editKind,
   getTask,
+  kindFiles,
   moveTask,
   updateTask,
 } from "./tasks/operations.ts";
@@ -68,6 +69,11 @@ export interface Workspace {
     taskId: string,
     change: KindChange,
   ) => Effect.Effect<Task, TaskNotFound | InvalidRequest | StorageError>;
+  /** The text of the plugin `plugin`'s files in a task of its kind, refusing any other task. */
+  readonly kindFiles: (
+    plugin: string,
+    taskId: string,
+  ) => Effect.Effect<ReadonlyMap<string, string>, TaskNotFound | InvalidRequest | StorageError>;
   /**
    * Refuses links to the task itself and to unknown tasks, except unknown ones its field already
    * lists, so a dangling blocker never stops an edit of the others.
@@ -181,6 +187,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     getTask: (taskId) => getTask(state, taskId),
     createTask: (input, kind?: NewKind) => createTask(state, input, kind),
     editKind: (plugin, taskId, change) => editKind(state, plugin, taskId, change),
+    kindFiles: (plugin, taskId) => kindFiles(state, plugin, taskId),
     updateTask: (taskId, input) => updateTask(state, taskId, input),
     moveTask: (taskId, input) => moveTask(state, taskId, input),
     deleteTask: (taskId) => deleteTask(state, taskId),

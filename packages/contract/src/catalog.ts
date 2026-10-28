@@ -271,7 +271,7 @@ export const catalog = {
   },
   move_task: {
     description:
-      "Move a task to another status, list or parent task (a list or a parent, not both; parent null lifts a subtask into its list). before/after place it next to another task id; otherwise it goes last.",
+      "Move a task to another status, list or parent task (a list or a parent, not both; parent null lifts a subtask into its list). before/after place it next to another task id; otherwise it goes last. A recurring task moved to a completed status logs that it was done and stays open, in the first unstarted status, until it is due again.",
     readonly: false,
     destructive: false,
     input: Schema.Struct({

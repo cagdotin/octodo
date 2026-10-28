@@ -18,10 +18,11 @@ import {
 } from "@octodo/contract/rules";
 import { patchFrontmatter } from "../frontmatter.ts";
 import { orderBetween } from "../place.ts";
-import { fileText } from "../scan.ts";
+import { fileText, type Scan } from "../scan.ts";
 import { containerDir, orderedTasks } from "../siblings.ts";
 import { invalid, nextId, readBack, storageError, type State } from "../state.ts";
 import type { KindChange } from "../plugins/plugin.ts";
+import type { Files } from "../storage/files.ts";
 import { editTaskFile, keepLinks, newTaskFile, type NewKind } from "./task-file.ts";
 
 const TOP: Container = { list: null, parent: null };
@@ -137,28 +138,55 @@ export const updateTask = (state: State, taskId: string, given: UpdateTaskInput)
     }),
   );
 
+/**
+ * The text of each file `change` rewrites in the task's folder, as the scan read it, refusing a
+ * file on disk the scan could not read, so a change never builds on a file it has not seen.
+ */
+const changedFiles = (state: State, scan: Scan, taskId: string, change: KindChange) =>
+  Effect.gen(function* () {
+    const dir = scan.dirs.tasks.get(taskId)!;
+    const read = scan.kindFiles.get(taskId) ?? new Map<string, string>();
+    for (const name of Object.keys(change.files ?? {}))
+      if (
+        !read.has(name) &&
+        (yield* state.storage
+          .exists(join(dir, name))
+          .pipe(storageError("Could not read the task folder")))
+      )
+        return yield* invalid(`${name} could not be read, so it is not changed`);
+    return read;
+  });
+
+const writeChangedFiles = (
+  files: Files,
+  dir: string,
+  change: KindChange,
+  read: ReadonlyMap<string, string>,
+) =>
+  Effect.forEach(
+    Object.entries(change.files ?? {}),
+    ([name, next]) => files.writeFile(join(dir, name), next(read.get(name) ?? null)),
+    { discard: true },
+  );
+
+const ofKind = (snapshot: WorkspaceSnapshot, id: string, taskId: string) =>
+  Effect.flatMap(findTask(snapshot, taskId), (task) =>
+    task.kind?.id === id
+      ? Effect.succeed(task)
+      : invalid(`${taskId} is not a task of the ${id} kind`),
+  );
+
 /** Writes the plugin `id`'s keys and files of a task of its kind, the files before `task.md`. */
 export const editKind = (state: State, id: string, taskId: string, change: KindChange) =>
   state.write((files) =>
     Effect.gen(function* () {
       const scan = yield* state.scan;
       const { snapshot } = scan;
-      const task = yield* findTask(snapshot, taskId);
-      if (task.kind?.id !== id) return yield* invalid(`${taskId} is not a task of the ${id} kind`);
+      const task = yield* ofKind(snapshot, id, taskId);
       yield* checkKind(state, snapshot, id, change);
-      const dir = scan.dirs.tasks.get(taskId)!;
-      const read = scan.kindFiles.get(taskId) ?? new Map<string, string>();
-      for (const name of Object.keys(change.files ?? {}))
-        if (
-          !read.has(name) &&
-          (yield* state.storage
-            .exists(join(dir, name))
-            .pipe(storageError("Could not read the task folder")))
-        )
-          return yield* invalid(`${name} could not be read, so it is not changed`);
+      const read = yield* changedFiles(state, scan, taskId, change);
       yield* Effect.gen(function* () {
-        for (const [name, next] of Object.entries(change.files ?? {}))
-          yield* files.writeFile(join(dir, name), next(read.get(name) ?? null));
+        yield* writeChangedFiles(files, scan.dirs.tasks.get(taskId)!, change, read);
         if (change.keys !== undefined) {
           const file = join(snapshot.workspace.root, task.path);
           yield* files.writeFile(file, patchFrontmatter(yield* fileText(scan, file), change.keys));
@@ -168,6 +196,40 @@ export const editKind = (state: State, id: string, taskId: string, change: KindC
     }),
   );
 
+/** The text of the plugin `id`'s files in a task of its kind, as the last scan read them. */
+export const kindFiles = (state: State, id: string, taskId: string) =>
+  state.read(
+    Effect.gen(function* () {
+      const scan = yield* state.scan;
+      yield* ofKind(scan.snapshot, id, taskId);
+      return scan.kindFiles.get(taskId) ?? new Map<string, string>();
+    }),
+  );
+
+/**
+ * What a move into `status` writes for a task whose kind completes in place: its plugin's change
+ * and the first unstarted status, or nothing when the move does not complete such a task.
+ */
+const completion = Effect.fnUntraced(function* (
+  state: State,
+  snapshot: WorkspaceSnapshot,
+  task: Task,
+  status: string | undefined,
+) {
+  const plugin = state.plugins.find((candidate) => candidate.shared.id === task.kind?.id);
+  const category = snapshot.statuses.find((known) => known.id === status)?.category;
+  if (plugin?.complete === undefined || category !== "completed") return null;
+  const at = `${DateTime.formatIso(yield* DateTime.now).slice(0, 16)}:00Z`;
+  return {
+    change: plugin.complete(at),
+    status: defaultStatus(snapshot.statuses)?.id ?? task.status,
+  };
+});
+
+/**
+ * A task whose kind completes in place (a recurring task) moved into a completed status gets its
+ * plugin's change instead, and the first unstarted status.
+ */
 export const moveTask = (state: State, taskId: string, input: MoveTaskInput) =>
   state.write((files) =>
     Effect.gen(function* () {
@@ -178,9 +240,13 @@ export const moveTask = (state: State, taskId: string, input: MoveTaskInput) =>
       const container = yield* placed(snapshot, input, task);
       if (container.parent !== null && taskSubtree(snapshot.tasks, taskId).has(container.parent))
         return yield* invalid("A task cannot move inside itself or its subtasks");
+      const completed = yield* completion(state, snapshot, task, input.status);
+      const read =
+        completed === null ? null : yield* changedFiles(state, scan, taskId, completed.change);
+      const status = completed?.status ?? input.status;
       yield* Effect.gen(function* () {
         const changes: Record<string, string> = {};
-        if (input.status !== undefined) changes["status"] = input.status;
+        if (status !== undefined) changes["status"] = status;
         const placedAmong = input.before !== undefined || input.after !== undefined;
         if (placedAmong || container.list !== task.list || container.parent !== task.parent)
           changes["order"] = orderBetween(
@@ -192,6 +258,7 @@ export const moveTask = (state: State, taskId: string, input: MoveTaskInput) =>
           scan.dirs.tasks.get(taskId)!,
           containerDir(scan, container),
         );
+        if (completed !== null) yield* writeChangedFiles(files, dir, completed.change, read!);
         yield* files.writeFile(join(dir, TASK_FILE), patchFrontmatter(text, changes));
       }).pipe(storageError("Could not move the task"));
       return yield* reread(state, taskId);

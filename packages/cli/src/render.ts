@@ -1,12 +1,17 @@
-import type { Task, TaskRef } from "@octodo/contract";
+import type { Task, TaskKind, TaskRef } from "@octodo/contract";
 import type { OperationName } from "@octodo/contract/catalog";
 import type { OperationSuccess } from "@octodo/engine";
 
 /** What a task line shows: a task from the snapshot, a summary or a detail. */
 type Shown = Pick<
   Task,
-  "id" | "title" | "status" | "priority" | "tags" | "due" | "list" | "blocked"
+  "id" | "title" | "status" | "priority" | "tags" | "due" | "list" | "blocked" | "kind"
 >;
+
+/** The few words a task's kind adds to its line, from its plugin's `label`; empty for none. */
+export type KindLabel = (kind: TaskKind | undefined) => string;
+
+const noLabel: KindLabel = () => "";
 
 const priorityMark: Record<Task["priority"], string> = {
   none: "",
@@ -22,12 +27,13 @@ const heading = (task: Pick<Task, "id" | "status" | "title">) => [
   task.title,
 ];
 
-export const line = (task: Shown) =>
+export const line = (task: Shown, label = noLabel) =>
   [
     ...heading(task),
     priorityMark[task.priority],
     ...task.tags.map((tag) => `#${tag}`),
     task.due === null ? "" : `due ${task.due}`,
+    label(task.kind),
     task.list === null ? "" : `(${task.list})`,
     task.blocked ? "[blocked]" : "",
   ]
@@ -70,19 +76,22 @@ const bytes = (size: number) =>
 
 /** How `octo` prints an operation's success when `--json` is not given, line by line. */
 export const renderers: {
-  readonly [K in OperationName]?: (result: OperationSuccess<K>) => ReadonlyArray<string>;
+  readonly [K in OperationName]?: (
+    result: OperationSuccess<K>,
+    label: KindLabel,
+  ) => ReadonlyArray<string>;
 } = {
   list_workspaces: (all) =>
     all.map((info) => `${info.id.padEnd(20)} ${info.key.padEnd(6)} ${info.root}`),
-  list_tasks: (tasks) =>
+  list_tasks: (tasks, label) =>
     tasks.length === 0
       ? ["No tasks"]
       : tree(tasks).map(({ task, depth }) => {
           const under = depth === 0 && task.parent !== null ? `  (under ${task.parent})` : "";
-          return `${"  ".repeat(depth)}${line(task)}${under}`;
+          return `${"  ".repeat(depth)}${line(task, label)}${under}`;
         }),
-  get_task: (task) => [
-    line(task),
+  get_task: (task, label) => [
+    line(task, label),
     ...(task.parent === null ? [] : [`parent: ${task.parent}`]),
     ...(
       [
@@ -106,9 +115,9 @@ export const renderers: {
         ]),
     ...(task.body.length === 0 ? [] : [`\n${task.body.trimEnd()}`]),
   ],
-  create_task: (task) => [line(task)],
-  update_task: (task) => [line(task)],
-  move_task: (task) => [line(task)],
+  create_task: (task, label) => [line(task, label)],
+  update_task: (task, label) => [line(task, label)],
+  move_task: (task, label) => [line(task, label)],
   delete_task: ({ deleted }) => [`Deleted ${deleted}`],
   create_list: (list) => [`Created list ${list.id} in ${list.folder}`],
   move_list: (list) => [`Moved list ${list.id} to ${list.folder}`],

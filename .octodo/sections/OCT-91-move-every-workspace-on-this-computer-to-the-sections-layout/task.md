@@ -1,7 +1,7 @@
 ---
 id: OCT-91
 title: Move every workspace on this computer to the sections layout, once
-status: todo
+status: done
 priority: high
 tags:
   - migration

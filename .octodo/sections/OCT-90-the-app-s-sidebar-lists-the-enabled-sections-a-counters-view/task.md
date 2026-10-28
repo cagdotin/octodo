@@ -1,7 +1,7 @@
 ---
 id: OCT-90
 title: The app's sidebar lists the enabled sections; a Counters view
-status: todo
+status: done
 priority: high
 tags:
   - web

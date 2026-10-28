@@ -53,8 +53,8 @@ instead of keeping the code because it exists.
   create, a file read without an id and a fix alike. The lock's one row names the last holder, so
   a holder that finds another one had it since forgets its cache and reads the files again.
 - Dot entries are octodo's own bookkeeping: the owner lock, `.*.tmp` files and `.new-*` folders.
-  Scans, diagnostics and attachments never see them. A process that takes the lock from another
-  holder removes the temporary ones, since no write that owns them can still be running.
+  Scans, diagnostics and attachments never see them. The first time a process holds the lock, it
+  removes the temporary ones, since no write that owns them can still be running.
 - Every problem a read finds is a diagnostic `{ path, kind, field, message, fix }`, and every kind
   is a row of `PROBLEMS` in `diagnostics.ts` with its remedy and its fixes. A fix runs only when asked
   (`octo doctor`, the app's dialog, MCP `fix_diagnostic`) and only if a fresh read still offers that

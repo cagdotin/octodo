@@ -235,14 +235,19 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   /** Forgets every read, for when the files may have changed in ways nobody reported. */
   const forgetAll = Effect.sync(() => reads.clear());
 
+  /** Whether this workspace removed a crashed write's leftovers yet, which it does once. */
+  let cleaned = false;
+  const cleanUp = Effect.suspend(() => {
+    if (cleaned) return Effect.void;
+    cleaned = true;
+    return withPlatform(
+      Effect.andThen(removeLeftovers(tasksDir), Effect.ignore(ignoreBookkeeping(tasksDir))),
+    );
+  });
+
   const owner = yield* makeOwnerLock(path.join(tasksDir, OWNER_LOCK_FILE), {
     wait: options.lockWait ?? "10 seconds",
-    onNewHolder: Effect.andThen(
-      forgetAll,
-      withPlatform(
-        Effect.andThen(removeLeftovers(tasksDir), Effect.ignore(ignoreBookkeeping(tasksDir))),
-      ),
-    ),
+    onNewHolder: Effect.andThen(forgetAll, cleanUp),
   });
 
   /** Runs `effect` as the only octodo process writing the workspace. */

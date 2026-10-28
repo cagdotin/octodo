@@ -40,9 +40,11 @@ the risks of that walk. With [0001](0001-octodo-is-the-only-writer.md) and
 - The lock's one row names the last holder. A process that takes the lock from another holder
   first writes its own name into the row and commits, then takes the lock again. So a holder that
   dies during its writes still leaves the row naming it. Whenever the row names someone else, the
-  new holder forgets its cache (the next read rescans), removes the temporary files a crashed
-  write left (no write that owns one can still be running) and adds missing `.gitignore` lines.
-  While one process keeps writing, a hold costs one transaction and no rescan.
+  new holder forgets its cache, so its next read rescans. While one process keeps writing, a hold
+  costs one transaction and no rescan.
+- The first time a process holds the lock, it removes the temporary files a crashed write left,
+  of any age (no write that owns one can still be running), and adds missing `.gitignore` lines.
+  At 5,000 tasks that walk takes about 350 ms, so it runs once per process, not at every handover.
 - The holder assigns the next id from its scan's highest id on disk, and never hands out a number
   twice in one process.
 

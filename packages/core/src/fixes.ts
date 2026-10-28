@@ -1,4 +1,4 @@
-import { Effect, FileSystem, Path, PlatformError } from "effect";
+import { Effect, FileSystem, Path } from "effect";
 import { DEFAULT_STATUSES, type Diagnostic, type FixAction } from "./domain.ts";
 import { createFolder, freeName, writeFileAtomic } from "./files.ts";
 import {
@@ -12,6 +12,7 @@ import {
 import { frontmatterId, keepLinks, patchFrontmatter, readFrontmatter } from "./markdown.ts";
 import type { Scan } from "./scan.ts";
 import { editConfig } from "./storage/config.ts";
+import { taskFoldersFrom } from "./storage/tree.ts";
 
 /** What a fix knows: the workspace and a scan of it taken just before, which found the problem. */
 interface FixContext {
@@ -28,23 +29,6 @@ type Handler = (
   context: FixContext,
 ) => Effect.Effect<void, unknown, FileSystem.FileSystem | Path.Path>;
 
-/** The task folders from `dir` down, parents before their subtasks. */
-const taskFoldersUnder = (
-  dir: string,
-): Effect.Effect<Array<string>, PlatformError.PlatformError, FileSystem.FileSystem | Path.Path> =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const found = [dir];
-    for (const name of (yield* fs.readDirectory(dir)).toSorted()) {
-      const child = path.join(dir, name);
-      if (name.startsWith(".") || (yield* fs.lstat(child)).type !== "Directory") continue;
-      if (yield* fs.exists(path.join(child, TASK_FILE)))
-        found.push(...(yield* taskFoldersUnder(child)));
-    }
-    return found;
-  });
-
 /**
  * Gives the copied task in `dir` a new id, and each of its subtasks whose id another folder has,
  * then renames their folders to match, dropping a conflict copy's ` 2`. Ids go in before any
@@ -55,7 +39,7 @@ const renumberCopy = (dir: string, context: FixContext) =>
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const renames: Array<{ dir: string; old: string | null; id: string }> = [];
-    for (const folder of yield* taskFoldersUnder(dir)) {
+    for (const folder of taskFoldersFrom(context.scan.tree, dir)) {
       const file = path.join(folder, TASK_FILE);
       const text = yield* fs.readFileString(file);
       const old = frontmatterId(text);

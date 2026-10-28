@@ -35,34 +35,6 @@ export const writeFileAtomic = Effect.fnUntraced(function* (
 export const isNotFound = (error: unknown): boolean =>
   PlatformError.isPlatformError(error) && error.reason._tag === "NotFound";
 
-/**
- * Whether two folders hold the same names and bytes all the way down, hidden files included and
- * octodo's bookkeeping aside. A link is the same only as a link to the same place.
- */
-export const sameTree = (
-  a: string,
-  b: string,
-): Effect.Effect<boolean, PlatformError.PlatformError, FileSystem.FileSystem | Path.Path> =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const [infoA, infoB] = [yield* fs.lstat(a), yield* fs.lstat(b)];
-    if (infoA.type !== infoB.type) return false;
-    if (infoA.type === "SymbolicLink") return (yield* fs.readLink(a)) === (yield* fs.readLink(b));
-    if (infoA.type === "File") {
-      const [bytesA, bytesB] = [yield* fs.readFile(a), yield* fs.readFile(b)];
-      return bytesA.length === bytesB.length && bytesA.every((byte, i) => byte === bytesB[i]);
-    }
-    const kept = (names: ReadonlyArray<string>) =>
-      names.filter((name) => !isLeftover(name)).toSorted();
-    const [namesA, namesB] = [kept(yield* fs.readDirectory(a)), kept(yield* fs.readDirectory(b))];
-    if (namesA.join("/") !== namesB.join("/")) return false;
-    for (const name of namesA) {
-      if (!(yield* sameTree(path.join(a, name), path.join(b, name)))) return false;
-    }
-    return true;
-  });
-
 /** `name`, or `name-2`, `name-3`, ... before the extension, whichever `dir` does not have yet. */
 export const freeName = Effect.fnUntraced(function* (dir: string, name: string, extension = "") {
   const fs = yield* FileSystem.FileSystem;

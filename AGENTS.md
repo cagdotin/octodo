@@ -40,7 +40,8 @@ instead of keeping the code because it exists.
 - Folder names carry no meaning for the scanner; they are for people: `<id>-<slug>` for a task, the
   slug for a list. Anything else (a loose `.md`, a folder with neither marker or both, a symlink,
   which is never followed) is a diagnostic. A loose `.md` without frontmatter is a note: reported,
-  never changed.
+  never changed. `storage/tree.ts` is the one reader of this grammar: nothing else lists a folder
+  in `.octodo/`, and the scan only parses what it read and never writes.
 - Of several task folders with one id, the task is the one a sync tool did not name as a copy
   (`HM-3-paint 2`), then the one named after its id and title, then the first read.
 - A task's identity is the `id` in its frontmatter, never its path. Files without an id get one the

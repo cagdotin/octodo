@@ -74,7 +74,7 @@ import {
   OwnerLockFailed,
   makeOwnerLock,
 } from "./storage/owner-lock.ts";
-import { invisibleToScans, makeScanCache, reportingChanges } from "./scan-cache.ts";
+import { MARKERS, makeTreeReader, reportingChanges } from "./storage/tree.ts";
 
 /** One workspace on disk: a folder with a `.octodo/` directory. The files are the source of truth. */
 export interface Workspace {
@@ -152,9 +152,6 @@ interface Container {
 
 const TOP: Container = { list: null, parent: null };
 
-/** Lower case, since a case-insensitive file system (macOS, Windows) takes `Task.MD` for `task.md`. */
-const MARKERS = new Set([TASK_FILE, LIST_FILE]);
-
 const storage =
   (message: string) =>
   <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, StorageError, R> =>
@@ -214,7 +211,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     readonly lockWait?: Duration.Input;
   } = {},
 ) {
-  const reads = makeScanCache();
+  const reads = makeTreeReader();
   const fs = reportingChanges(yield* FileSystem.FileSystem, reads);
   const path = yield* Path.Path;
   const tasksDir = path.join(root, TASKS_DIR);
@@ -675,7 +672,8 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         return yield* invalid("Give a path relative to the task folder");
       if (segments.some(isHidden))
         return yield* invalid("Attachment paths cannot leave the task folder or name hidden files");
-      if (segments.some((part) => MARKERS.has(part.toLowerCase())))
+      // A case-insensitive file system (macOS, Windows) takes `Task.MD` for `task.md`.
+      if (segments.some((part) => MARKERS.includes(part.toLowerCase())))
         return yield* invalid(
           `An attachment cannot be named ${TASK_FILE} or ${LIST_FILE}: that would make a subtask or a list`,
         );
@@ -776,7 +774,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
   if (watching) {
     yield* fs.watch(tasksDir, { recursive: true }).pipe(
       Stream.map((event) => path.join(tasksDir, event.path)),
-      Stream.filter((changed) => !invisibleToScans(changed)),
+      Stream.filter((changed) => !isHidden(path.basename(changed))),
       Stream.tap((changed) => Effect.sync(() => reads.changed(changed))),
       Stream.debounce("75 millis"),
       Stream.runForEach(() => PubSub.publish(changes, undefined)),

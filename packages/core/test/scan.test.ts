@@ -1,6 +1,14 @@
 import { NodeServices } from "@effect/platform-node";
 import { Effect, FileSystem, Layer } from "effect";
-import { chmodSync, mkdirSync, mkdtempSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -119,5 +127,32 @@ describe("scanWorkspace", () => {
     } finally {
       for (const dir of locked) chmodSync(dir, 0o755);
     }
+  });
+
+  it("only reads: a task.md without an id is reported and left as it is", async () => {
+    const root = await fresh({ "garden/list.md": "---\nname: Garden\n---\n" });
+    const file = join(root, ".octodo/garden/weeds/task.md");
+    mkdirSync(dirname(file));
+    writeFileSync(file, "Pull the weeds\n");
+    const refuseWrites = Layer.effect(
+      FileSystem.FileSystem,
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const refused = () => Effect.die(new Error("the scan wrote"));
+        return {
+          ...fs,
+          makeDirectory: refused,
+          remove: refused,
+          rename: refused,
+          writeFile: refused,
+          writeFileString: refused,
+        };
+      }),
+    ).pipe(Layer.provideMerge(NodeServices.layer));
+
+    const { snapshot, missingId } = await run(scanWorkspace("test", root), refuseWrites);
+    expect(missingId).toEqual([dirname(file)]);
+    expect(snapshot.diagnostics.map((diagnostic) => diagnostic.kind)).toEqual(["missing-id"]);
+    expect(readFileSync(file, "utf8")).toBe("Pull the weeds\n");
   });
 });

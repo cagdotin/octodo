@@ -48,6 +48,12 @@ clears a value; `octo <command> --help` lists them):
 - `log_occurrence`, `octo recurring log <id>`: Record that a recurring task was done, now or at an earlier time, without changing its status.
 - `remove_occurrence`, `octo recurring unlog <id> <at>`: Remove one time a recurring task was done, by its time as list_occurrences gives it.
 - `list_occurrences`, `octo recurring history <id>`: List every time a recurring task was done, newest first.
+- `create_counter`, `octo counter create <title>`: Create a days-since counter, which counts the days since something last happened, from now.
+- `reset_counter`, `octo counter reset <id>`: Record that the counted thing happened, now or at an earlier time: the count starts again from the latest reset.
+- `remove_reset`, `octo counter unreset <id> <at>`: Take back one reset of a counter, by its time as list_resets gives it.
+- `list_resets`, `octo counter history <id>`: List every time a counter was reset, newest first.
+- `create_anniversary`, `octo anniversary create <title>`: Create an anniversary: a task for a date that comes back every year, such as a birthday.
+- `set_anniversary_date`, `octo anniversary date <id> <date>`: Change the day an anniversary first happened.
 
 ```sh
 octo list                                                         # Open tasks, subtasks under their parent
@@ -63,6 +69,9 @@ octo move HM-42 in-progress                                       # Change its s
 octo move HM-43 --parent HM-42                                    # Make it a subtask; --no-parent lifts it out
 octo recurring create "Water the plants" --repeat "every 3 days"  # A chore that comes back three days after each time
 octo recurring log HM-4 --at 2026-10-25                           # It was done on the 25th
+octo counter create "Days since I last smoked"                    # A counter that starts today
+octo counter reset HM-4 --at 2026-10-16                           # It last happened on the 16th
+octo anniversary create "Mum's birthday" --date 1961-06-14        # A birthday that comes back every June 14
 ```
 
 If a command warns about a file, run `octo doctor`: it lists each problem and what to do about

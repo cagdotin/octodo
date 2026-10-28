@@ -1,5 +1,7 @@
 import type { Task } from "@octodo/contract";
 import type { ComponentType } from "react";
+import { counterWeb } from "./counter/web.tsx";
+import { anniversaryWeb } from "./anniversary/web.tsx";
 import { recurringWeb } from "./recurring/web.tsx";
 
 /** A task of a plugin's kind, with `kind.fields` as the plugin's `fields` schema encodes them. */
@@ -37,4 +39,6 @@ type KindFields = Readonly<Record<string, unknown>>;
 /** Every plugin's web half, by its id, as `task.kind.id` names it. */
 export const webPlugins: Readonly<Record<string, PluginWeb<KindFields>>> = {
   recurring: recurringWeb as unknown as PluginWeb<KindFields>,
+  counter: counterWeb as unknown as PluginWeb<KindFields>,
+  anniversary: anniversaryWeb as unknown as PluginWeb<KindFields>,
 };

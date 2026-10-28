@@ -91,7 +91,8 @@ it is built on. Three questions were left open:
 ## Consequences
 
 - Days-since counters (OCT-58) stay a plugin of their own (`type: counter`): another rule, another
-  row, another preset. They reuse `log.jsonl`, its line format and `recurring/log.ts`, with a
+  row, another preset. They reuse `log.jsonl`, its line format and `recurring/log.ts` (since moved to
+  `log.ts`, [0019](0019-days-since-counters-share-the-occurrence-log.md)), with a
   `reset` event added to the reader. Since a plugin's file is its data only in tasks of its kind
   (0014), OCT-58 makes file claims per kind instead of global, so both can own `log.jsonl`, and
   changing a task's `type` between them keeps its history.

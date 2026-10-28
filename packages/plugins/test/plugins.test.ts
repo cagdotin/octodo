@@ -60,7 +60,11 @@ const kinds = (snapshot: WorkspaceSnapshot) => snapshot.diagnostics.map((d) => [
 
 describe("the plugin registry", () => {
   it("installs the first-party plugins, and the plain task registers through it", () => {
-    expect(plugins.map((plugin) => plugin.shared.id)).toEqual(["recurring"]);
+    expect(plugins.map((plugin) => plugin.shared.id)).toEqual([
+      "recurring",
+      "counter",
+      "anniversary",
+    ]);
     expect(Object.keys(makeRegistry([]).operations)).toEqual(Object.keys(plainTask.operations));
   });
 
@@ -70,7 +74,7 @@ describe("the plugin registry", () => {
     expect(String(registry.operations["bump_tally"]!.error.ast._tag)).toBe("Union");
   });
 
-  it("refuses two claims on one kind, key, file or operation, loudly", () => {
+  it("refuses two claims on one kind, key or operation, loudly, and lets two kinds own a file", () => {
     const like = (shared: Partial<typeof tallyShared>) =>
       definePlugin({ ...tallyShared, ...shared } as typeof tallyShared, {
         read: tally.read as never,
@@ -85,7 +89,7 @@ describe("the plugin registry", () => {
         tally,
         like({ id: "other", keys: Schema.Struct({}) as never, operations: {} as never }),
       ]),
-    ).toThrow("the file tally.log");
+    ).not.toThrow();
     expect(() => makeRegistry([like({ files: ["task.md"] })])).toThrow("cannot own task.md");
     expect(() =>
       makeRegistry([

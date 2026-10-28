@@ -10,6 +10,7 @@ import { DragAndDrop } from "@/components/drag-and-drop";
 import { ListView } from "@/components/list-view";
 import { NewTaskDialog } from "@/components/new-task-dialog";
 import { TaskDetail } from "@/components/task-detail";
+import { sectionDay } from "@/components/section";
 import { kindDay } from "@/components/task-kind";
 import { ViewHeader } from "@/components/workspace-header";
 import {
@@ -40,6 +41,7 @@ import {
   showCompleted as showCompletedPref,
 } from "@/lib/prefs";
 import {
+  dueEntries,
   EMPTY_FILTER,
   filterTasks,
   matchesFilter,
@@ -205,7 +207,14 @@ function WorkspacePage() {
                 display={display}
                 onDisplayChange={setDisplay}
               />
-              {view === "list" ? <ListView {...viewProps} /> : <BoardView {...viewProps} />}
+              {view === "list" ? (
+                <ListView
+                  {...viewProps}
+                  entries={dueEntries(snapshot, search.list, sectionDay, today)}
+                />
+              ) : (
+                <BoardView {...viewProps} />
+              )}
             </div>
             {!isMobile && detail && (
               <aside className="flex w-[400px] shrink-0 flex-col border-l bg-background lg:w-[440px]">

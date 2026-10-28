@@ -1,7 +1,7 @@
-import type { CreateTaskInput, Task } from "@octodo/contract";
+import type { CreateTaskInput, Entry, Task } from "@octodo/contract";
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
-import { countersWeb } from "./counters/web.ts";
+import { countersWeb } from "./counters/web.tsx";
 import { recurringWeb } from "./recurring/web.tsx";
 
 /** A task of a plugin's kind, with `kind.fields` as the plugin's `fields` schema encodes them. */
@@ -71,8 +71,51 @@ export const webPlugins: Readonly<Record<string, PluginWeb<KindFields>>> = {
   recurring: recurringWeb as unknown as PluginWeb<KindFields>,
 };
 
-/** A section plugin's `web` half. */
+/** An entry of a section plugin, with `fields` as the plugin's `fields` schema encodes them. */
+export type EntryOf<Fields> = Entry & { readonly fields: Fields };
+
+export interface EntryProps<Fields> {
+  readonly workspace: string;
+  readonly entry: EntryOf<Fields>;
+}
+
+/** What the app hands a section's view: its entries in order, and the open one. */
+export interface SectionViewProps<Fields> {
+  readonly workspace: string;
+  readonly entries: ReadonlyArray<EntryOf<Fields>>;
+  /** The id of the entry the panel shows, if any. */
+  readonly selected: string | undefined;
+  readonly onOpen: (id: string) => void;
+  /** Whether the new-entry row is open: N and the sidebar's new button open it. */
+  readonly composing: boolean;
+  readonly onCompose: (open: boolean) => void;
+}
+
+/** What every entry has that the app's entry panel edits. */
+export interface EntryPatch {
+  readonly title?: string;
+  readonly body?: string;
+}
+
+/**
+ * A section plugin's `web` half (decision 0027): its place in the rail, its view, and its part of
+ * the entry panel, whose title, body and delete the app owns, as it owns them for a task.
+ */
 export interface SectionWeb<Fields> {
+  /** The section's name in the rail and the toolbar: "Counters". */
+  readonly label: string;
+  /** One entry, lowercase, as "New counter" and "Delete counter" name it. */
+  readonly noun: string;
+  readonly Icon: LucideIcon;
+  /** The icon of one entry, its kind's, wherever the app shows it: Today, the entry panel. */
+  readonly EntryIcon: ComponentType<{ readonly fields: Fields; readonly className?: string }>;
+  readonly View: ComponentType<SectionViewProps<Fields>>;
+  /** The entry panel's section between the body and the footer. */
+  readonly Panel: ComponentType<EntryProps<Fields>>;
+  /** Calls the plugin's own update operation. */
+  readonly edit: (workspace: string, id: string, patch: EntryPatch) => Promise<unknown>;
+  /** Calls the plugin's own delete operation. */
+  readonly remove: (workspace: string, id: string) => Promise<unknown>;
   /** The day an entry falls on, as its shared half's `day` gives it (decisions 0025, 0027). */
   readonly day?: (fields: Fields, today: string) => string | null;
 }

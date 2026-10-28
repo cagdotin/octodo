@@ -20,8 +20,10 @@ import { DiagnosticsDialog } from "@/components/diagnostics-dialog";
 import { Disclosure } from "@/components/list-view";
 import { NewListDialog } from "@/components/new-list-dialog";
 import { ITEM, SidebarLists } from "@/components/sidebar-lists";
+import { SectionLinks } from "@/components/section-sidebar";
 import { SyncIndicator } from "@/components/sync-indicator";
 import { ViewIcon } from "@/components/task-bits";
+import { sectionDay } from "@/components/section";
 import { kindDay } from "@/components/task-kind";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@octodo/ui/components/button";
@@ -59,7 +61,7 @@ import { workspacesQuery } from "@/lib/api";
 import { desktop } from "@/lib/desktop";
 import { useToday } from "@octodo/ui/hooks/use-today";
 import { cn } from "@octodo/ui/lib/utils";
-import { filterTasks, listCounts, SMART, statusMap } from "@/lib/tasks";
+import { dueEntries, filterTasks, listCounts, SMART, statusMap } from "@/lib/tasks";
 
 export function AppSidebar({
   snapshot,
@@ -79,7 +81,7 @@ export function AppSidebar({
   const openCount = (list: string) =>
     filterTasks(snapshot, list, kindDay, today).filter(
       (task) => !isClosedCategory(statuses.get(task.status)?.category),
-    ).length;
+    ).length + dueEntries(snapshot, list, sectionDay, today).length;
   const [newListOpen, setNewListOpen] = useState(false);
   const { isMobile, setOpenMobile } = useSidebar();
   // Picking an entry on a phone should reveal the list behind the sheet.
@@ -144,6 +146,7 @@ export function AppSidebar({
         </div>
       </SidebarHeader>
       <SidebarContent className="gap-1">
+        <SectionLinks snapshot={snapshot} active={undefined} onNavigate={close} />
         <SidebarGroup className="py-1">
           <SidebarGroupContent>
             <SidebarMenu className="gap-px">
@@ -192,7 +195,7 @@ export function AppSidebar({
   );
 }
 
-function Count({ value }: { value: number }) {
+export function Count({ value }: { value: number }) {
   return (
     <SidebarMenuBadge className="top-1! font-mono font-normal text-sidebar-foreground/50">
       {value}
@@ -228,7 +231,7 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
  * The workspace menu: settings and the folder for this workspace, then every workspace, one
  * click away.
  */
-function WorkspaceSwitcher({ current }: { current: WorkspaceSnapshot["workspace"] }) {
+export function WorkspaceSwitcher({ current }: { current: WorkspaceSnapshot["workspace"] }) {
   const { data: workspaces = [] } = useQuery(workspacesQuery);
   const navigate = useNavigate();
   const [addOpen, setAddOpen] = useState(false);
@@ -325,7 +328,7 @@ export function Avatar({ label }: { label: string }) {
   );
 }
 
-function DiagnosticsButton({ snapshot }: { snapshot: WorkspaceSnapshot }) {
+export function DiagnosticsButton({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   const [open, setOpen] = useState(false);
   const count = snapshot.diagnostics.filter(isProblem).length;
   return (

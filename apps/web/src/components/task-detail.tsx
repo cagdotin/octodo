@@ -58,7 +58,7 @@ import { cn } from "@octodo/ui/lib/utils";
 import { useToday } from "@octodo/ui/hooks/use-today";
 import { dueInfo, formatTimestamp } from "@octodo/ui/lib/dates";
 import { listLabel, PRIORITIES } from "@/lib/tasks";
-import { changes, editorMachine } from "@/machines/editor";
+import { changes, type Draft, editorMachine } from "@/machines/editor";
 
 interface Props {
   workspace: string;
@@ -82,39 +82,9 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
   const remove = useDeleteTask(workspace);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // The save actor goes through TanStack Query so it shares the optimistic cache update.
-  // `mutateAsync` is stable for the lifetime of the mutation observer.
-  const save = update.mutateAsync;
-  const editor = useActorRef(
-    editorMachine.provide({
-      actors: {
-        save: fromPromise(async ({ input }) => {
-          await save({ id: task.id, patch: input.patch });
-          return input.draft;
-        }),
-      },
-    }),
-    { input: { title: task.title, body: task.body } },
+  const { editor, draft, error, phase, editBody } = useTitleBody(task, (patch) =>
+    update.mutateAsync({ id: task.id, patch }),
   );
-  const draft = useSelector(editor, (state) => state.context.draft);
-  const error = useSelector(editor, (state) => state.context.error);
-  const phase = useSelector(editor, (state) => state.value);
-
-  useEffect(() => {
-    editor.send({ type: "EXTERNAL", draft: { title: task.title, body: task.body } });
-  }, [editor, task.title, task.body]);
-
-  // Closing the pane mid-debounce still saves what was typed.
-  const open = useRef(true);
-  useEffect(() => {
-    open.current = true;
-    return () => {
-      open.current = false;
-      const patch = changes(editor.getSnapshot().context);
-      if (Object.keys(patch).length > 0) void save({ id: task.id, patch }).catch(() => {});
-    };
-  }, [editor, task.id]);
-
   const mentions = useMentions(workspace, snapshot, task.id);
   const setDue = (due: string | null) => update.mutate({ id: task.id, patch: { due } });
   const due = dueInfo(task.due, useToday());
@@ -203,11 +173,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
         attachments={taskAttachments(workspace, task.id)}
         {...mentions}
         value={draft.body}
-        onChange={(value) =>
-          open.current
-            ? editor.send({ type: "EDIT", field: "body", value })
-            : void save({ id: task.id, patch: { body: value } }).catch(() => {})
-        }
+        onChange={editBody}
         onBlur={() => editor.send({ type: "FLUSH" })}
         className="min-h-0 flex-1 text-base md:text-sm"
       />
@@ -354,8 +320,54 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
   );
 }
 
+/**
+ * The title and body editor of a panel, a task's or an entry's: debounced saves through `save`,
+ * edits made elsewhere adopted unless there are unsaved ones, and what was typed saved on close.
+ * `save` goes through TanStack Query so it shares the optimistic cache update; the panel is keyed
+ * by its id, so the one it is mounted with is the one it keeps.
+ */
+export function useTitleBody(saved: Draft, save: (patch: Partial<Draft>) => Promise<unknown>) {
+  const editor = useActorRef(
+    editorMachine.provide({
+      actors: {
+        save: fromPromise(async ({ input }) => {
+          await save(input.patch);
+          return input.draft;
+        }),
+      },
+    }),
+    { input: { title: saved.title, body: saved.body } },
+  );
+  const draft = useSelector(editor, (state) => state.context.draft);
+  const error = useSelector(editor, (state) => state.context.error);
+  const phase = useSelector(editor, (state) => state.value);
+
+  useEffect(() => {
+    editor.send({ type: "EXTERNAL", draft: { title: saved.title, body: saved.body } });
+  }, [editor, saved.title, saved.body]);
+
+  // Closing the panel mid-debounce still saves what was typed, and an image upload that
+  // finishes after it closed saves the body directly.
+  const open = useRef(true);
+  useEffect(() => {
+    open.current = true;
+    return () => {
+      open.current = false;
+      const patch = changes(editor.getSnapshot().context);
+      if (Object.keys(patch).length > 0) void save(patch).catch(() => {});
+    };
+  }, [editor]);
+
+  const editBody = (value: string) =>
+    open.current
+      ? editor.send({ type: "EDIT", field: "body", value })
+      : void save({ body: value }).catch(() => {});
+
+  return { editor, draft, error, phase, editBody };
+}
+
 /** The save state, kept quiet: a muted mono word while saving, a retry link when it failed. */
-function SaveState({
+export function SaveState({
   phase,
   error,
   onRetry,
@@ -400,7 +412,7 @@ const offsetAt = (element: HTMLElement, x: number, y: number) => {
  * The task title: one truncated line while reading, every line while editing. Clicking it starts
  * editing with the caret where it was clicked.
  */
-function TitleField({
+export function TitleField({
   value,
   onChange,
   onCommit,

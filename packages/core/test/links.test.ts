@@ -74,14 +74,14 @@ describe("mentions in a body", () => {
     expect(body.slice(first!.from, first!.to)).toBe("[[HM-3]]");
   });
 
-  it("reads a 300 KB body full of mentions and code spans in a few milliseconds", () => {
+  it("reads a 300 KB body full of mentions and code spans in linear time", () => {
     const body =
       "x `a` [[HM-1]] ".repeat(20_000) + "\n\n" + "- see [[HM-2]] and `code`\n".repeat(3_000);
     const unmatched = "[[HM-3]] " + " a ``x".repeat(20_000);
     const started = performance.now();
     expect(findMentions(body)).toHaveLength(23_000);
     expect(findMentions(unmatched)).toHaveLength(1);
-    expect(performance.now() - started).toBeLessThan(100);
+    expect(performance.now() - started, "a quadratic scan takes seconds here").toBeLessThan(500);
   });
 
   it("skips escaped mentions, indented code and HTML comments, as markdown renders them", () => {

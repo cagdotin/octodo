@@ -24,8 +24,10 @@ blocked_by: [OCT-48, OCT-49]
 - Placement and ordering helpers (`destination`, `containerDir`, `orderedTasks`, `ensureOrdered`, `orderBetween`) go in a small `place.ts`: they need task parents and `order`, which storage must not know.
 - `workspace.ts` builds the snapshot (duplicate ids, links, `blocked`, `mentionedIn`, subtask nesting, cross-domain diagnostics) and maps `Workspace` methods to domain functions.
 - Fix the wrong comment at `layout.ts` ~200 ("A new kind is one entry here plus its two `Task` fields"; it touches about 10 files). Link kinds stay non-generic.
+- Decide, in `statuses/`: the snapshot's `statuses` include made-up entries for task statuses missing from `config.json` (e.g. `in-review` as unstarted), and `reorderStatuses` writes the whole list, so reordering silently adds them to the config. That contradicts the health rule that an unknown status is added only when asked (found in OCT-45). Reorder should write only configured statuses, or refuse while unknown ones exist.
 
 ## Done when
 
 - Domain folders never list a folder or open a file.
+- A test pins the reorder behaviour above.
 - Same checks as the rest of this list, with the workspace, ids and health tests unchanged.

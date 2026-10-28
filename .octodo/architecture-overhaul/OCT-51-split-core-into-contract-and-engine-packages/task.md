@@ -24,6 +24,13 @@ Decision `docs/decisions/0004-packages-by-dependency-direction.md`. `@octodo/cor
 - A lint rule (`no-restricted-imports`) forbids `apps/web` and the desktop renderer from importing `@octodo/engine`.
 - Update every `@octodo/core/layout` importer (13 files in `apps/web`).
 
+## From OCT-50
+
+- Contract, as files: `domain.ts` (schemas, errors, and the `Problem` type), `layout.ts` (to `rules.ts`) and `place.ts` (plain functions: `Container`, `destination`, which returns a `Container` or the refusal as a string, `orderBetween`, `renumbered`, `compareOrder`, `compareTasks`; imports only `fractional-indexing`). `movedContainer` in the web can be replaced by `destination`. `statuses/statuses.ts` is pure too (`shownStatuses`, `statusOrderError`, `reorderedStatuses`); the settings page could use `statusOrderError`, otherwise it stays in the engine.
+- Engine: `storage/`, `scan.ts`, `state.ts`, `siblings.ts`, `frontmatter.ts` (it imports the `AssignedId` type from storage), `workspace.ts`, `workspaces.ts`, and `tasks/`, `lists/`, `statuses/operations.ts`, `health/`. `health/problems.ts` and `tasks/links.ts` are pure but only the engine uses them.
+- The blocked rule is `isOpen` inside `linkTasks` (`tasks/links.ts`). Extract it into `rules.ts` and have `linkTasks` import it, so the web's copy can go; `links.ts` itself imports `health/problems.ts` and stays in the engine.
+- Every operation is `(state: State, input) => Effect` in `tasks/operations.ts`, `tasks/attachments.ts`, `lists/operations.ts`, `statuses/operations.ts`, `health/operations.ts`; `workspace.ts` maps each `Workspace` method to one. That is the handler shape OCT-52's catalog can point at directly.
+
 ## Done when
 
 - The built web bundle contains no engine code (check the build output).

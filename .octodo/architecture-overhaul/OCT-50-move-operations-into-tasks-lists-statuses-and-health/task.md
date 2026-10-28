@@ -1,7 +1,7 @@
 ---
 id: OCT-50
 title: Move operations into tasks/, lists/, statuses/ and health/
-status: todo
+status: done
 priority: medium
 tags:
   - core
@@ -42,3 +42,13 @@ blocked_by: [OCT-48, OCT-49]
 - Domain folders never list a folder or open a file.
 - A test pins the reorder behaviour above.
 - Same checks as the rest of this list, with the workspace, ids and health tests unchanged.
+
+## Outcome
+
+- `workspace.ts` is 149 lines: the `Workspace` interface with its doc comments (about 65), `initWorkspace`, and one line per method mapping it to `(state, input)` functions in `tasks/`, `lists/`, `statuses/` and `health/`. The kept scan, the in-process semaphore and `giveIds` live in `state.ts`.
+- The snapshot is still built by `scan.ts`, not `workspace.ts`: it is one walk of the tree, and splitting it across domain folders would pass one accumulator around. It takes its ordering from `place.ts` and its shown statuses from `statuses/statuses.ts`.
+- `place.ts` is pure (destination, orderBetween, renumbered, comparators); the Effect half (`containerDir`, `orderedTasks`, `orderedLists`, writing renumbered keys) is `siblings.ts`, so OCT-51 moves `place.ts` to the contract as is.
+- Writes take file text from the scan (`markdownTexts` in `storage/tree.ts`, `fileText` in `scan.ts`); `Storage.readText` is gone. `exists` and `staysInside` stay: they are stats, and the tree does not keep non-markdown names (and on macOS `exists` is case-insensitive, which a name list is not).
+- The breadth-first `waiting` queue stays: it also decides which of two folders with one id is the task, so depth-first would change which one `fresh-id` renumbers.
+- Statuses: reorder takes the order of every status shown and writes only configured ones; recorded in 0008, pinned by `test/statuses.test.ts`.
+- Pin: a CLI and HTTP scenario (`pin50.sh`) on the commit before and after gives identical files apart from `waiting` no longer joining `config.json` on reorder. Bench at 5,000 tasks, alternating with the base commit: no median moved beyond the run-to-run range.

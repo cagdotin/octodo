@@ -1,14 +1,5 @@
-import type { Diagnostic, DiagnosticKind, Fix, FixAction } from "./domain.ts";
-import { MAX_LIST_DEPTH } from "./layout.ts";
-
-/** What is wrong with a file, before the reader says where. */
-export interface Problem {
-  readonly kind: DiagnosticKind;
-  readonly field: string | null;
-  readonly detail: string;
-  /** Null when the kind's fix does not apply to this case. */
-  readonly fix?: FixAction | null;
-}
+import type { Diagnostic, DiagnosticKind, Fix, FixAction } from "../domain.ts";
+import { MAX_LIST_DEPTH } from "../layout.ts";
 
 interface Remedy {
   /** What to do about it, appended to the specific finding. */

@@ -1,7 +1,7 @@
-import { diagnostic } from "./diagnostics.ts";
-import type { Diagnostic, StatusDefinition, Task } from "./domain.ts";
-import { LINK_KINDS, isClosedCategory } from "./layout.ts";
-import type { TaskFile } from "./markdown.ts";
+import type { Diagnostic, StatusDefinition, Task } from "../domain.ts";
+import { diagnostic } from "../health/problems.ts";
+import { LINK_KINDS, isClosedCategory } from "../layout.ts";
+import type { TaskFile } from "./task-file.ts";
 
 /** For each task id, the tasks whose `pick` lists it, in snapshot order. */
 const reverseIndex = (

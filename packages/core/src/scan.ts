@@ -1,6 +1,5 @@
 import { PlatformError, Result } from "effect";
 import { join, relative } from "node:path";
-import { diagnostic, type DiagnosticOptions } from "./diagnostics.ts";
 import {
   DEFAULT_STATUSES,
   type Diagnostic,
@@ -21,17 +20,16 @@ import {
   idNumber,
   sortStatuses,
 } from "./layout.ts";
-import { linkTasks } from "./links.ts";
+import { frontmatterId, hasFrontmatter, readFrontmatter } from "./frontmatter.ts";
+import { diagnostic, type DiagnosticOptions } from "./health/problems.ts";
+import { readListFile } from "./lists/list-file.ts";
+import { linkTasks } from "./tasks/links.ts";
 import {
-  frontmatterId,
-  hasFrontmatter,
-  readFrontmatter,
-  readListFile,
   readTaskFile,
   type TaskFile,
   type TaskFileRead,
   type TaskPlace,
-} from "./markdown.ts";
+} from "./tasks/task-file.ts";
 import type { StorageRead } from "./storage/storage.ts";
 import type { ListFolder, TaskFolder, Tree } from "./storage/tree.ts";
 

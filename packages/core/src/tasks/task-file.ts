@@ -1,25 +1,30 @@
-import { Option, Predicate, Schema } from "effect";
-import { generateKeyBetween } from "fractional-indexing";
-import { isMap, parseDocument, type Document } from "yaml";
+import { Option, Schema } from "effect";
 import {
   DueDate,
   Priority,
   Tags,
   type CreateTaskInput,
+  type Problem,
   type Task,
   type UpdateTaskInput,
-} from "./domain.ts";
-import type { Problem } from "./diagnostics.ts";
-import type { AssignedId } from "./storage/storage.ts";
+} from "../domain.ts";
+import {
+  absent,
+  invalidFrontmatter,
+  patchFrontmatter,
+  readFrontmatter,
+  readOrder,
+  stringOrNull,
+} from "../frontmatter.ts";
 import {
   LINK_KINDS,
   findMentions,
   humanize,
-  isLinkField,
   isTaskId,
   taskIdsIn,
   type LinkField,
-} from "./layout.ts";
+} from "../layout.ts";
+import type { AssignedId } from "../storage/storage.ts";
 
 /** What the folder tree says about a task, which `task.md` itself does not. */
 export interface TaskPlace {
@@ -36,10 +41,6 @@ export interface TaskPlace {
   /** The workspace key, whose ids are task ids even when it is not of the usual shape. */
   readonly key: string;
 }
-
-export type FrontmatterRead<A> =
-  | { readonly _tag: "Read"; readonly value: A }
-  | { readonly _tag: "Invalid"; readonly problem: Problem };
 
 /** A task as its own file has it, before a snapshot adds what other tasks say about it. */
 export type TaskFile = Omit<Task, "blocks" | "blocked" | "mentionedIn">;
@@ -82,8 +83,6 @@ const EDITABLE = {
   blocked_by: true,
 } satisfies Record<EditableKey, true>;
 
-const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n?---[ \t]*(?:\r?\n|$)/;
-
 const decodePriority = Schema.decodeUnknownOption(Priority);
 const decodeDue = Schema.decodeUnknownOption(DueDate);
 const decodeTags = Schema.decodeUnknownOption(Tags);
@@ -99,8 +98,6 @@ const tagsAsWritten = (value: unknown): unknown =>
       ? value
       : [scalarTag(value)];
 
-const absent = (value: unknown) => value === undefined || value === null || value === "";
-
 /** A field's value decoded through its schema, or the default with a problem when it does not decode. */
 const decodeField = <A>(
   value: unknown,
@@ -114,21 +111,6 @@ const decodeField = <A>(
   if (Option.isSome(decoded)) return decoded.value;
   problems.push({ ...problem, detail: problem.detail(JSON.stringify(value)) });
   return fallback;
-};
-
-const stringOrNull = (value: unknown): string | null =>
-  typeof value === "string" && value.length > 0 ? value : null;
-
-/** A fractional order key, or "" (unordered) for none or one written by hand that is not a key. */
-const readOrder = (value: unknown): string => {
-  const key = stringOrNull(value);
-  if (key === null) return "";
-  try {
-    generateKeyBetween(key, null);
-    return key;
-  } catch {
-    return "";
-  }
 };
 
 /**
@@ -169,76 +151,6 @@ const readLinks = (
   if (ids.includes(id))
     problems.push({ kind: "self-link", field, detail: `${field} lists the task itself` });
   return ids.filter((other) => other !== id);
-};
-
-const splitFrontmatter = (
-  text: string,
-): { readonly yaml: string | null; readonly body: string } => {
-  const match = FRONTMATTER.exec(text);
-  if (match === null) return { yaml: null, body: text };
-  return { yaml: match[1] ?? "", body: text.slice(match[0].length).replace(/^\r?\n/, "") };
-};
-
-/** Whether the file starts with a `---` frontmatter block. */
-export const hasFrontmatter = (text: string): boolean => splitFrontmatter(text).yaml !== null;
-
-/** The `id` in a file's frontmatter, found even when the rest of the frontmatter does not parse. */
-export const frontmatterId = (text: string): string | null => {
-  const { yaml } = splitFrontmatter(text);
-  return yaml === null ? null : (/^id:[ \t]*["']?([^\s"'#]+)/m.exec(yaml)?.[1] ?? null);
-};
-
-const parseYaml = (yaml: string | null): Document => {
-  const doc = parseDocument(yaml ?? "");
-  if (doc.errors.length > 0) {
-    const first = doc.errors[0]?.message.split("\n")[0]?.replace(/:$/, "") ?? "unknown error";
-    throw new Error(`Invalid frontmatter: ${first}`);
-  }
-  return doc;
-};
-
-/** The frontmatter as plain data, or why it is not a set of keys. */
-export const readFrontmatter = (
-  text: string,
-):
-  | { readonly data: Readonly<Record<string, unknown>>; readonly body: string }
-  | { readonly error: string } => {
-  try {
-    const parts = splitFrontmatter(text);
-    const value: unknown = parseYaml(parts.yaml).toJS();
-    if (value !== null && !Predicate.isObject(value))
-      return { error: "Invalid frontmatter: it must be a set of key: value pairs" };
-    return { data: (value ?? {}) as Record<string, unknown>, body: parts.body };
-  } catch (error) {
-    return { error: error instanceof Error ? error.message : String(error) };
-  }
-};
-
-const invalidFrontmatter = (error: string) => ({
-  _tag: "Invalid" as const,
-  problem: { kind: "invalid-frontmatter" as const, field: null, detail: error },
-});
-
-type FrontmatterChanges = Readonly<Record<string, unknown>> & { readonly id?: AssignedId };
-
-/**
- * Edits the frontmatter through the YAML document rather than re-serialising plain data, so keys
- * the app does not know about, their order and their comments survive. `undefined` removes a key.
- */
-export const patchFrontmatter = (
-  existing: string | null,
-  changes: FrontmatterChanges,
-  body?: string,
-): string => {
-  const parts = existing === null ? { yaml: null, body: "" } : splitFrontmatter(existing);
-  const doc = parseYaml(parts.yaml);
-  if (!isMap(doc.contents)) doc.contents = doc.createNode({});
-  for (const [key, value] of Object.entries(changes)) {
-    if (value === undefined) doc.delete(key);
-    else doc.set(key, isLinkField(key) ? doc.createNode(value, { flow: true }) : value);
-  }
-  const nextBody = body ?? parts.body;
-  return `---\n${doc.toString({ lineWidth: 0, flowCollectionPadding: false })}---\n${nextBody.length > 0 ? `\n${nextBody.replace(/\n*$/, "\n")}` : ""}`;
 };
 
 /** Values the file leaves out rather than writes: no priority, no tags, no due date. */
@@ -377,25 +289,3 @@ export const keepLinks = (
   if (kept.length === ids.length && !malformed) return null;
   return patchFrontmatter(text, { [field]: kept.length > 0 ? kept : undefined });
 };
-
-export interface ListFile {
-  readonly name: string | null;
-  readonly order: string;
-  readonly body: string;
-}
-
-export const readListFile = (text: string): FrontmatterRead<ListFile> => {
-  const read = readFrontmatter(text);
-  if ("error" in read) return invalidFrontmatter(read.error);
-  return {
-    _tag: "Read",
-    value: {
-      name: stringOrNull(read.data["name"]),
-      order: readOrder(read.data["order"]),
-      body: read.body,
-    },
-  };
-};
-
-export const newListFile = (list: { readonly name: string; readonly order: string }): string =>
-  patchFrontmatter(null, { name: list.name, order: list.order });

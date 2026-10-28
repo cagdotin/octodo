@@ -173,6 +173,15 @@ export const Diagnostic = Schema.Struct({
 });
 export type Diagnostic = typeof Diagnostic.Type;
 
+/** What is wrong with a file, before the reader says where. */
+export interface Problem {
+  readonly kind: DiagnosticKind;
+  readonly field: string | null;
+  readonly detail: string;
+  /** Null when the kind's fix does not apply to this case. */
+  readonly fix?: FixAction | null;
+}
+
 /**
  * Asks for fix `action` of the problem `kind` at `path`. The workspace reads the files again and
  * applies it only if a fresh read still offers that fix there, so a request made before the files

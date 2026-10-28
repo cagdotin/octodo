@@ -37,15 +37,10 @@ import {
   taskFolderName,
   taskSubtree,
 } from "./layout.ts";
-import {
-  editTaskFile,
-  keepLinks,
-  needsId,
-  newListFile,
-  newTaskFile,
-  patchFrontmatter,
-} from "./markdown.ts";
-import { applyFix } from "./fixes.ts";
+import { patchFrontmatter } from "./frontmatter.ts";
+import { applyFix } from "./health/fixes.ts";
+import { newListFile } from "./lists/list-file.ts";
+import { editTaskFile, keepLinks, needsId, newTaskFile } from "./tasks/task-file.ts";
 import { scanWorkspace, type Scan } from "./scan.ts";
 import { isHidden } from "./storage/bookkeeping.ts";
 import { hasConfig } from "./storage/config.ts";

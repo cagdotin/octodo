@@ -191,7 +191,8 @@ export const listMoveError = (
 /**
  * Relations a task stores in its frontmatter as a list of task ids: `blocked_by: [HM-3, HM-7]`.
  * Only the task named by `field` stores an edge; the other end gets it as `reverse` when a
- * snapshot is read. A new kind is one entry here plus its two `Task` fields.
+ * snapshot is read. The code is not generic over kinds: a new one also needs its `Task` fields,
+ * its input in `UpdateTaskInput`, and its handling in the MCP tools, the CLI and the web app.
  */
 export const LINK_KINDS = [
   {

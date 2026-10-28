@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-  editTaskFile,
-  newListFile,
-  newTaskFile,
-  patchFrontmatter,
-  readListFile,
-  readTaskFile,
-} from "../src/markdown.ts";
+import { patchFrontmatter } from "../src/frontmatter.ts";
+import { newListFile, readListFile } from "../src/lists/list-file.ts";
+import { editTaskFile, newTaskFile, readTaskFile } from "../src/tasks/task-file.ts";
 import type { AssignedId } from "../src/storage/storage.ts";
 
 /** Only storage mints an assigned id; these tests write fixed ones. */

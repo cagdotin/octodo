@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_STATUSES } from "../src/domain.ts";
 import { findMentions, isReady } from "../src/layout.ts";
-import { editTaskFile, keepLinks, readTaskFile } from "../src/markdown.ts";
+import { editTaskFile, keepLinks, readTaskFile } from "../src/tasks/task-file.ts";
 import { initWorkspace, makeWorkspace } from "../src/workspace.ts";
 
 const run = <A, E>(effect: Effect.Effect<A, E, any>) =>

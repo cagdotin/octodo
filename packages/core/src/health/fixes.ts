@@ -1,12 +1,13 @@
 import { Effect } from "effect";
 import { basename, dirname, join } from "node:path";
-import { DEFAULT_STATUSES, type Diagnostic, type FixAction } from "./domain.ts";
-import { TASK_FILE, humanize, idNumber, isLinkField, taskFolderName } from "./layout.ts";
-import { frontmatterId, keepLinks, patchFrontmatter, readFrontmatter } from "./markdown.ts";
-import type { Scan } from "./scan.ts";
-import type { Files } from "./storage/files.ts";
-import type { AssignedId, Storage } from "./storage/storage.ts";
-import { taskFoldersFrom } from "./storage/tree.ts";
+import { DEFAULT_STATUSES, type Diagnostic, type FixAction } from "../domain.ts";
+import { frontmatterId, patchFrontmatter, readFrontmatter } from "../frontmatter.ts";
+import { TASK_FILE, humanize, idNumber, isLinkField, taskFolderName } from "../layout.ts";
+import type { Scan } from "../scan.ts";
+import type { Files } from "../storage/files.ts";
+import type { AssignedId, Storage } from "../storage/storage.ts";
+import { taskFoldersFrom } from "../storage/tree.ts";
+import { keepLinks } from "../tasks/task-file.ts";
 
 /** What a fix knows: a scan taken just before, which found the problem, and the write it runs in. */
 interface FixContext {

@@ -57,7 +57,7 @@ instead of keeping the code because it exists.
   Scans, diagnostics and attachments never see them. The first time a process holds the lock, it
   removes the temporary ones, since no write that owns them can still be running.
 - Every problem a read finds is a diagnostic `{ path, kind, field, message, fix }`, and every kind
-  is a row of `PROBLEMS` in `diagnostics.ts` with its remedy and its fixes. A fix runs only when asked
+  is a row of `PROBLEMS` in `health/problems.ts` with its remedy and its fixes. A fix runs only when asked
   (`octo doctor`, the app's dialog, MCP `fix_diagnostic`) and only if a fresh read still offers that
   fix there, so repeating one changes nothing. Fix-all applies only fixes that cannot lose what a
   person wrote; one that guesses (making a loose file a task) is picked one at a time.

@@ -5,12 +5,13 @@ import { Field, FieldError } from "@octodo/ui/components/field";
 import { InputGroup, InputGroupInput } from "@octodo/ui/components/input-group";
 import { Popover, PopoverContent, PopoverTrigger } from "@octodo/ui/components/popover";
 import { PropertyChip } from "@octodo/ui/components/property-chip";
+import { useToday } from "@octodo/ui/hooks/use-today";
 import { dueInfo, formatTimestamp } from "@octodo/ui/lib/dates";
 import { cn } from "@octodo/ui/lib/utils";
 import { RepeatIcon } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import type { CreateFieldsProps, KindProps, PluginWeb, TaskOf } from "../web.ts";
-import { dueDay, localDay, nextDue, parseRule, RULE_EXAMPLES } from "./rule.ts";
+import { dueDay, nextDue, parseRule, RULE_EXAMPLES } from "./rule.ts";
 import type { RecurringFields, recurringShared } from "./shared.ts";
 
 const api = createClient<ServedApi<typeof recurringShared.operations>>("");
@@ -25,7 +26,7 @@ function Row({
   readonly className?: string | undefined;
 }) {
   const { repeat, next, last } = task.kind.fields;
-  const due = dueInfo(next);
+  const due = dueInfo(next, useToday());
   const title = [
     ruleText(repeat),
     next === null ? "no next day" : `next ${next}`,
@@ -120,18 +121,18 @@ interface Draft {
 }
 
 /** What a rule says about a task created today: its first due day, or why it is not a rule. */
-const preview = (repeat: string) => {
+const preview = (repeat: string, today: string) => {
   if (repeat.trim() === "") return { error: null, first: null };
   const parsed = parseRule(repeat);
   if ("error" in parsed) return { error: parsed.error, first: null };
-  const first = nextDue(parsed.rule, [], localDay(new Date().toISOString()));
-  return { error: null, first: dueInfo(first)?.label ?? null };
+  const first = nextDue(parsed.rule, [], today);
+  return { error: null, first: dueInfo(first, today)?.label ?? null };
 };
 
 /** The rule chip; it opens when Recurring is picked, since a recurring task needs a rule. */
 function CreateFields({ draft, onChange, onCloseAutoFocus }: CreateFieldsProps<Draft>) {
   const [open, setOpen] = useState(true);
-  const { error, first } = preview(draft.repeat);
+  const { error, first } = preview(draft.repeat, useToday());
   const valid = draft.repeat.trim() !== "" && error === null;
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -179,7 +180,7 @@ function CreateFields({ draft, onChange, onCloseAutoFocus }: CreateFieldsProps<D
 
 function Panel({ workspace, task }: KindProps<RecurringFields>) {
   const { next, count, recent } = task.kind.fields;
-  const due = dueInfo(next);
+  const due = dueInfo(next, useToday());
   return (
     <section aria-label="Repeats" className="flex shrink-0 flex-col border-t pt-1.5 pb-2">
       <h2 className="flex h-7 shrink-0 items-center gap-2 px-4 font-mono text-xs text-muted-foreground lowercase">

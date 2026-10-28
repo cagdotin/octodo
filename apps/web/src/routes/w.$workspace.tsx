@@ -30,6 +30,7 @@ import { SidebarInset } from "@octodo/ui/components/sidebar";
 import { Spinner } from "@octodo/ui/components/spinner";
 import { WindowDragArea } from "@/components/window-drag-area";
 import { useIsMobile } from "@octodo/ui/hooks/use-mobile";
+import { useToday } from "@octodo/ui/hooks/use-today";
 import { snapshotQuery } from "@/lib/api";
 import { useHotkeys } from "@/lib/hotkeys";
 import {
@@ -104,6 +105,7 @@ function WorkspacePage() {
   const navigate = useNavigate({ from: Route.fullPath });
   const { data: snapshot } = useQuery(snapshotQuery(workspace));
   const isMobile = useIsMobile();
+  const today = useToday();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [composing, setComposing] = useState<string | null>(null);
   // The new-task dialog, with its prefilled title; null while closed.
@@ -154,7 +156,7 @@ function WorkspacePage() {
 
   const statuses = snapshot.statuses.filter((status) => visibleCategory(status.category, display));
   const shown = new Set(statuses.map((status) => status.id));
-  const inList = filterTasks(snapshot, search.list, kindDay);
+  const inList = filterTasks(snapshot, search.list, kindDay, today);
   const tasks = inList.filter((task) => shown.has(task.status) && matchesFilter(task, filter));
   const title = viewTitle(search.list, snapshot.lists);
   const selected =

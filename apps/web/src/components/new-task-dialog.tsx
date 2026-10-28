@@ -42,6 +42,7 @@ import { ScrollArea } from "@octodo/ui/components/scroll-area";
 import { useCreateTask, useCreateTaskOfKind } from "@/lib/api";
 import { withoutRanges, type QuickAddToken } from "@/lib/quick-add";
 import { cn } from "@octodo/ui/lib/utils";
+import { useToday } from "@octodo/ui/hooks/use-today";
 import { dueInfo } from "@octodo/ui/lib/dates";
 import {
   allTags,
@@ -50,7 +51,6 @@ import {
   listTree,
   PRIORITIES,
   SMART,
-  todayKey,
   type ListNode,
 } from "@/lib/tasks";
 
@@ -140,6 +140,7 @@ function NewTaskForm({
   const [pickedTags, setPickedTags] = useState<Array<string>>([]);
 
   const { parsed } = draft;
+  const today = useToday();
   // A pick from the buttons replaces what the tokens said, so the dialog shows one answer.
   const dropTokens = (drop: (token: QuickAddToken) => boolean) =>
     draft.setText(
@@ -154,14 +155,14 @@ function NewTaskForm({
   const priority = parsed.fields.priority ?? pickedPriority ?? "none";
   const due =
     parsed.fields.due ??
-    (pickedDue === undefined ? (list === SMART.today ? todayKey() : null) : pickedDue);
+    (pickedDue === undefined ? (list === SMART.today ? today : null) : pickedDue);
   const viewList = isSmartView(list) ? null : (list ?? null);
   const targetList = parsed.fields.list ?? (pickedList === undefined ? viewList : pickedList);
   const tags = [...new Set([...pickedTags, ...parsed.fields.tags])];
   const knownTags = [...new Set([...allTags(snapshot.tasks), ...tags])].sort((a, b) =>
     a.localeCompare(b),
   );
-  const dueLabel = dueInfo(due);
+  const dueLabel = dueInfo(due, today);
   const ready =
     parsed.title !== "" &&
     status !== undefined &&

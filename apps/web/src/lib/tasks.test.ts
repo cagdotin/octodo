@@ -10,11 +10,12 @@ import {
   listCounts,
   SMART,
   subtaskProgress,
-  todayKey,
   withBlockedBy,
   withoutSubtree,
 } from "./tasks.ts";
 import { kindDay } from "../components/task-kind.tsx";
+
+const TODAY = format(new Date(), "yyyy-MM-dd");
 
 const task = (id: string, fields: Partial<Task> = {}): Task => ({
   id,
@@ -68,7 +69,7 @@ describe("subtasks in views", () => {
       task("HM-7", { due: "2000-01-01" }),
     ];
     const ids = (list: string | undefined) =>
-      filterTasks(snapshot(tasks), list, kindDay).map((entry) => entry.id);
+      filterTasks(snapshot(tasks), list, kindDay, TODAY).map((entry) => entry.id);
     expect(ids(undefined)).toEqual(["HM-1", "HM-5", "HM-7"]);
     expect(ids("home")).toEqual(["HM-1"]);
     expect(ids(SMART.none)).toEqual(["HM-5", "HM-7"]);
@@ -87,7 +88,7 @@ describe("subtasks in views", () => {
       task("HM-6", { parent: "HM-1", blockedBy: ["HM-5"] }),
     ]);
     const ready = (current: WorkspaceSnapshot) =>
-      filterTasks(current, SMART.ready, kindDay).map((entry) => entry.id);
+      filterTasks(current, SMART.ready, kindDay, TODAY).map((entry) => entry.id);
     expect(ready(tasks)).toEqual(["HM-1", "HM-4", "HM-5"]);
     expect(ready(applyMove(tasks, "HM-1", { status: "done" })), "a finished blocker").toEqual([
       "HM-2",
@@ -209,14 +210,30 @@ describe("changing blockers before the server answers", () => {
 
 describe("due dates", () => {
   it("groups a due date-time by its date", () => {
-    const today = todayKey();
+    const today = TODAY;
     const tasks = [task("HM-1", { due: `${today}T23:00` }), task("HM-2", { due: today })];
-    expect(filterTasks(snapshot(tasks), SMART.today, kindDay).map((found) => found.id)).toEqual([
-      "HM-1",
-      "HM-2",
-    ]);
-    expect(dueInfo(`${today}T23:00`)).toMatchObject({ label: "Today", today: true });
-    expect(dueInfo(`${today}T00:30+14:00`)).toMatchObject({ label: "Today", overdue: false });
+    expect(
+      filterTasks(snapshot(tasks), SMART.today, kindDay, TODAY).map((found) => found.id),
+    ).toEqual(["HM-1", "HM-2"]);
+    expect(dueInfo(`${today}T23:00`, TODAY)).toMatchObject({ label: "Today", today: true });
+    expect(dueInfo(`${today}T00:30+14:00`, TODAY)).toMatchObject({
+      label: "Today",
+      overdue: false,
+    });
+  });
+
+  it("labels a due day by the day it is shown on, so a page left open moves on at midnight", () => {
+    const due = "2026-10-29";
+    expect(dueInfo(due, "2026-10-28")).toEqual({ label: "Tomorrow", today: false, overdue: false });
+    expect(dueInfo(due, "2026-10-29")).toEqual({ label: "Today", today: true, overdue: false });
+    expect(dueInfo(due, "2026-10-30")).toEqual({ label: "Yesterday", today: false, overdue: true });
+    expect(dueInfo(due, "2026-11-02")).toEqual({ label: "Oct 29", today: false, overdue: true });
+    expect(dueInfo(due, "2027-01-01")?.label).toBe("Oct 29, 2026");
+    const tasks = [task("HM-1", { due })];
+    const today = (on: string) =>
+      filterTasks(snapshot(tasks), SMART.today, kindDay, on).map((found) => found.id);
+    expect(today("2026-10-28"), "the evening before").toEqual([]);
+    expect(today("2026-10-29"), "after midnight").toEqual(["HM-1"]);
   });
 
   it("lists a task of a kind by its kind's day, never its due, as list_tasks' due_by does", () => {
@@ -240,7 +257,7 @@ describe("due dates", () => {
       task("HM-10", { due: day(-1) }),
     ];
     const ids = (list: string) =>
-      filterTasks(snapshot(tasks), list, kindDay).map((found) => found.id);
+      filterTasks(snapshot(tasks), list, kindDay, TODAY).map((found) => found.id);
     expect(ids(SMART.today), "due today, the chores due today and overdue").toEqual([
       "HM-1",
       "HM-2",

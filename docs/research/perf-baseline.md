@@ -176,3 +176,84 @@ each round.
   child entry of its folder. Now the folder's own read holds the marker, and the scan never visits
   it as a child. The file system calls per task on a cold read stay the same: the `lstat` of
   `task.md` moved into the folder's read.
+
+## After the overhaul (OCT-61)
+
+### The engine, `pnpm bench`
+
+Measured at `d3a1afb` (the overhaul's last feature commit) against `31a8506` (`master` before the
+overhaul; its `packages/core` is the one the baseline above measured), alternating in one session on
+the same machine: three rounds of the full `pnpm bench`, `31a8506` first in each round, 7 runs per
+number. `31a8506` has no bench script, so its run used the script from `750383a` with the import
+pointing at `packages/core`; the two copies differ only in that line. Node 26.12.1 on both sides.
+The load average was 1.9 to 5.1 in rounds one and two and up to 8.7 in round three, with other
+agents and a browser running. Median of each round, in ms.
+
+| Tasks | Operation      | `31a8506`       | `d3a1afb`     |
+| ----- | -------------- | --------------- | ------------- |
+| 1,000 | cold open      | 238, 241, 254   | 157, 147, 151 |
+| 1,000 | status change  | 30, 45, 36      | 23, 36, 23    |
+| 1,000 | rename         | 27, 51, 45      | 35, 31, 26    |
+| 1,000 | create         | 134, 128, 144   | 26, 33, 19    |
+| 1,000 | hand edit seen | 117, 118, 130   | 107, 114, 102 |
+| 5,000 | cold open      | 1188, 971, 1162 | 629, 563, 811 |
+| 5,000 | status change  | 132, 117, 130   | 104, 122, 101 |
+| 5,000 | rename         | 126, 129, 147   | 85, 105, 75   |
+| 5,000 | create         | 589, 634, 1090  | 99, 101, 88   |
+| 5,000 | hand edit seen | 232, 215, 208   | 189, 198, 169 |
+
+Nothing regressed. Every median at `d3a1afb` is lower than or within the range of `31a8506`'s.
+
+- **Create** is about 500 ms faster at 5,000 tasks, as measured after OCT-46: the holder takes the
+  next id from its scan instead of two uncached walks of every id.
+- **Cold open** is about 400 ms faster at 5,000 tasks. OCT-46 moved the leftover cleanup from the
+  open to a process's first write, and OCT-48 dropped two cache lookups per task from each scan.
+  Round three's 811 ms ran at a load average of 8.7. Its range was 669 to 1,663 ms.
+- **Status change, rename and hand edit seen** are 20 to 50 ms faster at 5,000 tasks, from
+  OCT-48's leaner rescan. They are still bound by rebuilding the snapshot, which walks every
+  folder through the cache, so they still grow with the task count.
+
+### Through a running server
+
+The CLI and stdio MCP now run every call on the server when one runs, and the app always has. To
+time that path, `octo serve` ran on a scratch home with the bench's generated workspaces, timed over
+HTTP and as whole `bin/octo` processes, 5 runs, 2 s idle before each. At 5,000 tasks the load
+average was 2.4 to 3.2. Ranges are in parentheses, in ms. These come from a scratch script, not
+`pnpm bench`.
+
+| Operation                                   | 1,000 tasks      | 5,000 tasks      |
+| ------------------------------------------- | ---------------- | ---------------- |
+| first read after the server starts          | 166 (157–180)    | 552 (548–561)    |
+| first write after the server starts         | 243 (237–251)    | 961 (918–1002)   |
+| HTTP status change                          | 35 (19–43)       | 113 (84–142)     |
+| HTTP rename                                 | 69 (62–71)       | 210 (167–457)    |
+| HTTP create                                 | 44 (27–49)       | 131 (104–141)    |
+| hand edit seen (SSE change event, then GET) | 133 (129–136)    | 212 (187–222)    |
+| `octo list`, server running                 | 725 (723–806)    | 769 (751–816)    |
+| `octo move <id> <status>`, server running   | 551 (509–591)    | 635 (604–647)    |
+| `octo update --title`, server running       | 546 (540–583)    | 759 (672–847)    |
+| `octo create`, server running               | 534 (527–603)    | 625 (601–666)    |
+| `octo list`, no server                      | 816 (792–945)    | 1760 (1713–1849) |
+| `octo move <id> <status>`, no server        | 865 (828–884)    | 1922 (1898–2019) |
+| `octo update --title`, no server            | 1173 (1098–1204) | 3370 (3279–3396) |
+| `octo create`, no server                    | 879 (856–918)    | 1917 (1896–2004) |
+
+- Starting a process costs 430 ms (`octo --version`, 5 runs), so a CLI call through a running
+  server is that plus 100 to 300 ms, against 1.5 to 3 s on its own at 5,000 tasks. Two CLI writes
+  through the server left the same owner-lock holder token, and two without a server left two
+  different ones, so the calls did run on the server.
+- **HTTP status change and create** match the engine's numbers above.
+- **HTTP rename** costs about 100 ms more than the engine's, at `31a8506`'s Hono server too:
+  alternating the two servers, 3 rounds of 4 runs at 5,000 tasks, rename took 238 ms (203–273) at
+  `31a8506` and 237 ms (185–286) today, so it is not a regression. Its limiter is not pinned down.
+  In-process at 5,000 tasks, a `getTask` right after an update sometimes rescanned (55 to 87 ms),
+  which fits the watcher's report of the write's own change landing before the response does.
+- **First write after the server starts** is a regression: about 950 ms at 5,000 tasks, against 130
+  to 170 ms at `31a8506` (3 rounds each, alternating). That write takes the owner lock as a new
+  holder, which forgets the cache and removes leftovers over the whole tree (360 to 410 ms alone,
+  one file system call at a time), and then rescans without a cache. At `31a8506` the open removed
+  the leftovers. OCT-86 tracks it.
+- **The CLI with no server** got slower for `show` and `update` after `342e1b0`, which forgets the
+  cache before every read while no watcher runs. One command then scans the tree three or four
+  times. At 5,000 tasks, `octo show` takes 2.4 s against 1.4 s at `31a8506` and 1.0 s at `d3a1afb`,
+  and `octo update` 3.2 s against 1.6 s and 2.4 s. OCT-85 tracks it.

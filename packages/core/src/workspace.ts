@@ -390,10 +390,6 @@ export const makeWorkspace = Effect.fnUntraced(function* (
         const taskId = yield* claimId.pipe(storage("Could not claim an id for the task"));
         const scan = yield* state;
         const { snapshot } = scan;
-        if (scan.oldLayout)
-          return yield* invalid(
-            "This workspace still has folders from the old layout. Run `octo migrate` before adding tasks.",
-          );
         const status = input.status ?? defaultStatus(snapshot.statuses)?.id;
         if (status === undefined) return yield* invalid("The workspace has no statuses");
         yield* checkStatus(snapshot, status);

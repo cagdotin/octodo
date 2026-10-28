@@ -141,7 +141,6 @@ export const DiagnosticKind = Schema.Literals([
   "list-too-deep",
   "unreadable",
   "symlink",
-  "old-layout",
 ]);
 export type DiagnosticKind = typeof DiagnosticKind.Type;
 
@@ -154,7 +153,6 @@ export const FixAction = Schema.Literals([
   "drop-unknown-links",
   "drop-self-link",
   "normalize-links",
-  "migrate",
   "add-status",
 ]);
 export type FixAction = typeof FixAction.Type;

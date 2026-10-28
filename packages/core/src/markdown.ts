@@ -401,20 +401,3 @@ export const readListFile = (text: string): FrontmatterRead<ListFile> => {
 
 export const newListFile = (list: { readonly name: string; readonly order: string }): string =>
   patchFrontmatter(null, { name: list.name, order: list.order });
-
-/**
- * A task file of the old layout as `task.md`: the status its folder gave it, no `updated`, and no
- * keys left at their default. Throws on invalid frontmatter.
- */
-export const migratedTaskFile = (text: string, status: string): string => {
-  const read = readFrontmatter(text);
-  if ("error" in read) throw new Error(read.error);
-  const defaults = Object.keys(EDITABLE).filter(
-    (key) => key !== "title" && Object.hasOwn(read.data, key) && isDefault(read.data[key]),
-  );
-  return patchFrontmatter(text, {
-    status,
-    updated: undefined,
-    ...Object.fromEntries(defaults.map((key) => [key, undefined])),
-  });
-};

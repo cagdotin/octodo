@@ -32,8 +32,8 @@ and any.do first, then Linear.
   (`garden/seeds`), so moving a list to another parent changes its id.
 - Folder names carry no meaning for the scanner; they are for people: `<id>-<slug>` for a task, the
   slug for a list. Anything else (a loose `.md`, a folder with neither marker or both, a symlink,
-  which is never followed) is a diagnostic, and so is a workspace in the old folder layout, which
-  `octo migrate` converts. A loose `.md` without frontmatter is a note: reported, never changed.
+  which is never followed) is a diagnostic. A loose `.md` without frontmatter is a note: reported,
+  never changed.
 - Of several task folders with one id, the task is the one a sync tool did not name as a copy
   (`HM-3-paint 2`), then the one named after its id and title, then the first read.
 - A task's identity is the `id` in its frontmatter, never its path. Files without an id get one the
@@ -44,8 +44,8 @@ and any.do first, then Linear.
   alike. A `.pending-id` file in a task folder names the id being written into its `task.md`, so
   readers racing on one new file agree on its id.
 - Dot entries are octodo's own bookkeeping: claims, pending-id markers, `.*.tmp` files and `.new-*`
-  or `.migrate-*` folders. Scans, diagnostics and attachments never see them, and one more than a
-  minute old is a crash's leftover, removed when a workspace opens.
+  folders. Scans, diagnostics and attachments never see them, and one more than a minute old is a
+  crash's leftover, removed when a workspace opens.
 - Every problem a read finds is a diagnostic `{ path, kind, field, message, fix }`, and every kind
   is a row of `PROBLEMS` in `diagnostics.ts` with its remedy and its fixes. A fix runs only when asked
   (`octo doctor`, the app's dialog, MCP `fix_diagnostic`) and only if a fresh read still offers that

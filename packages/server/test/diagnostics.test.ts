@@ -87,10 +87,10 @@ describe("fixing diagnostics over HTTP", () => {
     const bad = await post("/diagnostics/fix", {
       path: ".octodo",
       kind: "everything",
-      action: "migrate",
+      action: "fresh-id",
     });
     expect(bad.status).toBe(400);
-    const actionless = await post("/diagnostics/fix", { path: ".octodo", kind: "old-layout" });
+    const actionless = await post("/diagnostics/fix", { path: ".octodo", kind: "duplicate-id" });
     expect(actionless.status).toBe(400);
   });
 });

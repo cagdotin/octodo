@@ -47,24 +47,6 @@ export const defaultStatus = (
 ): StatusDefinition | undefined =>
   statuses.find((status) => status.category === "unstarted") ?? sortStatuses(statuses)[0];
 
-/** A folder of the layout before tasks were folders: `s01-todo` (a status) or `l00-groceries` (a list). */
-export const legacyFolder = (
-  name: string,
-): {
-  readonly type: "status" | "list";
-  readonly slug: string;
-  readonly position: number | null;
-} | null => {
-  const match = /^([sl])(\d*)-(.+)$/.exec(name);
-  if (match === null) return null;
-  const [, prefix, digits, slug] = match;
-  return {
-    type: prefix === "s" ? "status" : "list",
-    slug: slug!,
-    position: digits === "" ? null : Number(digits),
-  };
-};
-
 export const slugify = (text: string): string =>
   text
     .normalize("NFKD")

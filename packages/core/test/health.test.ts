@@ -508,16 +508,6 @@ describe("file health", () => {
     ]);
   });
 
-  it("migrates the old layout when asked", async () => {
-    const root = await fresh({ "s01-todo/HM-1-a.md": "---\nid: HM-1\n---\n" });
-    expect(await diagnostics(root)).toEqual([
-      { path: ".octodo", kind: "old-layout", field: null, fix: "migrate" },
-    ]);
-    await fixTwice(root, { path: ".octodo", kind: "old-layout", action: "migrate" });
-    expect(files(root)).toEqual(["HM-1-a/task.md", "config.json"]);
-    expect(read(root, "HM-1-a/task.md")).toBe("---\nid: HM-1\nstatus: todo\n---\n");
-  });
-
   it("reports a task it cannot give an id, and gives it one on the next read that can", async () => {
     const root = await fresh({ "frozen/task.md": "No id yet\n" });
     chmodSync(join(root, ".octodo/frozen"), 0o555);

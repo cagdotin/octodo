@@ -9,8 +9,6 @@ import { hostname } from "node:os";
 export const tempName = {
   file: (name: string) => `.${name}.${crypto.randomUUID()}.tmp`,
   folder: () => `.new-${crypto.randomUUID()}`,
-  /** A migration names its temporary folders after its run, so two runs never share one. */
-  migration: (run: string, name: string) => `.migrate-${run}-${name}`,
   /** The file in `.octodo/` whose exclusive creation reserves task id `id` for one process. */
   claim: (id: string) => `.claim-${id}`,
   /** The file in a task folder naming the id being written into its `task.md`. */
@@ -18,9 +16,7 @@ export const tempName = {
 };
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-const LEFTOVER = new RegExp(
-  `^\\.(?:.+\\.${UUID}\\.tmp|new-${UUID}|migrate-${UUID}-.+|claim-.+-\\d+|pending-id)$`,
-);
+const LEFTOVER = new RegExp(`^\\.(?:.+\\.${UUID}\\.tmp|new-${UUID}|claim-.+-\\d+|pending-id)$`);
 
 /** The name a sync tool's conflict copy of a bookkeeping file copies: `.claim-HM-5 2` copies `.claim-HM-5`. */
 const copied = (name: string) => name.replace(/ \d+(?=(?:\.tmp)?$)/, "");
@@ -29,7 +25,7 @@ const copied = (name: string) => name.replace(/ \d+(?=(?:\.tmp)?$)/, "");
 const isBookkeeping = (name: string) => LEFTOVER.test(copied(name));
 
 /** Patterns in `.octodo/.gitignore` matching every bookkeeping name and its conflict copies. */
-const IGNORED = [".claim-*", ".pending-id*", ".new-*", ".migrate-*", ".*.tmp"];
+const IGNORED = [".claim-*", ".pending-id*", ".new-*", ".*.tmp"];
 
 /** Adds the bookkeeping patterns `.octodo/.gitignore` lacks, keeping the lines it has. */
 export const ignoreBookkeeping = (
@@ -66,7 +62,7 @@ const ownerRuns = (claim: string): boolean | null => {
 };
 
 /**
- * Removes the temporary files and folders under `dir` that a crashed write or migration left: a
+ * Removes the temporary files and folders under `dir` that a crashed write left: a
  * claim once its owner has stopped, anything else (and a claim from another machine) once it is
  * old enough that no live writer still owns it.
  */

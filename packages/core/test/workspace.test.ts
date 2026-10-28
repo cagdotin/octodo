@@ -314,19 +314,6 @@ describe("workspace", () => {
     });
   });
 
-  it("points an old-layout workspace at octo migrate once", async () => {
-    const root = fresh();
-    await run(initWorkspace(root));
-    write(root, "s01-todo/HM-1-a.md", "---\nid: HM-1\n---\n");
-    write(root, "l00-home/s01-todo/HM-2-b.md", "---\nid: HM-2\n---\n");
-    write(root, "l01-garden/s03-done/HM-3-c.md", "---\nid: HM-3\n---\n");
-    const snapshot = await run(Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot));
-    expect(snapshot.tasks).toEqual([]);
-    expect(snapshot.diagnostics).toHaveLength(1);
-    expect(snapshot.diagnostics[0]).toMatchObject({ path: ".octodo" });
-    expect(snapshot.diagnostics[0]!.message).toContain("octo migrate");
-  });
-
   it("gives new tasks ids past every id on disk, including tasks it does not read", async () => {
     const root = fresh();
     await run(initWorkspace(root));
@@ -350,42 +337,6 @@ describe("workspace", () => {
     expect(created.id).toBe("HM-14");
   });
 
-  it("refuses new tasks until the old layout is migrated, and numbers hand-written ones past it", async () => {
-    const root = fresh();
-    await run(initWorkspace(root));
-    write(root, "s01-todo/HM-4-old.md", "---\nid: HM-4\n---\n");
-    write(root, "milk/task.md", "Buy milk\n");
-    const error = await run(
-      Effect.flatMap(makeWorkspace("test", root), (ws) =>
-        Effect.flip(ws.createTask({ title: "x" })),
-      ),
-    );
-    expect(error).toMatchObject({ _tag: "InvalidRequest" });
-    expect(error.message).toContain("octo migrate");
-    expect(read(root, "milk/task.md")).toContain("id: HM-5\n");
-    const snapshot = await run(Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot));
-    expect(snapshot.diagnostics.map((diagnostic) => diagnostic.message)).toContainEqual(
-      expect.stringContaining("old layout (s01-todo)"),
-    );
-  });
-
-  it("takes old-layout names for old layout only when the folder holds the old layout", async () => {
-    const root = fresh();
-    await run(initWorkspace(root));
-    write(root, "s-tier/readme.txt", "x");
-    write(root, "s01-notes/plan.txt", "x");
-    write(root, "l-shaped/HM-1-a/task.md", "---\nid: HM-1\n---\n");
-    const snapshot = await run(Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot));
-    expect(snapshot.diagnostics.map((diagnostic) => diagnostic.message)).not.toContainEqual(
-      expect.stringContaining("octo migrate"),
-    );
-    expect(snapshot.diagnostics.map((diagnostic) => diagnostic.path).toSorted()).toEqual([
-      ".octodo/l-shaped",
-      ".octodo/s-tier",
-      ".octodo/s01-notes",
-    ]);
-  });
-
   it("removes temporary files a crashed write left behind, once they are a minute old", async () => {
     const root = fresh();
     await run(initWorkspace(root));
@@ -394,7 +345,6 @@ describe("workspace", () => {
     const stale = [
       `HM-1-a/.task.md.${uuid()}.tmp`,
       `.new-${uuid()}/task.md`,
-      `home/.migrate-${uuid()}-HM-2-b/task.md`,
       `.new-${uuid()} 2/task.md`,
       `HM-1-a/.task.md.${uuid()} 2.tmp`,
       `HM-1-a/.pending-id 2`,
@@ -450,7 +400,6 @@ describe("workspace", () => {
         "HM-1-a/.pending-id 2",
         `HM-1-a/.task.md.${crypto.randomUUID()}.tmp`,
         `.new-${crypto.randomUUID()}/task.md`,
-        `.migrate-${crypto.randomUUID()}-HM-3-b/task.md`,
       ])
         write(root, file, "x");
     };

@@ -28,7 +28,6 @@ import {
   taskFolderName,
 } from "./layout.ts";
 import { linkTasks } from "./links.ts";
-import { oldLayoutFolder } from "./migrate.ts";
 import {
   frontmatterId,
   hasFrontmatter,
@@ -58,8 +57,6 @@ export interface Scan {
   readonly idsOnDisk: ReadonlySet<string>;
   /** The number of the next new task id: past every id on disk, in tasks read or not. */
   readonly nextIdNumber: number;
-  /** Whether folders of the old layout are left, which `octo migrate` converts. */
-  readonly oldLayout: boolean;
 }
 
 const decodeConfig = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceConfig));
@@ -323,18 +320,6 @@ export const scanWorkspace = (
       detail: string,
       options?: DiagnosticOptions<K>,
     ) => diagnostics.push(diagnostic(kind, rel(absolute), detail, options));
-    /**
-     * What `effect` reads from one entry, or null when it fails: silently when the entry is gone
-     * (another process moved it), as a diagnostic otherwise.
-     */
-    const attempt = <A, E, R>(
-      absolute: string,
-      effect: Effect.Effect<A, E, R>,
-    ): Effect.Effect<A | null, never, R> =>
-      Effect.catch(effect, (error) => {
-        unreadable(absolute, error);
-        return Effect.succeed(null);
-      });
     const unreadable = (absolute: string, error: unknown, failure = "Could not read it") => {
       if (!isNotFound(error)) report("unreadable", absolute, `${failure}: ${String(error)}`);
     };
@@ -389,7 +374,6 @@ export const scanWorkspace = (
       /** The marker file it is a conflict copy of. */
       copyOf: string | null;
     }> = [];
-    const legacyFolders: Array<string> = [];
     let highestId = 0;
     const idsOnDisk = new Set<string>();
     const takeId = (taskId: string | null) => {
@@ -645,10 +629,7 @@ export const scanWorkspace = (
             report("both-markers", entry.path, "This folder has both task.md and list.md");
             yield* takeIdsUnder(entry.path);
           } else if (entry.type === "folder") {
-            if ((yield* attempt(entry.path, oldLayoutFolder(entry.path))) !== null)
-              legacyFolders.push(path.basename(entry.path));
-            else
-              report("unmarked-folder", entry.path, "This folder has neither task.md nor list.md");
+            report("unmarked-folder", entry.path, "This folder has neither task.md nor list.md");
             yield* takeIdsUnder(entry.path);
           } else if (listDepth(list) >= MAX_LIST_DEPTH) {
             report("list-too-deep", entry.path, `This list is ${listDepth(list) + 1} levels deep`);
@@ -747,13 +728,6 @@ export const scanWorkspace = (
     }
 
     for (const stray of strays) yield* reportStray(stray);
-    if (legacyFolders.length > 0) {
-      report(
-        "old-layout",
-        tasksDir,
-        `This workspace has folders from the old layout (${legacyFolders.slice(0, 3).join(", ")}${legacyFolders.length > 3 ? ", ..." : ""})`,
-      );
-    }
     for (const task of taskFiles) {
       if (statuses.some((known) => known.id === task.status)) continue;
       statuses.push({ id: task.status, name: humanize(task.status), category: "unstarted" });
@@ -786,6 +760,5 @@ export const scanWorkspace = (
       idClashes,
       idsOnDisk,
       nextIdNumber: highestId + 1,
-      oldLayout: legacyFolders.length > 0,
     };
   });

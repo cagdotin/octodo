@@ -4,7 +4,6 @@ import {
   defaultStatus,
   deriveKey,
   isClosedCategory,
-  legacyFolder,
   listMoveError,
   movedListId,
   sortStatuses,
@@ -104,21 +103,6 @@ describe("statuses", () => {
 });
 
 describe("layout", () => {
-  it("recognises folders of the old layout so the scanner can point at octo migrate", () => {
-    expect(legacyFolder("s02-in-progress")).toEqual({
-      type: "status",
-      slug: "in-progress",
-      position: 2,
-    });
-    expect(legacyFolder("l-groceries")).toEqual({
-      type: "list",
-      slug: "groceries",
-      position: null,
-    });
-    expect(legacyFolder("groceries")).toBeNull();
-    expect(legacyFolder("HM-1-buy-milk")).toBeNull();
-  });
-
   it("derives Linear-style keys", () => {
     expect(deriveKey("house-move")).toBe("HM");
     expect(deriveKey("Garden")).toBe("GAR");

@@ -12,7 +12,6 @@ import {
   taskFolderName,
 } from "./layout.ts";
 import { frontmatterId, keepLinks, patchFrontmatter, readFrontmatter } from "./markdown.ts";
-import { migrateWorkspace } from "./migrate.ts";
 import type { Scan } from "./scan.ts";
 
 /** What a fix knows: the workspace and a scan of it taken just before, which found the problem. */
@@ -150,7 +149,6 @@ const FIXES: Record<FixAction, Handler> = {
   "drop-unknown-links": keepLinksWhere((id, { known }) => known.has(id)),
   "drop-self-link": keepLinksWhere((id, { own }) => id !== own),
   "normalize-links": keepLinksWhere(() => true),
-  migrate: ({ root }) => Effect.asVoid(migrateWorkspace(root)),
   "add-status": ({ root, diagnostic, scan }) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

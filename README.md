@@ -11,27 +11,30 @@ at a project folder and it manages `<project>/.octodo/`.
 ```
 house-move/.octodo/
 ├── config.json              # { "name": "House Move", "key": "HM", "statuses": [...] }
-├── s00-backlog/             # statuses: s<NN>-<id>, numbered in workflow order
-├── s01-todo/
-│   └── HM-12-book-the-movers.md
-├── s02-in-progress/
-├── s03-done/
-└── l00-packing/             # a list: l<NN>-<name>, the number orders it among its siblings
-    ├── l00-kitchen/         # lists nest up to three levels
-    └── s01-todo/
-        └── HM-15-pack-the-books.md
+├── HM-12-book-the-movers/    # a folder with task.md is a task
+│   ├── task.md
+│   ├── images/quote.png      # anything else in it is an attachment
+│   └── HM-13-call-three-firms/
+│       └── task.md          # a task inside a task is a subtask
+└── packing/                 # a folder with list.md is a list
+    ├── list.md
+    ├── kitchen/             # lists nest up to three levels
+    │   └── list.md
+    └── HM-15-pack-the-books/
+        └── task.md
 ```
 
 ```markdown
 ---
 id: HM-12
 title: Book the movers
+status: todo
 priority: high
 tags: [quotes]
 due: 2026-11-02
 created: 2026-10-25T17:30:47.592Z
-updated: 2026-10-25T17:30:47.600Z
 order: a0
+blocked_by: [HM-9]
 ---
 
 Three quotes so far. Notes in markdown.

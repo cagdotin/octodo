@@ -7,7 +7,6 @@ import {
   defaultHome,
   isClosedCategory,
   isReady,
-  migrateWorkspace,
   taskSubtree,
   type Diagnostic,
   type Task,
@@ -352,34 +351,6 @@ const deleteCommand = Command.make(
   }),
 ).pipe(Command.withDescription("Delete a task's folder with its subtasks and attachments"));
 
-const migrateCommand = Command.make(
-  "migrate",
-  {
-    dir: Argument.String("dir").pipe(
-      Argument.withDescription("Workspace folder; defaults to the current workspace"),
-      Argument.optional,
-    ),
-  },
-  Effect.fn(function* ({ dir }) {
-    const path = yield* Path.Path;
-    const folder = Option.isSome(dir) ? path.resolve(dir.value) : yield* target;
-    const ws = yield* (yield* Workspaces).open(folder);
-    const summary = yield* migrateWorkspace(ws.root);
-    const changed = summary.tasks + summary.lists + summary.statusFolders;
-    if (changed === 0 && summary.skipped.length === 0)
-      return yield* Console.log(`Nothing to migrate in ${ws.root}`);
-    yield* Console.log(
-      `Migrated ${ws.root}: ${summary.tasks} tasks, ${summary.lists} lists, ${summary.statusFolders} status folders removed`,
-    );
-    for (const { path: skipped, reason } of summary.skipped)
-      yield* Console.error(`skipped: ${skipped}: ${reason}`);
-  }),
-).pipe(
-  Command.withDescription(
-    "Convert a workspace from the old s<NN>/l<NN> folders to task and list folders; safe to rerun",
-  ),
-);
-
 const describeDiagnostic = (diagnostic: Diagnostic) =>
   [
     `${diagnostic.path}  [${diagnostic.kind}${diagnostic.field === null ? "" : ` ${diagnostic.field}`}]`,
@@ -631,7 +602,6 @@ octo.pipe(
     updateCommand,
     moveCommand,
     deleteCommand,
-    migrateCommand,
     doctorCommand,
     initCommand,
     workspaceCommand,

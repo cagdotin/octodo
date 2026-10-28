@@ -103,10 +103,6 @@ export const PROBLEMS = {
     remedy: "Check that octodo may read it",
     fixes: [],
   },
-  "old-layout": {
-    remedy: "They are not read until `octo migrate` or the fix converts them",
-    fixes: ["migrate"],
-  },
 } as const satisfies Record<DiagnosticKind, Problem>;
 
 export const FIX_LABELS: Record<FixAction, string> = {
@@ -117,7 +113,6 @@ export const FIX_LABELS: Record<FixAction, string> = {
   "drop-unknown-links": "Remove the unknown ids",
   "drop-self-link": "Remove the link to itself",
   "normalize-links": "Write it as a list of ids",
-  migrate: "Convert the old layout",
   "add-status": "Add the status to config.json",
 };
 

@@ -30,6 +30,7 @@ import {
 import { useMoveTask, useUpdateTask } from "@/lib/api";
 import { checklistProgress } from "@/lib/checklist";
 import { cn } from "@octodo/ui/lib/utils";
+import { useToday } from "@octodo/ui/hooks/use-today";
 import { dueInfo } from "@octodo/ui/lib/dates";
 import { createdLabel, listLabel, PRIORITIES, PRIORITY_TEXT, SMART } from "@/lib/tasks";
 
@@ -248,8 +249,9 @@ export function ChecklistCount({ body, className }: { body: string; className?: 
 }
 
 export function TaskDate({ task, className }: { task: Task; className?: string }) {
+  const today = useToday();
   if (kindWeb(task) !== undefined) return <KindRow task={task} className={className} />;
-  const due = dueInfo(task.due);
+  const due = dueInfo(task.due, today);
   if (due) {
     return (
       <span
@@ -264,7 +266,7 @@ export function TaskDate({ task, className }: { task: Task; className?: string }
       </span>
     );
   }
-  const created = createdLabel(task.created);
+  const created = createdLabel(task.created, today);
   if (!created) return null;
   return (
     <span

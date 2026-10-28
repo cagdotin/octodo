@@ -32,7 +32,8 @@ from `@octodo/client`, the same probe `connect()` uses:
   `server.json` as any server does, and tells the app over the IPC channel that it listens
   (`{ listening: url }`) or why it could not (`{ failed: code, message }`). It closes cleanly,
   removing its `server.json`, on SIGTERM, SIGINT, or when the IPC channel drops because the app
-  died.
+  died. It listens for these before it starts the server, so an app that dies while its child is
+  still starting leaves no server behind.
 - A new child listens on `OCTODO_PORT` or 4520 first, and a restarted one on the port of the child
   before it, so the window's origin, and the web app's local storage with it, stays the same. When
   the port is taken, the app probes `server.json` again (another octodo may have just started
@@ -64,7 +65,8 @@ from `@octodo/client`, the same probe `connect()` uses:
 ### Quitting
 
 Quitting stops the child the app spawned (SIGTERM, then SIGKILL after 5 s), so its `server.json`
-goes. An attached server keeps running.
+goes. An attached server keeps running. A quit while the app is still looking for a server spawns
+nothing.
 
 ### `octo serve`
 

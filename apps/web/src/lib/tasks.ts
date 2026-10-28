@@ -122,8 +122,6 @@ export const matchesFilter = (task: Task, filter: TaskFilter) =>
 export const allTags = (tasks: ReadonlyArray<Task>) =>
   [...new Set(tasks.flatMap((task) => task.tags))].sort((a, b) => a.localeCompare(b));
 
-export const todayKey = () => format(new Date(), "yyyy-MM-dd");
-
 /**
  * The tasks a view shows. Views of a list show top-level tasks, with subtasks inside their parent;
  * the date views show every task due on or before their last day, a task of a kind by its kind's
@@ -133,9 +131,9 @@ export const filterTasks = (
   { tasks: all }: Pick<WorkspaceSnapshot, "tasks">,
   list: string | undefined,
   kindDay: DayContext["kindDay"],
+  today: string,
 ): ReadonlyArray<Task> => {
-  const now = new Date();
-  const context = { today: format(now, "yyyy-MM-dd"), kindDay };
+  const context = { today, kindDay };
   const dueBy = (last: string) => all.filter((task) => isDueBy(task, last, context));
   const tasks = all.filter((task) => task.parent === null);
   switch (list) {
@@ -144,7 +142,7 @@ export const filterTasks = (
     case SMART.today:
       return dueBy(context.today);
     case SMART.upcoming:
-      return dueBy(format(addDays(now, 7), "yyyy-MM-dd"));
+      return dueBy(format(addDays(parseISO(today), 7), "yyyy-MM-dd"));
     case SMART.ready:
       return all.filter((task) => task.ready);
     case SMART.none:
@@ -172,11 +170,11 @@ export const viewTitle = (list: string | undefined, lists: ReadonlyArray<List>) 
 };
 
 /** Short "Oct 19" label for a creation timestamp, with the full date as a tooltip. */
-export const createdLabel = (created: string | null) => {
+export const createdLabel = (created: string | null, today: string) => {
   if (created === null) return null;
   const date = parseISO(created);
   if (Number.isNaN(date.getTime())) return null;
-  const thisYear = date.getFullYear() === new Date().getFullYear();
+  const thisYear = format(date, "yyyy") === today.slice(0, 4);
   return {
     label: format(date, thisYear ? "MMM d" : "MMM yyyy"),
     title: `Created ${format(date, "MMM d, yyyy")}`,

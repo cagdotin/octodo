@@ -57,6 +57,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@octodo/ui/components/tooltip";
 import { workspacesQuery } from "@/lib/api";
 import { desktop } from "@/lib/desktop";
+import { useToday } from "@octodo/ui/hooks/use-today";
 import { cn } from "@octodo/ui/lib/utils";
 import { filterTasks, listCounts, SMART, statusMap } from "@/lib/tasks";
 
@@ -73,9 +74,10 @@ export function AppSidebar({
 }) {
   const ws = snapshot.workspace.id;
   const { counts, none, open } = listCounts(snapshot);
+  const today = useToday();
   const statuses = statusMap(snapshot.statuses);
   const openCount = (list: string) =>
-    filterTasks(snapshot, list, kindDay).filter(
+    filterTasks(snapshot, list, kindDay, today).filter(
       (task) => !isClosedCategory(statuses.get(task.status)?.category),
     ).length;
   const [newListOpen, setNewListOpen] = useState(false);

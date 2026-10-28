@@ -20,13 +20,17 @@ export interface QuickAddDraft {
   makePlain: (tokenText: string) => void;
 }
 
-export function useQuickAdd(lists: ReadonlyArray<List>, initial = ""): QuickAddDraft {
+export function useQuickAdd(
+  lists: ReadonlyArray<List>,
+  initial = "",
+  { dates = true }: { readonly dates?: boolean } = {},
+): QuickAddDraft {
   const [{ text, revision }, setDraft] = useState({ text: initial, revision: 0 });
   const [plain, setPlain] = useState<ReadonlySet<string>>(() => new Set());
   const [now] = useState(() => new Date());
   const parsed = useMemo(
-    () => parseQuickAdd(text, { lists, now, plain }),
-    [text, lists, now, plain],
+    () => parseQuickAdd(text, { lists, now, plain, dates }),
+    [text, lists, now, plain, dates],
   );
   return {
     text,

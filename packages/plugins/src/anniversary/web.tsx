@@ -4,6 +4,7 @@ import { Button } from "@octodo/ui/components/button";
 import { Calendar } from "@octodo/ui/components/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@octodo/ui/components/popover";
 import { PropertyChip } from "@octodo/ui/components/property-chip";
+import { useToday } from "@octodo/ui/hooks/use-today";
 import { dueInfo } from "@octodo/ui/lib/dates";
 import { cn } from "@octodo/ui/lib/utils";
 import { CakeIcon } from "lucide-react";
@@ -40,9 +41,8 @@ const untilText = (next: Day, from: Day) => {
   return days === 0 ? "Today" : days === 1 ? "Tomorrow" : `in ${plural(days, "day")}`;
 };
 
-/** The next occurrence as of now: computed here, since the engine's read is cached across days. */
-const occurrenceNow = (date: Day | null) => {
-  const from = today();
+/** The next occurrence from `from`: computed here, since the engine's read is cached across days. */
+const occurrenceFrom = (date: Day | null, from: Day) => {
   return date === null ? null : { from, ...nextOccurrence(date, from) };
 };
 
@@ -53,8 +53,9 @@ function Row({
   readonly task: TaskOf<AnniversaryFields>;
   readonly className?: string | undefined;
 }) {
-  const occurrence = occurrenceNow(task.kind.fields.date);
-  const due = dueInfo(occurrence?.next ?? null);
+  const from = useToday();
+  const occurrence = occurrenceFrom(task.kind.fields.date, from);
+  const due = dueInfo(occurrence?.next ?? null, from);
   return (
     <span
       title={
@@ -80,6 +81,7 @@ function DateEditor({ workspace, task }: KindProps<AnniversaryFields>) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const from = useToday();
 
   const save = async (day: Day) => {
     setSaving(true);
@@ -114,7 +116,7 @@ function DateEditor({ workspace, task }: KindProps<AnniversaryFields>) {
           aria-label="Change the date"
         >
           <CakeIcon data-icon="inline-start" />
-          {date === null ? "No date" : (dueInfo(date)?.label ?? date)}
+          {date === null ? "No date" : (dueInfo(date, from)?.label ?? date)}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" collisionPadding={8} className="w-fit gap-1.5 p-2">
@@ -147,6 +149,7 @@ interface Draft {
 /** The date chip; it opens when Anniversary is picked, since an anniversary needs its day. */
 function CreateFields({ draft, onChange, onCloseAutoFocus }: CreateFieldsProps<Draft>) {
   const [open, setOpen] = useState(true);
+  const from = useToday();
   const selected = draft.date === null ? undefined : toDate(draft.date);
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -155,7 +158,7 @@ function CreateFields({ draft, onChange, onCloseAutoFocus }: CreateFieldsProps<D
           {draft.date === null ? (
             "First happened"
           ) : (
-            <span className="font-mono">{dueInfo(draft.date)?.label ?? draft.date}</span>
+            <span className="font-mono">{dueInfo(draft.date, from)?.label ?? draft.date}</span>
           )}
         </PropertyChip>
       </PopoverTrigger>
@@ -186,7 +189,7 @@ function CreateFields({ draft, onChange, onCloseAutoFocus }: CreateFieldsProps<D
 }
 
 function Panel({ workspace, task }: KindProps<AnniversaryFields>) {
-  const occurrence = occurrenceNow(task.kind.fields.date);
+  const occurrence = occurrenceFrom(task.kind.fields.date, useToday());
   return (
     <section aria-label="Anniversary" className="flex shrink-0 flex-col border-t pt-1.5 pb-2">
       <h2 className="flex h-7 shrink-0 items-center gap-2 px-4 font-mono text-xs text-muted-foreground lowercase">

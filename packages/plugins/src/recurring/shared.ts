@@ -92,7 +92,8 @@ export const recurringShared = {
         workspace,
         id,
         at: Schema.optionalKey(DueDate).annotate({
-          description: "When it was done: YYYY-MM-DD (midday) or YYYY-MM-DDTHH:mm; now if omitted",
+          description:
+            "When it was done: YYYY-MM-DD (its midday, or now when that is still to come today) or YYYY-MM-DDTHH:mm; now if omitted",
         }),
       }),
       success: Task,

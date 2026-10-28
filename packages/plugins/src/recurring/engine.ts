@@ -17,6 +17,8 @@ type Problem = KindProblem<keyof typeof recurringShared.problems>;
 
 const RECENT = 10;
 
+const dayOf = (instant: string) => localDay(instant) ?? [];
+
 const checkRule = (repeat: string) => {
   const read = parseRule(repeat);
   return "error" in read
@@ -49,7 +51,7 @@ export const recurring = definePlugin(recurringShared, {
     const start = task.created === null ? null : localDay(task.created);
     const fields: RecurringFields = {
       repeat: typeof keys["repeat"] === "string" ? keys["repeat"] : null,
-      next: rule === null ? null : nextDue(rule, last === null ? null : localDay(last), start),
+      next: rule === null ? null : nextDue(rule, log.occurrences.flatMap(dayOf), start),
       last,
       count: log.occurrences.length,
       recent: log.occurrences.slice(-RECENT).toReversed(),

@@ -6,8 +6,9 @@ import { PriorityIcon, StatusIcon, TagChip } from "@/components/task-bits";
 import { Kbd } from "@octodo/ui/components/kbd";
 import { useCreateTask } from "@/lib/api";
 import { cn } from "@octodo/ui/lib/utils";
+import { useToday } from "@octodo/ui/hooks/use-today";
 import { dueInfo } from "@octodo/ui/lib/dates";
-import { isSmartView, SMART, todayKey } from "@/lib/tasks";
+import { isSmartView, SMART } from "@/lib/tasks";
 
 interface Props {
   workspace: string;
@@ -40,7 +41,8 @@ export function TaskComposer({
   const create = useCreateTask(workspace);
   const { title, fields } = draft.parsed;
   const category = snapshot.statuses.find((entry) => entry.id === status)?.category;
-  const due = dueInfo(fields.due ?? null);
+  const today = useToday();
+  const due = dueInfo(fields.due ?? null, today);
 
   const submit = () => {
     if (title === "") return;
@@ -50,7 +52,7 @@ export function TaskComposer({
       status,
       ...(fields.priority ? { priority: fields.priority } : {}),
       // Adding from Today means due today unless the text says otherwise.
-      ...(fields.due ? { due: fields.due } : list === SMART.today ? { due: todayKey() } : {}),
+      ...(fields.due ? { due: fields.due } : list === SMART.today ? { due: today } : {}),
       ...(fields.list ? { list: fields.list } : isSmartView(list) ? {} : { list: list ?? null }),
     };
     create.mutate(input);

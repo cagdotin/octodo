@@ -4,6 +4,7 @@ import { Button } from "@octodo/ui/components/button";
 import { Field, FieldError } from "@octodo/ui/components/field";
 import { InputGroup, InputGroupInput } from "@octodo/ui/components/input-group";
 import { Popover, PopoverContent, PopoverTrigger } from "@octodo/ui/components/popover";
+import { useToday } from "@octodo/ui/hooks/use-today";
 import { formatTimestamp } from "@octodo/ui/lib/dates";
 import { cn } from "@octodo/ui/lib/utils";
 import { HistoryIcon, RotateCcwIcon, TimerResetIcon, XIcon } from "lucide-react";
@@ -44,6 +45,9 @@ const resetAt = (workspace: string, id: string, at?: string) =>
 const localMinute = (date = new Date()) =>
   new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 
+/** The counter's runs as of today, counted again when the day changes. */
+const useCounted = (fields: CounterFields) => counted(fields, new Date(`${useToday()}T00:00`));
+
 function Row({
   task,
   className,
@@ -51,7 +55,7 @@ function Row({
   readonly task: TaskOf<CounterFields>;
   readonly className?: string | undefined;
 }) {
-  const { current, best } = counted(task.kind.fields);
+  const { current, best } = useCounted(task.kind.fields);
   const { since } = task.kind.fields;
   const title =
     current === null || since === null
@@ -126,7 +130,7 @@ function EarlierReset({ workspace, task }: KindProps<CounterFields>) {
 
 function Panel({ workspace, task }: KindProps<CounterFields>) {
   const { since, resets, recent } = task.kind.fields;
-  const { current, best } = counted(task.kind.fields);
+  const { current, best } = useCounted(task.kind.fields);
   const { busy, error, run } = useCall();
   const remove = (at: string) =>
     run(() =>

@@ -55,6 +55,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@octodo/ui/components/p
 import { Textarea } from "@octodo/ui/components/textarea";
 import { taskAttachments, useDeleteTask, useMoveTask, useUpdateTask } from "@/lib/api";
 import { cn } from "@octodo/ui/lib/utils";
+import { useToday } from "@octodo/ui/hooks/use-today";
 import { dueInfo, formatTimestamp } from "@octodo/ui/lib/dates";
 import { listLabel, PRIORITIES } from "@/lib/tasks";
 import { changes, editorMachine } from "@/machines/editor";
@@ -116,7 +117,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
 
   const mentions = useMentions(workspace, snapshot, task.id);
   const setDue = (due: string | null) => update.mutate({ id: task.id, patch: { due } });
-  const due = dueInfo(task.due);
+  const due = dueInfo(task.due, useToday());
 
   const currentStatus = snapshot.statuses.find((status) => status.id === task.status);
   const priority =

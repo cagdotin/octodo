@@ -1,14 +1,14 @@
 import { NodeServices } from "@effect/platform-node";
 import type { Task, TaskSummary } from "@octodo/contract";
 import { makeRegistry, Workspaces } from "@octodo/engine";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Exit, Layer, Schema } from "effect";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { recurring } from "../src/recurring/engine.ts";
-import { readLog, withOccurrence, withoutOccurrence } from "../src/log.ts";
-import { nextDue, parseRule, type Rule } from "../src/recurring/rule.ts";
+import { occurrenceAt, readLog, withOccurrence, withoutOccurrence } from "../src/log.ts";
+import { localDay, nextDue, parseRule, type Rule } from "../src/recurring/rule.ts";
 import { recurringShared } from "../src/recurring/shared.ts";
 
 const rule = (text: string): Rule => {
@@ -32,26 +32,87 @@ describe("the repeat rule", () => {
   });
 
   it("counts an interval from the day it was last done, and is due on its first day before", () => {
-    expect(nextDue(rule("every 3 days"), "2026-10-28", "2026-10-01")).toBe("2026-10-31");
-    expect(nextDue(rule("every 3 days"), null, "2026-10-01")).toBe("2026-10-01");
-    expect(nextDue(rule("every month"), "2026-01-31", null), "a shorter month").toBe("2026-02-28");
-    expect(nextDue(rule("every year"), "2028-02-29", null)).toBe("2029-02-28");
-    expect(nextDue(rule("every 2 weeks"), "2026-12-25", null)).toBe("2027-01-08");
-    expect(nextDue(rule("every day"), null, null)).toBeNull();
+    expect(nextDue(rule("every 3 days"), ["2026-10-28"], "2026-10-01")).toBe("2026-10-31");
+    expect(nextDue(rule("every 3 days"), [], "2026-10-01")).toBe("2026-10-01");
+    expect(nextDue(rule("every month"), ["2026-01-31"], null), "a shorter month").toBe(
+      "2026-02-28",
+    );
+    expect(nextDue(rule("every year"), ["2028-02-29"], null)).toBe("2029-02-28");
+    expect(nextDue(rule("every 2 weeks"), ["2026-12-25"], null)).toBe("2027-01-08");
+    expect(nextDue(rule("every day"), [], null)).toBeNull();
   });
 
   it("names the first matching day after it was last done for a calendar rule", () => {
     const bins = rule("every monday and thursday");
-    expect(nextDue(bins, "2026-10-28", null), "a Wednesday").toBe("2026-10-29");
-    expect(nextDue(bins, "2026-10-29", null), "a Thursday").toBe("2026-11-02");
-    expect(nextDue(bins, null, "2026-10-29"), "never done, started on a Thursday").toBe(
-      "2026-10-29",
-    );
+    expect(nextDue(bins, ["2026-10-28"], null), "a Wednesday").toBe("2026-10-29");
+    expect(nextDue(bins, ["2026-10-29"], null), "a Thursday").toBe("2026-11-02");
+    expect(nextDue(bins, [], "2026-10-29"), "never done, started on a Thursday").toBe("2026-10-29");
     const rent = rule("monthly on the 31st");
-    expect(nextDue(rent, "2026-10-31", null)).toBe("2026-11-30");
-    expect(nextDue(rent, "2026-11-30", null)).toBe("2026-12-31");
-    expect(nextDue(rule("monthly on the 1st"), "2026-10-15", null)).toBe("2026-11-01");
+    expect(nextDue(rent, ["2026-10-31"], null)).toBe("2026-11-30");
+    expect(nextDue(rent, ["2026-11-30"], null)).toBe("2026-12-31");
+    expect(nextDue(rule("monthly on the 1st"), ["2026-10-15"], null)).toBe("2026-11-01");
   });
+
+  it("moves a calendar rule past its current due when it is done early, and never back", () => {
+    const bins = rule("every monday");
+    const started = "2026-10-28";
+    expect(nextDue(bins, [], started), "first due, from a Wednesday").toBe("2026-11-02");
+    expect(nextDue(bins, ["2026-10-29"], started), "done early, on the Thursday").toBe(
+      "2026-11-09",
+    );
+    expect(nextDue(bins, ["2026-11-02"], started), "done on the day").toBe("2026-11-09");
+    expect(nextDue(bins, ["2026-11-04"], started), "done late").toBe("2026-11-09");
+    expect(
+      nextDue(bins, ["2026-10-29", "2026-10-30"], started),
+      "done again in the period it was already done for",
+    ).toBe("2026-11-09");
+    expect(
+      nextDue(bins, ["2026-10-29", "2026-11-03"], started),
+      "then early again, for the next one",
+    ).toBe("2026-11-16");
+    expect(
+      nextDue(bins, ["2026-10-12", "2026-10-19"], started),
+      "history from before it started leaves the first due",
+    ).toBe("2026-11-02");
+    const rent = rule("monthly on the 1st");
+    expect(nextDue(rent, ["2026-10-20"], "2026-10-05"), "paid early").toBe("2026-12-01");
+    expect(nextDue(rent, ["2026-10-01"], "2026-10-05"), "paid before it started").toBe(
+      "2026-11-01",
+    );
+  });
+});
+
+describe("a day as an occurrence", () => {
+  const zone = process.env["TZ"];
+  afterEach(() => {
+    vi.useRealTimers();
+    if (zone === undefined) delete process.env["TZ"];
+    else process.env["TZ"] = zone;
+  });
+  const at = (day: string) => {
+    const exit = Effect.runSyncExit(occurrenceAt(day));
+    return Exit.isSuccess(exit) ? exit.value : "refused";
+  };
+
+  it.each(["America/Los_Angeles", "Europe/Istanbul", "Asia/Tokyo"])(
+    "takes today at any hour in %s, never later than now, and refuses tomorrow",
+    (timeZone) => {
+      process.env["TZ"] = timeZone;
+      vi.useFakeTimers();
+      for (const hour of ["00:30", "09:00", "11:59", "12:00", "15:00", "23:45"]) {
+        const now = new Date(`2026-10-28T${hour}`);
+        vi.setSystemTime(now);
+        const minute = at("2026-10-28");
+        expect(minute, `today at ${hour}`).not.toBe("refused");
+        expect(new Date(minute).getTime(), `today at ${hour}`).toBeLessThanOrEqual(now.getTime());
+        expect(new Date(minute).getDate(), `today at ${hour}`).toBe(28);
+        expect(at("2026-10-27"), `yesterday at ${hour}`).toBe(
+          new Date("2026-10-27T12:00").toISOString().replace(".000", ""),
+        );
+        expect(at("2026-10-29"), `tomorrow at ${hour}`).toBe("refused");
+      }
+    },
+  );
 });
 
 describe("the log", () => {
@@ -162,7 +223,13 @@ describe("a recurring task in a workspace", () => {
     await ws.call("log_occurrence", { id: "HM-1", at: "2026-10-19T07:30" });
     const logged: Task = (await ws.call("log_occurrence", { id: "HM-1", at: "2026-10-19T07:30" }))
       .value;
-    expect(logged.kind?.fields).toMatchObject({ count: 1, next: "2026-10-26" });
+    expect(
+      logged.kind?.fields,
+      "history from before it started leaves its first due",
+    ).toMatchObject({
+      count: 1,
+      next: nextDue(rule("every monday"), [], localDay(new Date().toISOString())),
+    });
     expect((await ws.call("log_occurrence", { id: "HM-1", at: "2999-01-01" })).error).toBe(
       "InvalidRequest: 2999-01-01 has not happened yet",
     );

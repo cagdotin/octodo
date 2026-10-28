@@ -42,6 +42,7 @@ import { ScrollArea } from "@octodo/ui/components/scroll-area";
 import { useCreateTask, useCreateTaskOfKind } from "@/lib/api";
 import { withoutRanges, type QuickAddToken } from "@/lib/quick-add";
 import { cn } from "@octodo/ui/lib/utils";
+import { useToday } from "@octodo/ui/hooks/use-today";
 import { dueInfo } from "@octodo/ui/lib/dates";
 import {
   allTags,
@@ -50,7 +51,6 @@ import {
   listTree,
   PRIORITIES,
   SMART,
-  todayKey,
   type ListNode,
 } from "@/lib/tasks";
 
@@ -129,7 +129,8 @@ function NewTaskForm({
   const [kind, setKind] = useState<{ kind: CreatableKind; draft: unknown }>();
   const pickedFields = useRef(false);
   const titleInput = useRef<QuickAddInputHandle>(null);
-  const draft = useQuickAdd(snapshot.lists, initialTitle);
+  // A kind has its own date (decision 0023), so with one picked a typed date stays title text.
+  const draft = useQuickAdd(snapshot.lists, initialTitle, { dates: kind === undefined });
   const suggestions = useMemo(() => suggestionsFor(snapshot), [snapshot]);
   const [notes, setNotes] = useState("");
   // Picks from the buttons; undefined means "whatever the tokens or the view say".
@@ -140,6 +141,7 @@ function NewTaskForm({
   const [pickedTags, setPickedTags] = useState<Array<string>>([]);
 
   const { parsed } = draft;
+  const today = useToday();
   // A pick from the buttons replaces what the tokens said, so the dialog shows one answer.
   const dropTokens = (drop: (token: QuickAddToken) => boolean) =>
     draft.setText(
@@ -154,14 +156,14 @@ function NewTaskForm({
   const priority = parsed.fields.priority ?? pickedPriority ?? "none";
   const due =
     parsed.fields.due ??
-    (pickedDue === undefined ? (list === SMART.today ? todayKey() : null) : pickedDue);
+    (pickedDue === undefined ? (list === SMART.today ? today : null) : pickedDue);
   const viewList = isSmartView(list) ? null : (list ?? null);
   const targetList = parsed.fields.list ?? (pickedList === undefined ? viewList : pickedList);
   const tags = [...new Set([...pickedTags, ...parsed.fields.tags])];
   const knownTags = [...new Set([...allTags(snapshot.tasks), ...tags])].sort((a, b) =>
     a.localeCompare(b),
   );
-  const dueLabel = dueInfo(due);
+  const dueLabel = dueInfo(due, today);
   const ready =
     parsed.title !== "" &&
     status !== undefined &&
@@ -253,10 +255,12 @@ function NewTaskForm({
             <DropdownMenuContent
               align="start"
               className="w-52"
-              onCloseAutoFocus={(event) =>
-                // A kind's fields open their own picker, which takes focus.
-                pickedFields.current ? event.preventDefault() : refocus(event)
-              }
+              onCloseAutoFocus={(event) => {
+                // A kind's fields open their own picker, which takes focus; only this once.
+                if (pickedFields.current) event.preventDefault();
+                else refocus(event);
+                pickedFields.current = false;
+              }}
             >
               <DropdownMenuGroup>
                 <DropdownMenuLabel>Kind</DropdownMenuLabel>

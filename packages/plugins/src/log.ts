@@ -92,11 +92,18 @@ export const withoutOccurrence = (text: string, at: string): string =>
     })
     .join("\n");
 
-/** The minute of `at` (a day means its midday here), refusing a time still to come. */
+/** A day as a time: its midday here, or now on a today whose midday is still to come. */
+const middayOrNow = (day: string, now: Date) => {
+  const midday = new Date(`${day}T12:00`);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return midday > now && new Date(`${day}T00:00`).getTime() === today.getTime() ? now : midday;
+};
+
+/** The minute of `at` (a day means its midday here, or now today), refusing a time to come. */
 export const occurrenceAt = (at: string | undefined) =>
   Effect.gen(function* () {
     const now = new Date(DateTime.toEpochMillis(yield* DateTime.now));
-    const when = at === undefined ? now : new Date(at.length === 10 ? `${at}T12:00` : at);
+    const when = at === undefined ? now : at.length === 10 ? middayOrNow(at, now) : new Date(at);
     if (when.getTime() > now.getTime() + 60_000)
       return yield* new InvalidRequest({ message: `${at} has not happened yet` });
     return toMinute(when);

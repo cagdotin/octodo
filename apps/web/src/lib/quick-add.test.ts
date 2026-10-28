@@ -97,6 +97,15 @@ describe("parseQuickAdd", () => {
     expect(parsed.fields).toEqual({ tags: [], priority: "high" });
   });
 
+  test("without dates, a typed date stays in the title and the other tokens still read", () => {
+    const parsed = parseQuickAdd("Water the plants tomorrow due:fri #garden", {
+      ...context,
+      dates: false,
+    });
+    expect(parsed.title).toBe("Water the plants tomorrow due:fri");
+    expect(parsed.fields).toEqual({ tags: ["garden"] });
+  });
+
   test("a plain natural date lets a later one through", () => {
     const parsed = parseQuickAdd("Call friday or thursday", {
       ...context,

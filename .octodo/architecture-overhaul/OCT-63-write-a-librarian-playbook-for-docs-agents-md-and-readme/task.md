@@ -1,7 +1,7 @@
 ---
 id: OCT-63
 title: Write a librarian playbook for docs, AGENTS.md and README
-status: todo
+status: done
 priority: medium
 tags:
   - agents

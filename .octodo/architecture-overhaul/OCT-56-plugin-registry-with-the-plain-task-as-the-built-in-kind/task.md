@@ -8,7 +8,7 @@ tags:
   - plugins
 created: 2026-10-28T07:40:11.229Z
 order: aC
-blocked_by: [OCT-51, OCT-52, OCT-70]
+blocked_by: [OCT-51, OCT-52]
 ---
 
 ## Goal
@@ -22,10 +22,11 @@ Decision `docs/decisions/0007-first-party-plugins-per-workspace.md`.
 - A task names its kind in frontmatter (`type: recurring`); no `type` means the plain task. An unknown or not-enabled kind loads as a plain task with a diagnostic.
 - `config.json` gains `plugins: [...]`; only enabled plugins apply in a workspace.
 - `@octodo/plugins` package with `shared`, `engine` and `web` entry points per plugin, so the web half never imports engine code. Registration conflicts (two plugins claiming one key or file) fail loudly.
+- A file a plugin owns is never listed as an attachment, and `read_attachment` refuses it with the not-found error. The plugin exposes its content through computed fields or read-only operations (0011).
 - UI: the app shows a plugin's fields and views only where it is enabled. Settle how a plugin's `web` entry plugs into the task panel and list rows.
 
 ## Done when
 
 - The plain task goes through the registry with every existing test passing unchanged.
-- A test plugin registered in a test proves keys, files, a computed field, an operation and a validator end to end.
+- A test plugin registered in a test proves keys, files, a computed field, an operation and a validator end to end, and that `read_attachment` refuses its owned file.
 - `docs/architecture.md` describes the plugin API.

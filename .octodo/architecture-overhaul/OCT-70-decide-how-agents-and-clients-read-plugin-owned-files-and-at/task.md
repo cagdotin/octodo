@@ -1,7 +1,7 @@
 ---
 id: OCT-70
 title: Decide how agents and clients read plugin-owned files and attachment bytes
-status: todo
+status: done
 priority: low
 tags:
   - architecture

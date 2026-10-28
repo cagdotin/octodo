@@ -21,6 +21,8 @@ import type { Workspace } from "../workspace.ts";
 /** The plain task: the kind of a task without `type`, and the frontmatter keys every task has. */
 export const plainTask = {
   id: "task",
+  name: "Tasks",
+  description: "The plain task every workspace has.",
   keys: Schema.Struct({
     id: Schema.String,
     title: Schema.String,

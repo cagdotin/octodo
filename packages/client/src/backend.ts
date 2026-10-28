@@ -5,7 +5,6 @@ import type {
   ServerMismatch,
   ServerUnavailable,
   StorageError,
-  WorkspaceInfo,
   WorkspaceNotFound,
 } from "@octodo/contract";
 import type { Operation, OperationName } from "@octodo/contract/catalog";
@@ -22,11 +21,6 @@ export type ClientError =
   | ServerMismatch
   | ServerUnavailable;
 
-export interface WorkspaceOptions {
-  readonly name?: string | undefined;
-  readonly key?: string | undefined;
-}
-
 /** Where calls run: the server over HTTP, or the engine in this process. Both give the same. */
 export interface Backend {
   /** Runs an operation on its decoded input, whose `workspace` is an id or an absolute folder. */
@@ -35,10 +29,6 @@ export interface Backend {
     operation: Operation,
     input: Record<string, unknown>,
   ) => Effect.Effect<unknown, ClientError>;
-  readonly addWorkspace: (
-    root: string,
-    options: WorkspaceOptions,
-  ) => Effect.Effect<WorkspaceInfo, ClientError>;
   readonly removeWorkspace: (id: string) => Effect.Effect<void, ClientError>;
   readonly fixAll: (workspace: string) => Effect.Effect<FixResult, ClientError>;
 }

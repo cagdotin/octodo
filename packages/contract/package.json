@@ -9,6 +9,7 @@
     "./catalog": "./src/catalog.ts",
     "./client": "./src/client.ts",
     "./plugin": "./src/plugin.ts",
+    "./presets": "./src/presets.ts",
     "./rules": "./src/rules.ts"
   },
   "dependencies": {

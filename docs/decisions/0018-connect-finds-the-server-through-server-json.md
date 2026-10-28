@@ -30,8 +30,9 @@ the question of whether to prefer the server at all is open again.
 ### `connect()`
 
 `@octodo/client` exports `connect({ home, registry, watch })` and the `Connection` service built from
-it. A `Connection` runs any operation of the registry, adds and removes a workspace, and runs
-fix-all. Each call picks where it runs:
+it. A `Connection` runs any operation of the registry, removes a workspace, and runs fix-all. Adding
+a workspace is the operation `add_workspace`
+([0022](0022-presets-in-the-contract-workspace-and-plugin-settings-are-operations.md)). Each call picks where it runs:
 
 | `server.json`                                               | The call                                                              |
 | ----------------------------------------------------------- | --------------------------------------------------------------------- |

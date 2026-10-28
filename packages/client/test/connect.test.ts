@@ -26,7 +26,7 @@ const scratch = async () => {
   const home = join(base, "home");
   const root = join(base, "house");
   mkdirSync(root);
-  await run(home, (connection) => connection.addWorkspace(root, { key: "HM" }));
+  await run(home, (connection) => connection.run("add_workspace", { root, key: "HM" }));
   return { home, root };
 };
 

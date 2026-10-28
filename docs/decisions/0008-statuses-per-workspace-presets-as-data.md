@@ -26,6 +26,8 @@ task's status becomes when it moves between lists with different status sets.
 ## Consequences
 
 - Changing a preset later does not change existing workspaces.
-- Presets need no code. They are JSON in the plugins or engine package.
+- Presets need no code. They are data in `@octodo/contract/presets`, which the catalog's
+  `add_workspace` and the app's dialog both read
+  ([0022](0022-presets-in-the-contract-workspace-and-plugin-settings-are-operations.md)).
 - Dragging an unknown status in the settings page does not keep its place: it shows at the end of
   the unstarted statuses until it is added.

@@ -37,7 +37,7 @@ describe("reorderStatuses", () => {
         const ws = yield* makeWorkspace("test", root);
         const shown = (yield* ws.snapshot).statuses.map((status) => status.id);
         const statuses = yield* ws.reorderStatuses({
-          order: ["done", "in-progress", "in-review", "todo", "backlog", "archived"],
+          order: ["done", "in-progress", "in-review", "todo", "backlog", "canceled", "archived"],
         });
         return { shown, statuses, diagnostics: (yield* ws.snapshot).diagnostics };
       }),
@@ -48,6 +48,7 @@ describe("reorderStatuses", () => {
       "todo",
       "in-progress",
       "done",
+      "canceled",
       "archived",
     ]);
     expect(result.statuses.map((status) => status.id)).toEqual([
@@ -56,6 +57,7 @@ describe("reorderStatuses", () => {
       "in-review",
       "in-progress",
       "done",
+      "canceled",
       "archived",
     ]);
     expect(
@@ -72,7 +74,16 @@ describe("reorderStatuses", () => {
     await run(
       Effect.flatMap(makeWorkspace("test", root), (ws) =>
         ws.reorderStatuses({
-          order: ["archived", "done", "in-progress", "in-review", "waiting", "todo", "backlog"],
+          order: [
+            "archived",
+            "canceled",
+            "done",
+            "in-progress",
+            "in-review",
+            "waiting",
+            "todo",
+            "backlog",
+          ],
         }),
       ),
     );
@@ -82,6 +93,7 @@ describe("reorderStatuses", () => {
       "todo",
       "in-progress",
       "done",
+      "canceled",
       "archived",
     ]);
   });

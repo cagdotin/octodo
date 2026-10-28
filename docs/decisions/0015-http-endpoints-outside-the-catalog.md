@@ -24,14 +24,15 @@ holds what is not an operation:
 | `GET /api/workspaces/:workspace`                       | the snapshot the web app renders; agents read through `get_workspace` and `list_tasks` |
 | `PUT /api/workspaces/:workspace/tasks/:id/files/:path` | the body is the file's bytes, which no flat input struct carries                       |
 | `GET /api/events`                                      | the server-sent change feed                                                            |
-| `POST /api/workspaces`                                 | adds a workspace; candidate for the catalog                                            |
 | `DELETE /api/workspaces/:workspace`                    | removes a workspace, answers `{ removed }`; candidate for the catalog                  |
 | `PUT /api/workspaces/:workspace/statuses/order`        | reorders statuses; candidate for the catalog                                           |
 | `POST /api/workspaces/:workspace/diagnostics/fix-all`  | fix-all; candidate for the catalog                                                     |
 
-The first six stay HTTP only. The last four are operations in all but name: they move into the
+The first six stay HTTP only. The last three are operations in all but name: they move into the
 catalog, and so become MCP tools and CLI commands, once the plugin registry (OCT-56) settles how
-entries are collected.
+entries are collected. Adding a workspace (`POST /api/workspaces`) was a fourth; it is the catalog
+operation `add_workspace` at the same path
+([0022](0022-presets-in-the-contract-workspace-and-plugin-settings-are-operations.md)).
 
 `capabilities` in `/api/health` names what this server offers (`operations`, `mcp`, `openapi`), so
 a client that finds a running server can tell what it may call before calling it

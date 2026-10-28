@@ -74,6 +74,10 @@ const bytes = (size: number) =>
       ? `${Math.ceil(size / 1024)} KB`
       : `${Math.ceil(size / 1024 / 1024)} MB`;
 
+const enabledPlugins = (plugins: ReadonlyArray<string>) => [
+  plugins.length === 0 ? "No plugins enabled" : `Enabled: ${plugins.join(", ")}`,
+];
+
 /** How `octo` prints an operation's success when `--json` is not given, line by line. */
 export const renderers: {
   readonly [K in OperationName]?: (
@@ -121,4 +125,8 @@ export const renderers: {
   delete_task: ({ deleted }) => [`Deleted ${deleted}`],
   create_list: (list) => [`Created list ${list.id} in ${list.folder}`],
   move_list: (list) => [`Moved list ${list.id} to ${list.folder}`],
+  list_plugins: (plugins) =>
+    plugins.map((plugin) => `${plugin.id.padEnd(14)} ${plugin.name}: ${plugin.description}`),
+  enable_plugin: enabledPlugins,
+  disable_plugin: enabledPlugins,
 };

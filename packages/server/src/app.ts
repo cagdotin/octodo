@@ -26,9 +26,6 @@ export const appLive = (api: ServedApi) =>
           )
           .handle("connection", () => Effect.succeed({ url, mcpUrl: `${url}/mcp` }))
           .handle("folders", ({ query }) => workspaces.browse(query.path ?? homedir()))
-          .handle("add_workspace", ({ payload: { root, ...options } }) =>
-            workspaces.add(root, options),
-          )
           .handle("remove_workspace", ({ params: { workspace } }) =>
             Effect.as(workspaces.remove(workspace), { removed: workspace }),
           )

@@ -15,6 +15,7 @@ import {
   List,
   MoveListInput,
   MoveTaskInput,
+  PluginInfo,
   StorageError,
   Task,
   TaskDetail,
@@ -22,9 +23,11 @@ import {
   TaskSummary,
   UpdateTaskInput,
   WorkspaceInfo,
+  WorkspaceKey,
   WorkspaceNotFound,
   WorkspaceOverview,
 } from "./domain.ts";
+import { DEFAULT_PRESET, PRESET_IDS, PRESETS } from "./presets.ts";
 
 /** How a field of an operation's input appears on the command line, beyond its name and type. */
 export const CliField = Schema.Struct({
@@ -84,6 +87,19 @@ const TaskId = Schema.String.annotate({
   ...cli({ positional: true }),
 });
 
+const presetList = PRESET_IDS.map(
+  (id) => `${id} (${PRESETS[id].description.split(". ")[0]!.replace(/\.$/, "")})`,
+).join("; ");
+
+const PluginId = Schema.String.annotate({
+  description: "Plugin id, e.g. recurring; list_plugins lists them",
+  ...cli({ positional: true }),
+});
+
+const pluginsOfWorkspace = Schema.Array(Schema.String).annotate({
+  description: "The plugins the workspace enables now",
+});
+
 const listId = "List id, e.g. groceries or garden/seeds";
 const parentTask = "Parent task id, making this a subtask";
 
@@ -100,6 +116,30 @@ export const catalog = {
     error: StorageError,
     http: { method: "GET", path: "/workspaces" },
     cli: { command: ["workspace", "list"], description: "List registered workspaces" },
+  },
+  add_workspace: {
+    description: `Create a workspace in a folder and register it on this machine: octodo writes .octodo/config.json there with the statuses and plugins of a preset, ${DEFAULT_PRESET} unless preset names another. A folder that already holds a workspace is registered as it is, and name, key and preset are ignored.`,
+    readonly: false,
+    destructive: false,
+    idempotent: true,
+    input: Schema.Struct({
+      // A relative path would resolve against the directory of whichever process runs it.
+      root: Schema.String.pipe(
+        Schema.check(Schema.isPattern(/^\//, { message: "Use an absolute folder path" })),
+      ).annotate({ description: "Absolute path of the folder" }),
+      name: Schema.optionalKey(Schema.String).annotate({
+        description: "Workspace name; the folder's name when omitted",
+      }),
+      key: Schema.optionalKey(WorkspaceKey).annotate({
+        description: "Id prefix, e.g. HM for HM-1; made from the name when omitted",
+      }),
+      preset: Schema.optionalKey(Schema.Literals(PRESET_IDS)).annotate({
+        description: `What it starts with: ${presetList}`,
+      }),
+    }),
+    success: WorkspaceInfo,
+    error: Schema.Union([InvalidRequest, StorageError]),
+    http: { method: "POST", path: "/workspaces" },
   },
   get_workspace: {
     description:
@@ -386,6 +426,44 @@ export const catalog = {
     success: FixResult,
     error: inWorkspace(),
     http: { method: "POST", path: "/workspaces/:workspace/diagnostics/fix" },
+  },
+  list_plugins: {
+    description:
+      "List the plugins octodo has, each a kind of task a workspace can enable: get_workspace says which ones it enables.",
+    readonly: true,
+    input: Schema.Struct({}),
+    success: Schema.Array(PluginInfo),
+    error: StorageError,
+    http: { method: "GET", path: "/plugins" },
+    cli: { command: ["plugins", "list"], description: "List the plugins octodo has" },
+  },
+  enable_plugin: {
+    description:
+      "Enable a plugin in a workspace, adding it to config.json's plugins. Its tasks read as tasks of its kind again, and its operations run there.",
+    readonly: false,
+    destructive: false,
+    idempotent: true,
+    input: Schema.Struct({ workspace: WorkspaceField, plugin: PluginId }),
+    success: pluginsOfWorkspace,
+    error: inWorkspace(InvalidRequest),
+    http: { method: "PUT", path: "/workspaces/:workspace/plugins/:plugin" },
+    cli: {
+      command: ["plugins", "enable"],
+      description: "Enable a plugin in the workspace",
+      examples: [{ command: "octo plugins enable recurring", description: "Let tasks repeat" }],
+    },
+  },
+  disable_plugin: {
+    description:
+      "Disable a plugin in a workspace, removing it from config.json's plugins. Its tasks stay as they are on disk and read as plain tasks, each with an unknown-kind diagnostic, until it is enabled again.",
+    readonly: false,
+    destructive: false,
+    idempotent: true,
+    input: Schema.Struct({ workspace: WorkspaceField, plugin: PluginId }),
+    success: pluginsOfWorkspace,
+    error: inWorkspace(InvalidRequest),
+    http: { method: "DELETE", path: "/workspaces/:workspace/plugins/:plugin" },
+    cli: { command: ["plugins", "disable"], description: "Disable a plugin in the workspace" },
   },
 } satisfies Record<string, Operation>;
 

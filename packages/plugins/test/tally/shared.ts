@@ -14,6 +14,8 @@ const workspace = Schema.optionalKey(Schema.String);
 /** A plugin made for tests: a task that counts bumps, `step` at a time, logged in `tally.log`. */
 export const tallyShared = {
   id: "tally",
+  name: "Tallies",
+  description: "Counters a test bumps.",
   keys: Schema.Struct({ step: Schema.Int.check(Schema.isGreaterThan(0)) }),
   files: ["tally.log"],
   fields: Schema.Struct({ count: Schema.Number, last: Schema.NullOr(Schema.String) }),

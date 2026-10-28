@@ -1,4 +1,5 @@
 import { Schema, SchemaAST, SchemaTransformation } from "effect";
+import { DEFAULT_PRESET, PRESETS } from "./presets.ts";
 import { MAX_ATTACHMENT_BYTES, STATUS_CATEGORIES, WORKSPACE_KEY } from "./rules.ts";
 
 export const Priority = Schema.Literals(["none", "low", "medium", "high", "urgent"]);
@@ -63,13 +64,8 @@ export const WorkspaceConfig = Schema.Struct({
 });
 export type WorkspaceConfig = typeof WorkspaceConfig.Type;
 
-export const DEFAULT_STATUSES: ReadonlyArray<StatusDefinition> = [
-  { id: "backlog", name: "Backlog", category: "backlog" },
-  { id: "todo", name: "Todo", category: "unstarted" },
-  { id: "in-progress", name: "In Progress", category: "started" },
-  { id: "done", name: "Done", category: "completed" },
-  { id: "archived", name: "Archived", category: "archived" },
-];
+/** The statuses of a config.json that lists none: the default preset's. */
+export const DEFAULT_STATUSES: ReadonlyArray<StatusDefinition> = PRESETS[DEFAULT_PRESET].statuses;
 
 /**
  * A folder with `list.md`. Snapshots give lists depth first, each among its siblings by `order`, so
@@ -292,6 +288,15 @@ export const WorkspaceInfo = Schema.Struct({
   root: Schema.String,
 });
 export type WorkspaceInfo = typeof WorkspaceInfo.Type;
+
+/** A plugin octodo has, which a workspace may enable. */
+export const PluginInfo = Schema.Struct({
+  /** Its name in config.json's `plugins` and the `type` its tasks name. */
+  id: Schema.String,
+  name: Schema.String,
+  description: Schema.String,
+});
+export type PluginInfo = typeof PluginInfo.Type;
 
 /** The plugins a workspace enables that octodo has, in config.json's order; absent for none. */
 const EnabledPlugins = Schema.optionalKey(Schema.Array(Schema.String));

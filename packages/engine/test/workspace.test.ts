@@ -75,6 +75,7 @@ describe("workspace", () => {
       "todo",
       "in-progress",
       "done",
+      "canceled",
       "archived",
     ]);
     expect(readdirSync(join(root, ".octodo")).toSorted()).toEqual([
@@ -793,7 +794,7 @@ describe("workspace", () => {
         const before = files(root);
         const reopened = yield* makeWorkspace("test", root);
         const statuses = yield* reopened.reorderStatuses({
-          order: ["done", "in-review", "todo", "in-progress", "backlog", "archived"],
+          order: ["done", "in-review", "todo", "in-progress", "backlog", "canceled", "archived"],
         });
         return { before, statuses };
       }),
@@ -804,6 +805,7 @@ describe("workspace", () => {
       "in-review",
       "in-progress",
       "done",
+      "canceled",
       "archived",
     ]);
     expect(files(root)).toEqual(result.before);

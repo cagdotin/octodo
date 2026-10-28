@@ -114,7 +114,7 @@ describe("a plugin's kind in a workspace", () => {
       [
         "unknown-kind",
         "type",
-        'The type tally is a plugin this workspace does not enable. It reads as a plain task until the plugin is added to "plugins" in config.json or the type line is removed.',
+        "The type tally is a plugin this workspace does not enable. It reads as a plain task until the plugin is enabled in the workspace's settings (octo plugins enable, MCP enable_plugin) or the type line is removed.",
       ],
     ]);
     expect((await ws.call("get_task", { id: "HM-1" })).value.attachments).toEqual([

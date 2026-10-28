@@ -1,4 +1,4 @@
-import type { Diagnostic } from "@octodo/core";
+import type { Diagnostic } from "@octodo/contract";
 import { CircleCheckIcon, WrenchIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {

@@ -8,7 +8,8 @@
   "type": "module",
   "dependencies": {
     "@effect/platform-node": "^4.0.6",
-    "@octodo/core": "workspace:*",
+    "@octodo/contract": "workspace:*",
+    "@octodo/engine": "workspace:*",
     "@octodo/mcp": "workspace:*",
     "@octodo/server": "workspace:*",
     "effect": "^4.0.6"

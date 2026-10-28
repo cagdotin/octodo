@@ -12,10 +12,9 @@ import {
   Task,
   UpdateTaskInput,
   WorkspaceInfo,
-  Workspaces,
-  type Workspace,
   type WorkspaceSnapshot,
-} from "@octodo/core";
+} from "@octodo/contract";
+import { Workspaces, type Workspace } from "@octodo/engine";
 import { Effect, Layer, Logger, Schema } from "effect";
 import { McpProtocol, McpServer, Tool, Toolkit } from "effect/ai";
 

@@ -1,5 +1,5 @@
-import type { Task, WorkspaceSnapshot } from "@octodo/core";
-import { LINK_KINDS, isClosedCategory, readiness } from "@octodo/core/layout";
+import type { Task, WorkspaceSnapshot } from "@octodo/contract";
+import { LINK_KINDS, isClosedCategory, readiness } from "@octodo/contract/rules";
 import { useNavigate } from "@tanstack/react-router";
 import { LockIcon, PlusIcon, XIcon } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";

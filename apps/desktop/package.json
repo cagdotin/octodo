@@ -10,7 +10,7 @@
     "start": "electron ."
   },
   "dependencies": {
-    "@octodo/core": "workspace:*",
+    "@octodo/engine": "workspace:*",
     "@octodo/server": "workspace:*"
   },
   "devDependencies": {

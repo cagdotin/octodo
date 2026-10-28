@@ -1,5 +1,5 @@
-import type { Task, WorkspaceSnapshot } from "@octodo/core";
-import { defaultStatus } from "@octodo/core/layout";
+import type { Task, WorkspaceSnapshot } from "@octodo/contract";
+import { defaultStatus } from "@octodo/contract/rules";
 import { Link } from "@tanstack/react-router";
 import { CornerLeftUpIcon, ListTreeIcon, PlusIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";

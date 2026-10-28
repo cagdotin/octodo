@@ -1,6 +1,5 @@
-import type { Task, WorkspaceSnapshot } from "@octodo/core";
-import { DEFAULT_STATUSES } from "@octodo/core";
-import { readiness } from "@octodo/core/layout";
+import { type Task, type WorkspaceSnapshot, DEFAULT_STATUSES } from "@octodo/contract";
+import { readiness } from "@octodo/contract/rules";
 import { describe, expect, it } from "vitest";
 import {
   applyMove,

@@ -1,8 +1,8 @@
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { StatusDefinition, Task, WorkspaceSnapshot } from "@octodo/core";
-import { isClosedCategory } from "@octodo/core/layout";
+import type { StatusDefinition, Task, WorkspaceSnapshot } from "@octodo/contract";
+import { isClosedCategory } from "@octodo/contract/rules";
 import { Link } from "@tanstack/react-router";
 import { InboxIcon, PlusIcon } from "lucide-react";
 import { useMemo, useState, type ComponentProps, type ReactNode } from "react";

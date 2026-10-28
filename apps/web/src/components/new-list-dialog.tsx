@@ -1,5 +1,5 @@
-import type { List } from "@octodo/core";
-import { listDepth, MAX_LIST_DEPTH } from "@octodo/core/layout";
+import type { List } from "@octodo/contract";
+import { listDepth, MAX_LIST_DEPTH } from "@octodo/contract/rules";
 import { useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";

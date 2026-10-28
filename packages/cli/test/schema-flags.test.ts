@@ -1,4 +1,4 @@
-import { CreateTaskInput, MoveTaskInput, UpdateTaskInput } from "@octodo/core";
+import { CreateTaskInput, MoveTaskInput, UpdateTaskInput } from "@octodo/contract";
 import { Effect, FileSystem, Layer, Path, Schema, Stdio, Terminal } from "effect";
 import { CliError, Command } from "effect/cli";
 import { ChildProcessSpawner } from "effect/process";

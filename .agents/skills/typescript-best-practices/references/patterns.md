@@ -133,7 +133,7 @@ External sources include RPC payloads, `JSON.parse`, `postMessage`, IPC, file co
 
 ## Schemas before hand-rolled guards
 
-Before writing a property-by-property type guard for external data, look for an existing schema in `packages/core/src/domain.ts`. Let one Effect `Schema` own validation and derive the TypeScript type from it. Do not maintain a schema, a duplicate interface, and a guard that can drift apart.
+Before writing a property-by-property type guard for external data, look for an existing schema in `packages/contract/src/domain.ts`. Let one Effect `Schema` own validation and derive the TypeScript type from it. Do not maintain a schema, a duplicate interface, and a guard that can drift apart.
 
 ```ts
 import { Effect, Schema } from "effect";

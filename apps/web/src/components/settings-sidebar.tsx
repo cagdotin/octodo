@@ -1,4 +1,4 @@
-import type { WorkspaceSnapshot } from "@octodo/core";
+import type { WorkspaceSnapshot } from "@octodo/contract";
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import { ChevronLeftIcon, PaletteIcon, PlugIcon, SlidersHorizontalIcon } from "lucide-react";
 import type { ReactNode } from "react";

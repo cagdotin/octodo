@@ -25,7 +25,7 @@ the risks of that walk. With [0001](0001-octodo-is-the-only-writer.md) and
 ## Mechanism (OCT-46)
 
 - The lock is an exclusive transaction (`BEGIN EXCLUSIVE`, `busy_timeout` 0) on
-  `.octodo/.owner-lock`, opened with `node:sqlite` (`packages/core/src/storage/owner-lock.ts`). It
+  `.octodo/.owner-lock`, opened with `node:sqlite` (`packages/engine/src/storage/owner-lock.ts`). It
   lives in `.octodo/` rather than in `<home>`, so every process finds the same file whatever its
   `OCTODO_HOME` or the path it opened the folder by, and moving the folder moves the lock. It is a
   dot name, so scans, the watcher and attachments ignore it, and `.gitignore` lists it.

@@ -1,5 +1,5 @@
 // Development entry point: `pnpm dev` runs this next to the Vite dev server, which proxies /api.
-import { defaultHome } from "@octodo/core";
+import { defaultHome } from "@octodo/engine";
 import { homedir } from "node:os";
 import { startServer } from "./index.ts";
 

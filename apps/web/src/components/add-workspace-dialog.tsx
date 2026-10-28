@@ -1,4 +1,4 @@
-import { deriveKey, humanize } from "@octodo/core/layout";
+import { deriveKey, humanize } from "@octodo/contract/rules";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {

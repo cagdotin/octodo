@@ -38,7 +38,7 @@
       }
     },
     {
-      "files": ["packages/core/src/**"],
+      "files": ["packages/engine/src/**"],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -47,19 +47,19 @@
               {
                 "name": "effect",
                 "importNames": ["FileSystem"],
-                "message": "Only packages/core/src/storage/ touches the disk; take a Storage instead (docs/architecture.md)."
+                "message": "Only packages/engine/src/storage/ touches the disk; take a Storage instead (docs/architecture.md)."
               },
               {
                 "name": "effect/FileSystem",
-                "message": "Only packages/core/src/storage/ touches the disk; take a Storage instead (docs/architecture.md)."
+                "message": "Only packages/engine/src/storage/ touches the disk; take a Storage instead (docs/architecture.md)."
               },
               {
                 "name": "node:fs",
-                "message": "Only packages/core/src/storage/ touches the disk; take a Storage instead (docs/architecture.md)."
+                "message": "Only packages/engine/src/storage/ touches the disk; take a Storage instead (docs/architecture.md)."
               },
               {
                 "name": "node:fs/promises",
-                "message": "Only packages/core/src/storage/ touches the disk; take a Storage instead (docs/architecture.md)."
+                "message": "Only packages/engine/src/storage/ touches the disk; take a Storage instead (docs/architecture.md)."
               }
             ]
           }
@@ -67,9 +67,80 @@
       }
     },
     {
-      "files": ["packages/core/src/storage/**"],
+      "files": ["packages/engine/src/storage/**"],
       "rules": {
         "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["packages/contract/src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["node:*", "@octodo/engine", "@octodo/engine/*"],
+                "message": "The contract runs in the browser too: no Node modules and no engine (decision 0004)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/contract/src/rules.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["node:*", "@octodo/engine", "@octodo/engine/*", "effect", "effect/*"],
+                "message": "rules.ts is plain functions the browser imports: no Effect, no Node modules, no engine (decision 0004)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["apps/web/src/**", "apps/desktop/src/preload.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@octodo/contract",
+                "allowTypeImports": true,
+                "message": "@octodo/contract is Effect Schema code: import only its types here, and values from @octodo/contract/rules."
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["@octodo/engine", "@octodo/engine/*"],
+                "message": "The browser bundle may not hold engine code; talk to the server, and import rules from @octodo/contract/rules (decision 0004)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["apps/web/src/**/*.test.ts", "apps/web/src/**/*.test.tsx"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@octodo/engine", "@octodo/engine/*"],
+                "message": "The browser bundle may not hold engine code; talk to the server, and import rules from @octodo/contract/rules (decision 0004)."
+              }
+            ]
+          }
+        ]
       }
     }
   ]

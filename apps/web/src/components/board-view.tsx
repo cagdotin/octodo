@@ -1,7 +1,7 @@
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { StatusDefinition, Task, WorkspaceSnapshot } from "@octodo/core";
+import type { StatusDefinition, Task, WorkspaceSnapshot } from "@octodo/contract";
 import { useNavigate } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
 import { useMemo, type ReactNode } from "react";

@@ -1,4 +1,4 @@
-import type { List, WorkspaceSnapshot } from "@octodo/core";
+import type { List, WorkspaceSnapshot } from "@octodo/contract";
 import { useMemo, useState } from "react";
 import { parseQuickAdd, type QuickAdd } from "@/lib/quick-add";
 import { allTags, listLabel, PRIORITIES } from "@/lib/tasks";

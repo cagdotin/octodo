@@ -13,10 +13,10 @@ Apply the **type-system-discipline** principle skill first.
 
 These come from `AGENTS.md` and the toolchain. Break one and the code doesn't run or doesn't ship.
 
-- **Erasable syntax only.** Node runs the TypeScript sources directly. No `enum`, no `namespace`, no parameter properties. Use `as const` arrays plus `Schema.Literals`, as `STATUS_CATEGORIES` does in `packages/core/src/domain.ts`.
-- **Import with the `.ts` extension.** `import { slugify } from "./layout.ts"`.
-- **The browser bundle imports only types from `@octodo/core`**, plus `@octodo/core/layout`, which is plain functions with no Effect. A value import from anywhere else in core pulls the Effect runtime into the web app.
-- **Effect holds the logic, Hono stays thin.** Route handlers parse, call a service, and map the result. Domain rules live in `packages/core`.
+- **Erasable syntax only.** Node runs the TypeScript sources directly. No `enum`, no `namespace`, no parameter properties. Use `as const` arrays plus `Schema.Literals`, as `STATUS_CATEGORIES` (`packages/contract/src/rules.ts`) and `StatusCategory` (`domain.ts`) do.
+- **Import with the `.ts` extension.** `import { TASK_FILE } from "./layout.ts"`.
+- **The browser bundle imports only types from `@octodo/contract`**, plus `@octodo/contract/rules`, which is plain functions with no Effect, and never `@octodo/engine`. Lint fails anything else, since a value import from `domain.ts` pulls the Effect runtime into the web app.
+- **Effect holds the logic, Hono stays thin.** Route handlers parse, call a service, and map the result. Domain rules live in `packages/engine`, and the ones the browser shares in `packages/contract/src/rules.ts`.
 - **Use Effect's built-in modules where they exist**: `Schema`, `FileSystem`, `Path`, `effect/cli`, the `effect/ai` MCP server.
 
 ## Rules
@@ -39,7 +39,7 @@ These come from `AGENTS.md` and the toolchain. Break one and the code doesn't ru
 | `satisfies` over `as`           | Validates the value without widening literal types.                                                                                                                                                                                                                      |
 | Schema-derived types            | Reach for `Pick`/`Omit`/`Parameters`/`ReturnType`/`typeof` and `Schema.pick`/`Schema.omit` before declaring a new type.                                                                                                                                                  |
 | Object args                     | Pass objects, not positional arguments, so argument order is self-documenting. Skip on hot paths.                                                                                                                                                                        |
-| Real tests                      | Don't mock what you can run. Core tests run the real `Workspace` against a temp folder (`packages/core/test/`). Mock only what you can't run locally.                                                                                                                    |
+| Real tests                      | Don't mock what you can run. Engine tests run the real `Workspace` against a temp folder (`packages/engine/test/`). Mock only what you can't run locally.                                                                                                                |
 | Structured logs                 | `Effect.logInfo`, `Effect.logWarning`, and `Effect.logDebug` inside Effect code, with the id that lets someone debug it. `console` only at a process entry point (`main.ts`), as the server and desktop do.                                                              |
 
 Examples: `references/patterns.md`.

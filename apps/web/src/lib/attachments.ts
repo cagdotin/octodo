@@ -1,4 +1,4 @@
-import { slugify } from "@octodo/core/layout";
+import { slugify } from "@octodo/contract/rules";
 
 /** Files in a task's folder, as the body editor uses them. */
 export interface Attachments {

@@ -1,16 +1,7 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import {
-  FixAction,
-  InvalidRequest,
-  Priority,
-  Workspaces,
-  defaultHome,
-  isClosedCategory,
-  isProblem,
-  taskSubtree,
-  type Diagnostic,
-  type Task,
-} from "@octodo/core";
+import { FixAction, InvalidRequest, Priority, type Diagnostic, type Task } from "@octodo/contract";
+import { isClosedCategory, isProblem, taskSubtree } from "@octodo/contract/rules";
+import { Workspaces, defaultHome } from "@octodo/engine";
 import { stdioLayer } from "@octodo/mcp";
 import { DEFAULT_PORT, startServer } from "@octodo/server";
 import { Console, Effect, FileSystem, Layer, Option, Path } from "effect";

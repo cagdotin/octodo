@@ -27,7 +27,7 @@ instead of keeping the code because it exists.
   comes from the file's mtime; `list` and `parent` are never stored. Changing status is one write of
   `task.md`.
 - A link is a frontmatter key holding a list of plain task ids, `blocked_by: [HM-3, HM-7]`;
-  `LINK_KINDS` in `layout.ts` lists the keys. Only one end stores an edge: the reverse (`blocks`),
+  `LINK_KINDS` in `contract/src/rules.ts` lists the keys. Only one end stores an edge: the reverse (`blocks`),
   `mentionedIn` (from `[[HM-3]]` in a body, outside code), `blocked` and `ready` (open and not
   blocked) are computed when a snapshot is read. A link field that is not a list of ids, a task's link to itself and an id no
   file on disk has are diagnostics (a blocker that is not read still blocks); deleting a task removes its id from other
@@ -40,7 +40,7 @@ instead of keeping the code because it exists.
 - Folder names carry no meaning for the scanner; they are for people: `<id>-<slug>` for a task, the
   slug for a list. Anything else (a loose `.md`, a folder with neither marker or both, a symlink,
   which is never followed) is a diagnostic. A loose `.md` without frontmatter is a note: reported,
-  never changed. `storage/tree.ts` is the one reader of this grammar: nothing else lists a folder
+  never changed. `engine/src/storage/tree.ts` is the one reader of this grammar: nothing else lists a folder
   in `.octodo/`, and the scan only parses what it read and never writes.
 - Of several task folders with one id, the first one read is the task; each other one is a
   `duplicate-id` diagnostic, and its folder name means nothing (a sync tool's `HM-3-paint 2` too).
@@ -57,7 +57,7 @@ instead of keeping the code because it exists.
   Scans, diagnostics and attachments never see them. The first time a process holds the lock, it
   removes the temporary ones, since no write that owns them can still be running.
 - Every problem a read finds is a diagnostic `{ path, kind, field, message, fix }`, and every kind
-  is a row of `PROBLEMS` in `health/problems.ts` with its remedy and its fixes. A fix runs only when asked
+  is a row of `PROBLEMS` in `engine/src/health/problems.ts` with its remedy and its fixes. A fix runs only when asked
   (`octo doctor`, the app's dialog, MCP `fix_diagnostic`) and only if a fresh read still offers that
   fix there, so repeating one changes nothing. Fix-all applies only fixes that cannot lose what a
   person wrote; one that guesses (making a loose file a task) is picked one at a time.
@@ -66,29 +66,32 @@ instead of keeping the code because it exists.
   into folders that exist: never `mkdir -p` a container (only `octo init` creates the folder it is asked to
   make a workspace). Any in-memory index is a cache that a file
   watcher invalidates.
-- Only `packages/core/src/storage/` touches the disk; lint fails a `FileSystem` or `node:fs`
-  import anywhere else in core. Other code takes a `Storage` (`makeStorage(root)`) and changes
+- Only `packages/engine/src/storage/` touches the disk; lint fails a `FileSystem` or `node:fs`
+  import anywhere else in the engine. Other code takes a `Storage` (`makeStorage(root)`) and changes
   files only in `storage.write((files, ids) => ...)`, which holds the owner lock and reports each
   touched path to the cache. A new id written into frontmatter is an `AssignedId` from `ids.next`
   ([0012](docs/decisions/0012-only-storage-touches-the-disk.md)).
 
 ## Layout
 
-| Path              | What                                                                                                                       |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `packages/core`   | Effect v4 domain: schemas, markdown round-trip, folder rules, `Workspace` and `Workspaces` services                        |
-| `packages/mcp`    | MCP toolkit and stdio/HTTP layers on Effect's `McpServer`                                                                  |
-| `packages/server` | Hono HTTP API at `/api`, MCP at `/mcp`, SSE change feed, serves the built web app; `./client` is the typed Hono RPC client |
-| `packages/cli`    | `octo` CLI on `effect/cli`; run it with `bin/octo`                                                                         |
-| `apps/web`        | Vite + React, TanStack Router/Query, shadcn/ui, XState                                                                     |
-| `apps/desktop`    | Electron shell: starts the server in the main process and opens the web app                                                |
-| `apps/site`       | Static landing page (plain HTML, no build); icons come from `brand/`                                                       |
-| `brand/`          | `glyph.svg` and `build.ts` (`pnpm brand`), which renders every icon, banner and social image                               |
+| Path                | What                                                                                                                       |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `packages/contract` | What every client shares: Effect schemas and errors (`domain.ts`) and `rules.ts`, the plain rules the browser runs too     |
+| `packages/engine`   | Effect v4 domain: storage, scan, markdown round-trip, folder grammar, tasks, lists, statuses, health, `Workspace(s)`       |
+| `packages/mcp`      | MCP toolkit and stdio/HTTP layers on Effect's `McpServer`                                                                  |
+| `packages/server`   | Hono HTTP API at `/api`, MCP at `/mcp`, SSE change feed, serves the built web app; `./client` is the typed Hono RPC client |
+| `packages/cli`      | `octo` CLI on `effect/cli`; run it with `bin/octo`                                                                         |
+| `apps/web`          | Vite + React, TanStack Router/Query, shadcn/ui, XState                                                                     |
+| `apps/desktop`      | Electron shell: starts the server in the main process and opens the web app                                                |
+| `apps/site`         | Static landing page (plain HTML, no build); icons come from `brand/`                                                       |
+| `brand/`            | `glyph.svg` and `build.ts` (`pnpm brand`), which renders every icon, banner and social image                               |
 
 Decisions: Hono is the HTTP layer and Effect holds all logic. Use Effect's built-in modules where
-they exist (`effect/ai` McpServer, `effect/cli`, `FileSystem`, `Schema`). The browser bundle imports
-only types from `@octodo/core`, never Effect runtime code; `@octodo/core/layout` (plain functions,
-no Effect) is the one runtime import it may use.
+they exist (`effect/ai` McpServer, `effect/cli`, `FileSystem`, `Schema`). Packages depend in one direction,
+`contract` ← `engine` ← `server` ([0004](docs/decisions/0004-packages-by-dependency-direction.md)).
+The browser bundle (`apps/web`, the desktop preload) never imports `@octodo/engine` and imports
+only types from `@octodo/contract`; `@octodo/contract/rules` (plain functions, no Effect) is the
+one runtime import it may use. Lint enforces both.
 
 ## Security
 

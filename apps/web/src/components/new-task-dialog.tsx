@@ -1,4 +1,5 @@
-import type { List, Priority, WorkspaceSnapshot } from "@octodo/core";
+import type { List, Priority, WorkspaceSnapshot } from "@octodo/contract";
+import { defaultStatus } from "@octodo/contract/rules";
 import {
   CalendarIcon,
   HashIcon,
@@ -42,7 +43,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { defaultStatus } from "@octodo/core/layout";
 import { useCreateTask } from "@/lib/api";
 import { withoutRanges, type QuickAddToken } from "@/lib/quick-add";
 import { cn } from "@/lib/utils";

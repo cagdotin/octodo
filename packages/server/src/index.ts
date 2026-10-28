@@ -1,7 +1,7 @@
 import { NodeServices } from "@effect/platform-node";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import { Workspaces } from "@octodo/core";
+import { Workspaces } from "@octodo/engine";
 import { httpLayer } from "@octodo/mcp";
 import { Layer, ManagedRuntime } from "effect";
 import { HttpRouter, HttpServer } from "effect/http";

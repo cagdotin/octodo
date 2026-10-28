@@ -208,9 +208,9 @@ importers:
 
   apps/desktop:
     dependencies:
-      '@octodo/core':
+      '@octodo/engine':
         specifier: workspace:*
-        version: link:../../packages/core
+        version: link:../../packages/engine
       '@octodo/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -260,9 +260,9 @@ importers:
       '@lezer/common':
         specifier: ^1.5.4
         version: 1.5.4
-      '@octodo/core':
+      '@octodo/contract':
         specifier: workspace:*
-        version: link:../../packages/core
+        version: link:../../packages/contract
       '@octodo/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -348,9 +348,12 @@ importers:
       '@effect/platform-node':
         specifier: ^4.0.6
         version: 4.0.6(effect@4.0.6)(redis@6.3.0)
-      '@octodo/core':
+      '@octodo/contract':
         specifier: workspace:*
-        version: link:../core
+        version: link:../contract
+      '@octodo/engine':
+        specifier: workspace:*
+        version: link:../engine
       '@octodo/mcp':
         specifier: workspace:*
         version: link:../mcp
@@ -361,8 +364,17 @@ importers:
         specifier: ^4.0.6
         version: 4.0.6
 
-  packages/core:
+  packages/contract:
     dependencies:
+      effect:
+        specifier: ^4.0.6
+        version: 4.0.6
+
+  packages/engine:
+    dependencies:
+      '@octodo/contract':
+        specifier: workspace:*
+        version: link:../contract
       effect:
         specifier: ^4.0.6
         version: 4.0.6
@@ -375,9 +387,12 @@ importers:
 
   packages/mcp:
     dependencies:
-      '@octodo/core':
+      '@octodo/contract':
         specifier: workspace:*
-        version: link:../core
+        version: link:../contract
+      '@octodo/engine':
+        specifier: workspace:*
+        version: link:../engine
       effect:
         specifier: ^4.0.6
         version: 4.0.6
@@ -393,9 +408,12 @@ importers:
       '@hono/standard-validator':
         specifier: ^0.4.0
         version: 0.4.0(@standard-schema/spec@1.1.0)(hono@4.13.14)
-      '@octodo/core':
+      '@octodo/contract':
         specifier: workspace:*
-        version: link:../core
+        version: link:../contract
+      '@octodo/engine':
+        specifier: workspace:*
+        version: link:../engine
       '@octodo/mcp':
         specifier: workspace:*
         version: link:../mcp

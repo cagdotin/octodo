@@ -18,7 +18,7 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { getEventCoordinates } from "@dnd-kit/utilities";
-import type { List, StatusDefinition, Task } from "@octodo/core";
+import type { List, StatusDefinition, Task } from "@octodo/contract";
 import { useMemo, useState, type ReactNode } from "react";
 import { useMoveTask } from "@/lib/api";
 import { neighbours } from "@/lib/tasks";

@@ -15,8 +15,8 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { StatusCategory, StatusDefinition } from "@octodo/core";
-import { defaultStatus } from "@octodo/core/layout";
+import type { StatusCategory, StatusDefinition } from "@octodo/contract";
+import { defaultStatus } from "@octodo/contract/rules";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { GripVerticalIcon } from "lucide-react";

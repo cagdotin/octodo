@@ -6,8 +6,8 @@ import {
   type ClientRect,
   type Over,
 } from "@dnd-kit/core";
-import type { List, MoveListInput, WorkspaceSnapshot } from "@octodo/core";
-import { inSubtree, listMoveError, movedListId } from "@octodo/core/layout";
+import type { List, MoveListInput, WorkspaceSnapshot } from "@octodo/contract";
+import { inSubtree, listMoveError, movedListId } from "@octodo/contract/rules";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import { dragData, dropData, type DragData, type DropData } from "@/components/drag-and-drop";

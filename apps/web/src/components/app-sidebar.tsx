@@ -1,5 +1,5 @@
-import type { WorkspaceSnapshot } from "@octodo/core";
-import { isClosedCategory, isProblem } from "@octodo/core/layout";
+import type { WorkspaceSnapshot } from "@octodo/contract";
+import { isClosedCategory, isProblem } from "@octodo/contract/rules";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {

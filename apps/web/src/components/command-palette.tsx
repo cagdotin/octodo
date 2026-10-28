@@ -1,4 +1,4 @@
-import type { WorkspaceSnapshot } from "@octodo/core";
+import type { WorkspaceSnapshot } from "@octodo/contract";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {

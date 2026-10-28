@@ -11,7 +11,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { initWorkspace, makeWorkspace, type Workspace } from "../../packages/core/src/index.ts";
+import { initWorkspace, makeWorkspace, type Workspace } from "../../packages/engine/src/index.ts";
 
 const KEY = "BN";
 const STATUSES = ["backlog", "todo", "in-progress", "done", "archived"];

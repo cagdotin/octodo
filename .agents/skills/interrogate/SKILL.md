@@ -16,7 +16,7 @@ Identify what to review from context:
 - On a feature branch, `git diff master...HEAD` for the full changeset, plus the working tree.
 - If the user's message references recent work, gather the relevant files.
 
-Note the surrounding files a reviewer needs to understand the code: callers, the schemas in `packages/core/src/domain.ts`, the rules in `AGENTS.md` the change touches.
+Note the surrounding files a reviewer needs to understand the code: callers, the schemas in `packages/contract/src/domain.ts`, the rules in `AGENTS.md` the change touches.
 
 ## Step 2. Intent
 

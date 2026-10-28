@@ -1,4 +1,4 @@
-import type { CreateTaskInput, WorkspaceSnapshot } from "@octodo/core";
+import type { CreateTaskInput, WorkspaceSnapshot } from "@octodo/contract";
 import { useMemo } from "react";
 import { QuickAddInput } from "@/components/quick-add/quick-add-input";
 import { suggestionsFor, useQuickAdd } from "@/components/quick-add/use-quick-add";

@@ -1,0 +1,13 @@
+{
+  "name": "@octodo/contract",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/domain.ts",
+    "./rules": "./src/rules.ts"
+  },
+  "dependencies": {
+    "effect": "^4.0.6"
+  }
+}

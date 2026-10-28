@@ -1,4 +1,4 @@
-import type { List, Priority } from "@octodo/core";
+import type { List, Priority } from "@octodo/contract";
 import { casual, type Component, type ParsedResult, type Refiner } from "chrono-node/en";
 import { addDays, format, isValid, parseISO } from "date-fns";
 

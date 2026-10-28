@@ -7,7 +7,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@octodo/core": "workspace:*",
+    "@octodo/contract": "workspace:*",
+    "@octodo/engine": "workspace:*",
     "effect": "^4.0.6"
   }
 }

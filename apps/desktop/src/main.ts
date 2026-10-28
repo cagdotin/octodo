@@ -2,7 +2,7 @@
  * The desktop app: starts the octodo server (API, MCP endpoint and web app) inside the Electron
  * main process and shows the web app in a window.
  */
-import { defaultHome } from "@octodo/core";
+import { defaultHome } from "@octodo/engine";
 import { DEFAULT_PORT, startServer, type RunningServer } from "@octodo/server";
 import { BrowserWindow, app, dialog, ipcMain, shell } from "electron";
 import { homedir } from "node:os";

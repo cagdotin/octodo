@@ -30,4 +30,7 @@ anything. A lint rule forbids web and desktop renderer code from importing `engi
 
 - `layout.ts` becomes `contract`'s `rules.ts`. It keeps only rules that must run per keystroke or
   per drag hover. Values the server can compute once (`ready`, `blocked`) go into the snapshot.
+- What only the engine needs stays there (OCT-51): `layout.ts` keeps the on-disk grammar (file
+  names, task id formats, folder names) and `place.ts` the order keys. Of `place.ts`, only
+  `destination`, which the web's optimistic move needs, moved into `rules.ts`.
 - A plugin's UI half cannot import its engine half. Shared types live in its `shared` entry.

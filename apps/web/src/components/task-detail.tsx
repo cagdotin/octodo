@@ -1,4 +1,4 @@
-import type { Task, WorkspaceSnapshot } from "@octodo/core";
+import type { Task, WorkspaceSnapshot } from "@octodo/contract";
 import { useActorRef, useSelector } from "@xstate/react";
 import { format, parseISO } from "date-fns";
 import {

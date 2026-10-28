@@ -5,7 +5,7 @@ import type {
   StatusDefinition,
   Task,
   WorkspaceSnapshot,
-} from "@octodo/core";
+} from "@octodo/contract";
 import {
   CalendarDaysIcon,
   CalendarRangeIcon,

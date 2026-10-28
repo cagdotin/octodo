@@ -8,8 +8,8 @@ import type {
   Task,
   UpdateTaskInput,
   WorkspaceSnapshot,
-} from "@octodo/core";
-import { sortStatuses } from "@octodo/core/layout";
+} from "@octodo/contract";
+import { sortStatuses } from "@octodo/contract/rules";
 import { createClient } from "@octodo/server/client";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";

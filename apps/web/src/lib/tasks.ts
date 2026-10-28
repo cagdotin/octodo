@@ -7,7 +7,7 @@ import type {
   StatusDefinition,
   Task,
   WorkspaceSnapshot,
-} from "@octodo/core";
+} from "@octodo/contract";
 import {
   destination,
   inSubtree,
@@ -15,7 +15,7 @@ import {
   movedListId,
   readiness,
   taskSubtree,
-} from "@octodo/core/layout";
+} from "@octodo/contract/rules";
 import {
   addDays,
   format,

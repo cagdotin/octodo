@@ -1,4 +1,4 @@
-import type { Priority, Task, WorkspaceSnapshot } from "@octodo/core";
+import type { Priority, Task, WorkspaceSnapshot } from "@octodo/contract";
 import {
   KanbanIcon,
   ListFilterIcon,

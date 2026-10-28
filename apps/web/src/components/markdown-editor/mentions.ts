@@ -15,7 +15,7 @@ import {
 import { Decoration, type DecorationSet, EditorView, WidgetType } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode } from "@lezer/common";
-import { findMentions } from "@octodo/core/layout";
+import { findMentions } from "@octodo/contract/rules";
 
 /** A task a body can mention, as its chip and the `[[` completions show it. */
 export interface MentionTarget {

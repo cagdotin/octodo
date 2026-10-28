@@ -8,13 +8,12 @@ import {
   ReorderStatusesInput,
   UpdateTaskInput,
   WorkspaceKey,
-  Workspaces,
   type InvalidRequest,
   type StorageError,
   type TaskNotFound,
-  type Workspace,
   type WorkspaceNotFound,
-} from "@octodo/core";
+} from "@octodo/contract";
+import { Workspaces, type Workspace } from "@octodo/engine";
 import { Cause, Effect, Exit, Fiber, Option, Schema, Stream, type ManagedRuntime } from "effect";
 import { Hono, type Context } from "hono";
 import { homedir } from "node:os";

@@ -1,14 +1,7 @@
 import { Effect, FileSystem, Path } from "effect";
 import { DEFAULT_STATUSES, type Diagnostic, type FixAction } from "./domain.ts";
 import { createFolder, freeName, writeFileAtomic } from "./files.ts";
-import {
-  TASK_FILE,
-  conflictCopyOf,
-  humanize,
-  idNumber,
-  isLinkField,
-  taskFolderName,
-} from "./layout.ts";
+import { TASK_FILE, humanize, idNumber, isLinkField, taskFolderName } from "./layout.ts";
 import { frontmatterId, keepLinks, patchFrontmatter, readFrontmatter } from "./markdown.ts";
 import type { Scan } from "./scan.ts";
 import { editConfig } from "./storage/config.ts";
@@ -31,8 +24,8 @@ type Handler = (
 
 /**
  * Gives the copied task in `dir` a new id, and each of its subtasks whose id another folder has,
- * then renames their folders to match, dropping a conflict copy's ` 2`. Ids go in before any
- * folder is renamed, deepest folders first, so every path stays valid until it is used.
+ * then renames their folders to match. Ids go in before any folder is renamed, deepest folders
+ * first, so every path stays valid until it is used.
  */
 const renumberCopy = (dir: string, context: FixContext) =>
   Effect.gen(function* () {
@@ -49,7 +42,7 @@ const renumberCopy = (dir: string, context: FixContext) =>
       renames.push({ dir: folder, old, id });
     }
     for (const { dir: folder, old, id } of renames.toReversed()) {
-      const name = conflictCopyOf(path.basename(folder)) ?? path.basename(folder);
+      const name = path.basename(folder);
       const renamed =
         old !== null && (name === old || name.startsWith(`${old}-`))
           ? `${id}${name.slice(old.length)}`
@@ -110,15 +103,6 @@ const FIXES: Record<FixAction, Handler> = {
       const path = yield* Path.Path;
       yield* renumberCopy(path.dirname(context.target), context);
     }),
-  "keep-copy": (context) =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const { target } = context;
-      if ((yield* fs.stat(target)).type === "Directory")
-        return yield* renumberCopy(target, context);
-      yield* adopt(target, path.dirname(path.dirname(target)), context);
-    }),
   "wrap-as-task": (context) =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
@@ -127,7 +111,7 @@ const FIXES: Record<FixAction, Handler> = {
   "remove-copy": ({ target }) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      yield* fs.remove(target, { recursive: true });
+      yield* fs.remove(target);
     }),
   "drop-unknown-links": keepLinksWhere((id, { known }) => known.has(id)),
   "drop-self-link": keepLinksWhere((id, { own }) => id !== own),

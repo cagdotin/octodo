@@ -212,7 +212,7 @@ describe("file health", () => {
     expect(read(root, "HM-10-x/task.md")).toBe("---\nid: HM-2\ntitle: X\n---\n");
   });
 
-  it("serves the original of a duplicate even when the copy sorts first", async () => {
+  it("serves the first folder read of several with one id, and reports the others as duplicates", async () => {
     const root = await fresh({
       "HM-1-paint-walls/task.md": "---\nid: HM-1\ntitle: Paint walls\n---\n",
       "HM-1-old-name 2/task.md": "---\nid: HM-1\ntitle: Old name\n---\n",
@@ -220,16 +220,16 @@ describe("file health", () => {
       "HM-2-copy-of-tile/task.md": "---\nid: HM-2\ntitle: Tile\n---\n",
     });
     expect((await snapshot(root)).tasks.map((task) => [task.id, task.path])).toEqual([
-      ["HM-1", ".octodo/HM-1-paint-walls/task.md"],
-      ["HM-2", ".octodo/HM-2-tile/task.md"],
+      ["HM-1", ".octodo/HM-1-old-name 2/task.md"],
+      ["HM-2", ".octodo/HM-2-copy-of-tile/task.md"],
     ]);
     expect(await diagnostics(root)).toEqual([
-      one("HM-1-old-name 2", "conflict-copy", null, "keep-copy"),
-      one("HM-2-copy-of-tile/task.md", "duplicate-id", "id", "fresh-id"),
+      one("HM-1-paint-walls/task.md", "duplicate-id", "id", "fresh-id"),
+      one("HM-2-tile/task.md", "duplicate-id", "id", "fresh-id"),
     ]);
   });
 
-  it("keeps a conflict copy of a task with subtasks without renumbering the original's", async () => {
+  it("gives a sync tool's copy of a task with subtasks new ids, keeping its name and the original's ids", async () => {
     const root = await fresh({
       "HM-1-a/task.md": "---\nid: HM-1\nblocked_by: [HM-8]\n---\n",
       "HM-9-x/task.md": "---\nid: HM-9\ntitle: X\n---\nOne.\n",
@@ -239,7 +239,7 @@ describe("file health", () => {
     });
     const result = await inWorkspace(root, (ws) => ws.fixAll);
     expect(result.fixed.map(summary)).toEqual([
-      one("HM-9-x 2", "conflict-copy", null, "keep-copy"),
+      one("HM-9-x 2/task.md", "duplicate-id", "id", "fresh-id"),
     ]);
     expect(result.diagnostics).toEqual([]);
     expect(
@@ -248,8 +248,8 @@ describe("file health", () => {
       ["HM-1", null, ".octodo/HM-1-a/task.md", ""],
       ["HM-8", "HM-9", ".octodo/HM-9-x/HM-8-sub/task.md", "Original.\n"],
       ["HM-9", null, ".octodo/HM-9-x/task.md", "One.\n"],
-      ["HM-10", null, ".octodo/HM-10-x/task.md", "Two.\n"],
-      ["HM-11", "HM-10", ".octodo/HM-10-x/HM-11-sub/task.md", "Copy.\n"],
+      ["HM-10", null, ".octodo/HM-10-x 2/task.md", "Two.\n"],
+      ["HM-11", "HM-10", ".octodo/HM-10-x 2/HM-11-sub/task.md", "Copy.\n"],
     ]);
   });
 
@@ -368,42 +368,7 @@ describe("file health", () => {
     expect(files(root)).toEqual(["HM-1-a/task.md", "config.json"]);
   });
 
-  it("keeps a conflict copy of task.md as a new task next to the original, or deletes an identical one", async () => {
-    const root = await fresh({
-      "home/list.md": "",
-      "home/HM-1-paint/task.md": "---\nid: HM-1\ntitle: Paint\n---\nTwo coats.\n",
-      "home/HM-1-paint/task 2.md": "---\nid: HM-1\ntitle: Paint\n---\nThree coats.\n",
-      "HM-2-b/task.md": "---\nid: HM-2\n---\n",
-      "HM-2-b/task 3.md": "---\nid: HM-2\n---\n",
-    });
-    expect(await diagnostics(root)).toEqual([
-      one("HM-2-b/task 3.md", "conflict-copy", null, "remove-copy"),
-      one("home/HM-1-paint/task 2.md", "conflict-copy", null, "keep-copy"),
-    ]);
-    await fixTwice(root, {
-      path: ".octodo/home/HM-1-paint/task 2.md",
-      kind: "conflict-copy",
-      action: "keep-copy",
-    });
-    await fixTwice(root, {
-      path: ".octodo/HM-2-b/task 3.md",
-      kind: "conflict-copy",
-      action: "remove-copy",
-    });
-    expect(files(root)).toEqual([
-      "HM-2-b/task.md",
-      "config.json",
-      "home/HM-1-paint/task.md",
-      "home/HM-3-paint/task.md",
-      "home/list.md",
-    ]);
-    expect(read(root, "home/HM-3-paint/task.md")).toBe(
-      "---\nid: HM-3\ntitle: Paint\n---\n\nThree coats.\n",
-    );
-    expect(await diagnostics(root)).toEqual([]);
-  });
-
-  it("leaves an attachment named like a copy of task.md alone unless it has the task's id", async () => {
+  it("leaves an attachment named like a copy of task.md alone", async () => {
     const root = await fresh({
       "HM-1-a/task.md": "---\nid: HM-1\n---\n",
       "HM-1-a/task 2.md": "Meeting notes\n",
@@ -419,104 +384,40 @@ describe("file health", () => {
     ]);
   });
 
-  it("resolves a conflict copy of a task folder by its contents", async () => {
+  it("reads a sync tool's copy of task.md as an attachment and one of list.md as loose markdown", async () => {
     const root = await fresh({
-      "HM-1-paint/task.md": "---\nid: HM-1\n---\n",
-      "HM-1-paint/images/plan.png": "png",
-      "HM-1-paint 2/task.md": "---\nid: HM-1\n---\n",
-      "HM-1-paint 2/images/plan.png": "png",
-      "HM-2-tile/task.md": "---\nid: HM-2\n---\nGrey.\n",
-      "HM-2-tile 2/task.md": "---\nid: HM-2\n---\nWhite.\n",
+      "home/list.md": "---\nname: Home\n---\n",
+      "home/list 2.md": "---\nname: Home\n---\n",
+      "home/HM-1-paint/task.md": "---\nid: HM-1\ntitle: Paint\n---\nTwo coats.\n",
+      "home/HM-1-paint/task 2.md": "---\nid: HM-1\ntitle: Paint\n---\nThree coats.\n",
     });
-    expect(await diagnostics(root)).toEqual([
-      one("HM-1-paint 2", "conflict-copy", null, "remove-copy"),
-      one("HM-2-tile 2", "conflict-copy", null, "keep-copy"),
+    expect((await snapshot(root)).tasks.map((task) => task.path)).toEqual([
+      ".octodo/home/HM-1-paint/task.md",
     ]);
-    await fixTwice(root, {
-      path: ".octodo/HM-1-paint 2",
-      kind: "conflict-copy",
-      action: "remove-copy",
-    });
-    await fixTwice(root, {
-      path: ".octodo/HM-2-tile 2",
-      kind: "conflict-copy",
-      action: "keep-copy",
-    });
-    expect(files(root)).toEqual([
-      "HM-1-paint/images/plan.png",
-      "HM-1-paint/task.md",
-      "HM-2-tile/task.md",
-      "HM-3-tile/task.md",
-      "config.json",
-    ]);
-    expect(read(root, "HM-3-tile/task.md")).toBe("---\nid: HM-3\n---\n\nWhite.\n");
-  });
-
-  it("compares hidden files too before it offers to delete a copied folder", async () => {
-    const root = await fresh({
-      "HM-1-paint/task.md": "---\nid: HM-1\n---\n",
-      "HM-1-paint/.colours": "red\n",
-      "HM-1-paint 2/task.md": "---\nid: HM-1\n---\n",
-      "HM-1-paint 2/.colours": "blue\n",
-      "HM-2-tile/task.md": "---\nid: HM-2\n---\n",
-      "HM-2-tile 2/task.md": "---\nid: HM-2\n---\n",
-    });
     expect(await diagnostics(root)).toEqual([
-      one("HM-1-paint 2", "conflict-copy", null, "keep-copy"),
-      one("HM-2-tile 2", "conflict-copy", null, "remove-copy"),
+      one("home/list 2.md", "loose-markdown", null, "wrap-as-task"),
     ]);
   });
 
   it("refuses a fix whose action is not the one a fresh read offers", async () => {
-    const root = await fresh({
-      "HM-2-tile/task.md": "---\nid: HM-2\n---\nGrey.\n",
-      "HM-2-tile 2/task.md": "---\nid: HM-2\n---\nGrey.\n",
-    });
+    const task = "---\nid: HM-1\ntitle: A\n---\n";
+    const root = await fresh({ "HM-1-a/task.md": task, "HM-1-a.md": task });
     expect(await diagnostics(root)).toEqual([
-      one("HM-2-tile 2", "conflict-copy", null, "remove-copy"),
+      one("HM-1-a.md", "loose-markdown", null, "remove-copy"),
     ]);
-    write(root, "HM-2-tile 2/task.md", "---\nid: HM-2\n---\nWhite.\n");
+    write(root, "HM-1-a.md", "---\nid: HM-1\ntitle: B\n---\n");
     const stale = await inWorkspace(root, (ws) =>
       ws.fixDiagnostic({
-        path: ".octodo/HM-2-tile 2",
-        kind: "conflict-copy",
+        path: ".octodo/HM-1-a.md",
+        kind: "loose-markdown",
         action: "remove-copy",
       }),
     );
     expect(stale.fixed).toEqual([]);
     expect(stale.diagnostics.map(summary)).toEqual([
-      one("HM-2-tile 2", "conflict-copy", null, "keep-copy"),
+      one("HM-1-a.md", "loose-markdown", null, "wrap-as-task"),
     ]);
-    expect(read(root, "HM-2-tile 2/task.md")).toBe("---\nid: HM-2\n---\nWhite.\n");
-  });
-
-  it("deletes a conflict copy of list.md only when it is identical", async () => {
-    const root = await fresh({
-      "home/list.md": "---\nname: Home\n---\n",
-      "home/list 2.md": "---\nname: Home\n---\n",
-      "garden/list.md": "---\nname: Garden\n---\n",
-      "garden/list 2.md": "---\nname: Yard\n---\n",
-    });
-    expect(await diagnostics(root)).toEqual([
-      one("garden/list 2.md", "conflict-copy", null, null),
-      one("home/list 2.md", "conflict-copy", null, "remove-copy"),
-    ]);
-    await fixTwice(root, {
-      path: ".octodo/home/list 2.md",
-      kind: "conflict-copy",
-      action: "remove-copy",
-    });
-    await fixTwice(root, {
-      path: ".octodo/garden/list 2.md",
-      kind: "conflict-copy",
-      action: "remove-copy",
-    });
-    expect(files(root)).toEqual([
-      "config.json",
-      "garden/list 2.md",
-      "garden/list.md",
-      "home/list.md",
-    ]);
+    expect(read(root, "HM-1-a.md")).toBe("---\nid: HM-1\ntitle: B\n---\n");
   });
 
   it("reports a task it cannot give an id, and gives it one on the next read that can", async () => {
@@ -635,14 +536,10 @@ describe("file health", () => {
       ".owner-lock": "",
       "HM-1-a/task.md": "---\nid: HM-1\n---\n",
       "HM-1-a/.task.md.tmp": "x",
-      "HM-1-a 2/task.md": "---\nid: HM-1\n---\n",
       "home/list.md": "",
       "empty/.task.md.tmp": "x",
     });
-    expect(await diagnostics(root)).toEqual([
-      one("HM-1-a 2", "conflict-copy", null, "keep-copy"),
-      one("empty", "unmarked-folder", null, null),
-    ]);
+    expect(await diagnostics(root)).toEqual([one("empty", "unmarked-folder", null, null)]);
     const served = await inWorkspace(root, (ws) =>
       Effect.flip(ws.attachmentPath("HM-1", ".task.md.tmp")),
     );
@@ -703,7 +600,6 @@ describe("file health", () => {
       "home/list.md": "",
       "home/notes.md": "Loose\n",
       "HM-1-a/task.md": "---\nid: HM-1\nstatus: in-review\n---\n",
-      "HM-1-a/task 2.md": "---\nid: HM-1\nstatus: in-review\n---\nOther\n",
       "HM-1-b/task.md": "---\nid: HM-1\n---\n",
       "broken/task.md": "---\nid: [\n---\n",
     });
@@ -717,7 +613,6 @@ describe("file health", () => {
     expect(stale.fixed).toEqual([]);
     const result = await inWorkspace(root, (ws) => ws.fixAll);
     expect(result.fixed.map((diagnostic) => diagnostic.kind).toSorted()).toEqual([
-      "conflict-copy",
       "duplicate-id",
       "unknown-status",
     ]);

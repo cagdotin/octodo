@@ -42,8 +42,8 @@ instead of keeping the code because it exists.
   which is never followed) is a diagnostic. A loose `.md` without frontmatter is a note: reported,
   never changed. `storage/tree.ts` is the one reader of this grammar: nothing else lists a folder
   in `.octodo/`, and the scan only parses what it read and never writes.
-- Of several task folders with one id, the task is the one a sync tool did not name as a copy
-  (`HM-3-paint 2`), then the one named after its id and title, then the first read.
+- Of several task folders with one id, the first one read is the task; each other one is a
+  `duplicate-id` diagnostic, and its folder name means nothing (a sync tool's `HM-3-paint 2` too).
 - A task's identity is the `id` in its frontmatter, never its path. Files without an id get one the
   first time they are read. Frontmatter keys the app does not manage are kept untouched, including
   order and comments (edits go through the `yaml` document API).

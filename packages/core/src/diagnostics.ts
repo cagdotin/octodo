@@ -81,10 +81,6 @@ export const PROBLEMS = {
       "octodo leaves it as it is; to make it a task, put it in a task folder as task.md with --- frontmatter",
     fixes: [],
   },
-  "conflict-copy": {
-    remedy: "A sync tool made it when two edits clashed, and it is not read",
-    fixes: ["keep-copy", "remove-copy"],
-  },
   "unmarked-folder": {
     remedy:
       "Add task.md or list.md to it, or move what it holds elsewhere; until then it is not read",
@@ -117,7 +113,6 @@ export const PROBLEMS = {
 export const FIX_LABELS: Record<FixAction, string> = {
   "fresh-id": "Give this copy a new id",
   "wrap-as-task": "Make it a task",
-  "keep-copy": "Keep it as a new task",
   "remove-copy": "Delete the copy",
   "drop-unknown-links": "Remove the unknown ids",
   "drop-self-link": "Remove the link to itself",

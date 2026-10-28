@@ -15,12 +15,10 @@ import {
   LIST_FILE,
   TASK_FILE,
   TASKS_DIR,
-  conflictCopyOf,
   defaultStatus,
   humanize,
   idNumber,
   sortStatuses,
-  taskFolderName,
 } from "./layout.ts";
 import { linkTasks } from "./links.ts";
 import {
@@ -36,7 +34,6 @@ import {
 import { readConfig } from "./storage/config.ts";
 import {
   readTree,
-  sameTree,
   type ListFolder,
   type TaskFolder,
   type Tree,
@@ -172,14 +169,8 @@ export const scanWorkspace = (
     const taskDirs = new Map<string, string>();
     const taskTexts = new Map<string, string>();
     const missingId: Array<string> = [];
-    /** Markdown files that are not tasks: loose in a list, or a sync tool's copy of a marker file. */
-    const strays: Array<{
-      file: string;
-      text: string;
-      kind: "loose-markdown" | "conflict-copy";
-      /** The marker file it is a conflict copy of, and its text. */
-      copyOf: { readonly file: string; readonly text: string | null } | null;
-    }> = [];
+    /** Markdown files loose in a list, which are not tasks. */
+    const strays: Array<{ file: string; text: string }> = [];
     let highestId = 0;
     const idsOnDisk = new Set<string>();
     const takeId = (taskId: string | null) => {
@@ -192,59 +183,24 @@ export const scanWorkspace = (
     };
 
     /**
-     * A second folder with an id already read: a sync tool's conflict copy when its name says so
-     * (removable when it matches the first folder byte for byte), else a copied task.
+     * A markdown file that is not a task. One that matches the task its id names byte for byte is
+     * what an interrupted `wrap-as-task` leaves; the rest can become tasks when their frontmatter
+     * parses.
      */
-    const reportDuplicate = (dir: string, taskId: string) =>
-      Effect.gen(function* () {
-        const file = path.join(dir, TASK_FILE);
-        const original = taskDirs.get(taskId)!;
-        if (conflictCopyOf(path.basename(dir)) === null) {
-          report("duplicate-id", file, `The task ${rel(original)} already has the id ${taskId}`, {
-            field: "id",
-          });
-          return;
-        }
-        const identical = yield* sameTree(dir, original).pipe(Effect.orElseSucceed(() => false));
-        report(
-          "conflict-copy",
-          dir,
-          `This folder is a copy of ${rel(original)}${identical ? " with the same files" : ", with changes"}`,
-          { fix: identical ? "remove-copy" : "keep-copy" },
-        );
-      });
-
-    /**
-     * A markdown file that is not a task. One that matches the task its id names (or the file it
-     * copies) byte for byte is redundant; the rest can become tasks when their frontmatter parses,
-     * except a copy of list.md.
-     */
-    const reportStray = ({ file, text, kind, copyOf }: (typeof strays)[number]) => {
+    const reportStray = ({ file, text }: (typeof strays)[number]) => {
+      if (!hasFrontmatter(text)) {
+        report("note", file, "This markdown file has no frontmatter, so it is read as a note");
+        return;
+      }
       const named = frontmatterId(text);
       const twinDir = named === null ? undefined : taskDirs.get(named);
-      const twin =
-        twinDir === undefined
-          ? copyOf
-          : { file: path.join(twinDir, TASK_FILE), text: taskTexts.get(named!)! };
-      const identical = twin !== null && twin.text === text;
+      const identical = twinDir !== undefined && taskTexts.get(named!) === text;
       const parses = !("error" in readFrontmatter(text));
-      const adoptable = parses && copyOf?.file.endsWith(LIST_FILE) !== true;
-      const same = !identical
-        ? ""
-        : twin.file === copyOf?.file
-          ? " and identical to it"
-          : `, the same as ${rel(twin.file)}`;
+      const same = identical ? `, the same as ${rel(path.join(twinDir, TASK_FILE))}` : "";
       const broken = parses ? "" : ", and its frontmatter does not parse";
-      if (kind === "loose-markdown" && !hasFrontmatter(text))
-        report("note", file, "This markdown file has no frontmatter, so it is read as a note");
-      else if (kind === "loose-markdown")
-        report(kind, file, `This markdown file is not in a task folder${same}${broken}`, {
-          fix: identical ? "remove-copy" : adoptable ? "wrap-as-task" : null,
-        });
-      else
-        report(kind, file, `This is a conflict copy of ${rel(copyOf!.file)}${same}${broken}`, {
-          fix: identical ? "remove-copy" : adoptable ? "keep-copy" : null,
-        });
+      report("loose-markdown", file, `This markdown file is not in a task folder${same}${broken}`, {
+        fix: identical ? "remove-copy" : parses ? "wrap-as-task" : null,
+      });
     };
 
     interface Waiting {
@@ -253,12 +209,8 @@ export const scanWorkspace = (
       readonly list: string | null;
       readonly read: Exclude<TaskFileRead, { _tag: "Invalid" }>;
     }
-    /**
-     * Task folders read and waiting to be served, by rank, each in reading order. Of several
-     * folders with one id, the lowest rank is the task: 0 for a folder named after its id and
-     * title, 1 for another name, 2 for a sync tool's copy. The first read breaks a tie.
-     */
-    const waiting: readonly [Array<Waiting>, Array<Waiting>, Array<Waiting>] = [[], [], []];
+    /** Task folders read and waiting to be served. Of several with one id, the first is the task. */
+    const waiting: Array<Waiting> = [];
 
     const readTask = (folder: TaskFolder, list: string | null, parent: string | null) => {
       const file = path.join(folder.path, TASK_FILE);
@@ -283,68 +235,45 @@ export const scanWorkspace = (
         takeIds(markdownIn(folder));
         return;
       }
-      const rank =
-        conflictCopyOf(folder.name) !== null
-          ? 2
-          : read._tag === "Read" && folder.name !== taskFolderName(read.value.id, read.value.title)
-            ? 1
-            : 0;
-      waiting[rank].push({ folder, text, list, read });
+      waiting.push({ folder, text, list, read });
     };
 
-    const serveTask = ({
-      folder,
-      text,
-      list,
-      read,
-    }: Waiting): Effect.Effect<void, never, FileSystem.FileSystem | Path.Path> =>
-      Effect.gen(function* () {
-        const file = path.join(folder.path, TASK_FILE);
-        let id: string | null = null;
-        if (read._tag === "MissingId") {
-          missingId.push(folder.path);
-          report("missing-id", file, "This task has no id yet", { field: "id" });
-        } else if (taskDirs.has(read.value.id)) {
-          yield* reportDuplicate(folder.path, read.value.id);
-          takeIds(markdownIn(folder));
-          return;
-        } else {
-          id = read.value.id;
-          takeId(id);
-          taskDirs.set(id, folder.path);
-          taskTexts.set(id, text);
-          taskFiles.push(read.value);
-          for (const problem of read.problems) report(problem.kind, file, problem.detail, problem);
-          if (idNumber(id, config.key) === null)
-            report(
-              "foreign-id",
-              file,
-              `The id ${id} does not use the workspace key ${config.key}`,
-              {
-                field: "id",
-              },
-            );
+    const serveTask = ({ folder, text, list, read }: Waiting) => {
+      const file = path.join(folder.path, TASK_FILE);
+      let id: string | null = null;
+      if (read._tag === "MissingId") {
+        missingId.push(folder.path);
+        report("missing-id", file, "This task has no id yet", { field: "id" });
+      } else if (taskDirs.has(read.value.id)) {
+        const original = taskDirs.get(read.value.id)!;
+        report(
+          "duplicate-id",
+          file,
+          `The task ${rel(original)} already has the id ${read.value.id}`,
+          { field: "id" },
+        );
+        takeIds(markdownIn(folder));
+        return;
+      } else {
+        id = read.value.id;
+        takeId(id);
+        taskDirs.set(id, folder.path);
+        taskTexts.set(id, text);
+        taskFiles.push(read.value);
+        for (const problem of read.problems) report(problem.kind, file, problem.detail, problem);
+        if (idNumber(id, config.key) === null)
+          report("foreign-id", file, `The id ${id} does not use the workspace key ${config.key}`, {
+            field: "id",
+          });
+      }
+      for (const child of readAhead(folder.path, folder.children) ?? []) {
+        if (child.type === "task") readTask(child, list, id);
+        else if (child.type === "unread") {
+          report(child.problem.kind, child.path, child.problem.detail);
+          takeIds(child.markdown);
         }
-        for (const child of readAhead(folder.path, folder.children) ?? []) {
-          if (child.type === "task") readTask(child, list, id);
-          else if (child.type === "unread") {
-            report(child.problem.kind, child.path, child.problem.detail);
-            takeIds(child.markdown);
-          } else if (
-            Result.isSuccess(child.text) &&
-            conflictCopyOf(child.name) === TASK_FILE &&
-            id !== null &&
-            frontmatterId(child.text.success) === id
-          ) {
-            strays.push({
-              file: child.path,
-              text: child.text.success,
-              kind: "conflict-copy",
-              copyOf: { file, text },
-            });
-          }
-        }
-      });
+      }
+    };
 
     const readList = (folder: Tree | ListFolder, list: string | null) => {
       const children: Array<{ name: string; order: string; folder: ListFolder; list: List }> = [];
@@ -355,23 +284,7 @@ export const scanWorkspace = (
         } else if (child.type === "markdown") {
           if (Result.isFailure(child.text)) continue;
           const text = child.text.success;
-          const copyOf = list !== null && conflictCopyOf(child.name) === LIST_FILE;
-          strays.push(
-            copyOf
-              ? {
-                  file: child.path,
-                  text,
-                  kind: "conflict-copy",
-                  copyOf: {
-                    file: path.join(folder.path, LIST_FILE),
-                    text:
-                      "file" in folder && Result.isSuccess(folder.file)
-                        ? folder.file.success
-                        : null,
-                  },
-                }
-              : { file: child.path, text, kind: "loose-markdown", copyOf: null },
-          );
+          strays.push({ file: child.path, text });
           takeId(frontmatterId(text));
         } else if (child.type === "task") {
           readTask(child, list, null);
@@ -408,8 +321,7 @@ export const scanWorkspace = (
     };
 
     readList(tree, null);
-    const nextWaiting = () => waiting.find((queue) => queue.length > 0)?.shift();
-    for (let next = nextWaiting(); next !== undefined; next = nextWaiting()) yield* serveTask(next);
+    for (let next = waiting.shift(); next !== undefined; next = waiting.shift()) serveTask(next);
 
     for (const stray of strays) reportStray(stray);
     for (const task of taskFiles) {

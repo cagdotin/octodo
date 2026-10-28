@@ -134,7 +134,6 @@ export const DiagnosticKind = Schema.Literals([
   "malformed-link",
   "loose-markdown",
   "note",
-  "conflict-copy",
   "unmarked-folder",
   "both-markers",
   "list-in-task",
@@ -148,7 +147,6 @@ export type DiagnosticKind = typeof DiagnosticKind.Type;
 export const FixAction = Schema.Literals([
   "fresh-id",
   "wrap-as-task",
-  "keep-copy",
   "remove-copy",
   "drop-unknown-links",
   "drop-self-link",

@@ -59,12 +59,12 @@ describe("fixing diagnostics over HTTP", () => {
   });
 
   it("fixes everything fixable in one call", async () => {
-    seed("HOU-1-a/task 2.md", "---\nid: HOU-1\n---\n");
+    seed("HOU-1-c/task.md", "---\nid: HOU-1\n---\n");
     seed("notes.md", "---\ntitle: Loose\n---\n");
     const result = (await (await post("/diagnostics/fix-all")).json()) as {
       fixed: Array<{ kind: string }>;
     };
-    expect(result.fixed.map((diagnostic) => diagnostic.kind)).toEqual(["conflict-copy"]);
+    expect(result.fixed.map((diagnostic) => diagnostic.kind)).toEqual(["duplicate-id"]);
     expect(readFileSync(join(root, ".octodo/notes.md"), "utf8")).toBe("---\ntitle: Loose\n---\n");
   });
 

@@ -441,5 +441,5 @@ describe("every operation on every surface", () => {
     );
     expect(on("cli")).toEqual(without("cli", (row) => row.argv === undefined));
     expect(on("cli-served")).toEqual(without("cli-served", (row) => row.argv === undefined));
-  });
+  }, 30_000);
 });

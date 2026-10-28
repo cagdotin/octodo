@@ -9,17 +9,17 @@ tags:
   - security
 created: 2026-10-28T07:39:56.272Z
 order: a9
-blocked_by: [OCT-52, OCT-11]
+blocked_by: [OCT-52, OCT-11, OCT-68]
 ---
 
 ## Goal
 
-Decision `docs/decisions/0006-effect-httpapi-replaces-hono.md` (proposed; accept it before starting). One router and one runtime for `/api`, `/mcp` and the web app. Evidence: the HttpApi section of `docs/research/2026-10-architecture-survey.md`.
+Decision `docs/decisions/0006-effect-httpapi-replaces-hono.md` (accepted). One router and one runtime for `/api`, `/mcp` and the web app, and Hono deleted. Evidence: the HttpApi section of `docs/research/2026-10-architecture-survey.md`.
 
-## Open questions to settle first
+## Settled
 
-- Error body: accept `{ _tag, ...fields }`, or keep `{ error: message }` through a transform?
-- Attachment download and `GET /pair`: HttpApi endpoints (in OpenAPI) or raw `HttpRouter` routes?
+- Error body: `{ _tag, ...fields, message }`, each error a `Schema.TaggedErrorClass` with its status (0006, Errors). MCP and CLI errors carry the same fields.
+- Attachment download and `GET /pair`: decided in OCT-68.
 
 ## Scope
 
@@ -29,10 +29,11 @@ Decision `docs/decisions/0006-effect-httpapi-replaces-hono.md` (proposed; accept
 - SSE: events-mode `StreamSse` with the `change` event name and the 25 s ping; emit on open so headers flush (then drop the Vite proxy workaround).
 - Body-validation errors carry a message (`layerSchemaErrorTransform`). Attachment upload keeps the 20 MB limit (`StreamUint8Array({ maxBytes })`).
 - `/api/health` without a token: `version` and capability flags, each flag documented with what an older client does without it.
-- Browser client: a typed `fetch` wrapper from `typeof Api` with a type-only import (measured 0.6 KB gzipped; Effect's `HttpApiClient` is 124 KB). Keep `apps/web/src/lib/api.ts` hook signatures.
+- Browser client: a typed `fetch` wrapper from `typeof Api` with a type-only import (measured 0.6 KB gzipped; Effect's `HttpApiClient` is 124 KB). The web app's call sites may change to fit it.
 - Drop `hono`, `@hono/node-server`, `@hono/standard-validator`. Desktop shutdown closes open SSE streams.
 
 ## Done when
 
-- The server tests in `packages/server/test` pass, plus new tests for the three security rules and the `requireToken` gap (fail first).
-- `pnpm dev:web` works end to end with the pairing URL; checks as the rest of this list.
+- The server tests in `packages/server/test` pass, plus the OCT-11 security tests unchanged.
+- No package depends on Hono.
+- `pnpm dev:web` works end to end with the pairing URL.

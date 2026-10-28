@@ -1,6 +1,6 @@
 # 0006. Effect HttpApi replaces Hono
 
-- Status: proposed (recommended; two open questions below)
+- Status: accepted
 - Date: 2026-10-28
 
 ## Context
@@ -11,7 +11,7 @@ feature the server uses ([survey, HttpApi section](../research/2026-10-architect
 
 ## Decision
 
-Replace Hono with `effect/http-api`, with these conditions:
+Replace Hono with `effect/http-api` and delete Hono once nothing imports it, with these conditions:
 
 1. Do it in the same stage as the operation catalog ([0005](0005-one-operation-catalog.md)), not as
    a separate rewrite.
@@ -31,9 +31,15 @@ Replace Hono with `effect/http-api`, with these conditions:
   with a valid cookie. Not exploitable without a CORS preflight the server never answers, but the
   migration closes it with ordered security handlers.
 
-## Open questions
+## Errors
 
-- The error body becomes `{ _tag, ...fields }` instead of `{ error: message }`. Accept it, or keep
-  the old body through a transform?
-- Should attachment download and `GET /pair` become HttpApi endpoints (listed in OpenAPI) or stay
-  raw routes?
+An error response carries the error's tag, every field it has and a readable message:
+`{ "_tag": "TaskNotFound", "id": "OCT-9", "message": "No task OCT-9" }`. Each error is a
+`Schema.TaggedErrorClass` with its HTTP status, so the body is the error itself. A client can branch
+on `_tag`, and whoever reads it gets every detail the engine had. MCP tool errors and CLI messages
+carry the same fields.
+
+## Open question
+
+Whether attachment download and `GET /pair` become HttpApi endpoints or stay raw routes is decided
+from the target design, not from how today's web app calls them. OCT-68 holds that analysis.

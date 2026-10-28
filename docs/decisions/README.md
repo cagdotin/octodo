@@ -11,7 +11,7 @@ supersedes the old one and mark the old one's status.
 | [0003](0003-one-writer-per-workspace.md)               | One writer per workspace, through an owner lock                          | accepted, not built |
 | [0004](0004-packages-by-dependency-direction.md)       | Packages split by dependency direction, not by domain                    | accepted            |
 | [0005](0005-one-operation-catalog.md)                  | One operation catalog generates the HTTP API, MCP tools and CLI commands | accepted            |
-| [0006](0006-effect-httpapi-replaces-hono.md)           | Effect HttpApi replaces Hono                                             | proposed            |
+| [0006](0006-effect-httpapi-replaces-hono.md)           | Effect HttpApi replaces Hono                                             | accepted            |
 | [0007](0007-first-party-plugins-per-workspace.md)      | Task kinds are first-party plugins, enabled per workspace                | accepted            |
 | [0008](0008-statuses-per-workspace-presets-as-data.md) | Statuses belong to the workspace, and presets are data                   | accepted            |
 | [0009](0009-recurring-task-is-one-folder.md)           | A recurring task is one folder with a log of occurrences                 | accepted            |

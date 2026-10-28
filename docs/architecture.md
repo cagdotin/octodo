@@ -59,8 +59,8 @@ Packages depend in one direction: `contract` ← `engine` ← `server`, with `cl
 the server and an embedded engine, and `plugins` split into `shared`, `engine` and `web` entries
 ([0004](decisions/0004-packages-by-dependency-direction.md)). Operations are declared once in
 `contract` and the HTTP API, MCP tools and CLI commands are generated from them
-([0005](decisions/0005-one-operation-catalog.md)). The HTTP layer is Effect HttpApi if
-[0006](decisions/0006-effect-httpapi-replaces-hono.md) is accepted.
+([0005](decisions/0005-one-operation-catalog.md)). The HTTP layer is Effect HttpApi, and Hono is
+deleted ([0006](decisions/0006-effect-httpapi-replaces-hono.md)).
 
 ## Extensibility
 

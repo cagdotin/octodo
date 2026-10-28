@@ -10,3 +10,5 @@ apps/web/src/routeTree.gen.ts
 
 # octopus lab output (runs, cache, baselines)
 apps/site/lab/out/
+
+.claude/settings.local.json

@@ -9,6 +9,7 @@ model, the security rules and the toolchain. These docs hold the why.
 | [architecture.md](architecture.md) | You need to know which process and package does what, today and in the target design.        |
 | [decisions/](decisions/README.md)  | You are about to change something a decision covers, or you made a decision worth keeping.   |
 | [research/](research/)             | You want the evidence behind a decision, such as how other projects solved the same problem. |
+| [design.md](design.md)             | You are building or restyling UI: tokens, type and layout.                                   |
 | [branding.md](branding.md)         | You are naming, writing copy or making visuals.                                              |
 
 Record decisions here, in `decisions/`, not in an agent's memory. Each doc says what is true now;

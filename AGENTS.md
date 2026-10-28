@@ -12,7 +12,9 @@ beyond that. Long-term it competes with TickTick, Todoist and any.do first, then
 
 Decisions, the vision and the architecture live in `docs/` (start at `docs/README.md`). Record a
 new decision in `docs/decisions/`, not in agent memory, and update the docs in the same commit as
-the code they describe.
+the code they describe. Existing code is not a constraint: when it conflicts with the design in `docs/`,
+open a task in the same list for a first-principles analysis against that design, and decide there
+instead of keeping the code because it exists.
 
 ## The on-disk model
 

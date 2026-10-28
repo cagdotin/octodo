@@ -1,14 +1,37 @@
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type ProxyOptions } from "vite";
 
-// OCTODO_API_PORT points the dev proxy at a server on another port, e.g. a second instance.
-const api = `http://127.0.0.1:${process.env["OCTODO_API_PORT"] ?? "4520"}`;
+// The engine's defaultHome, which this config cannot import.
+const home =
+  process.env["OCTODO_HOME"] ??
+  join(process.env["XDG_CONFIG_HOME"] ?? join(homedir(), ".config"), "octodo");
+
+/**
+ * The server to proxy to: the one on OCTODO_API_PORT when it is set, otherwise the one
+ * `server.json` names at each request, as every octodo client finds it (decision 0018). The desktop
+ * app's server can be one it attached to or a child on another port.
+ */
+const target = () => {
+  const port = process.env["OCTODO_API_PORT"];
+  if (port !== undefined) return `http://127.0.0.1:${port}`;
+  try {
+    return (JSON.parse(readFileSync(join(home, "server.json"), "utf8")) as { url: string }).url;
+  } catch {
+    return "http://127.0.0.1:4520";
+  }
+};
 
 const proxy: ProxyOptions = {
-  target: api,
+  // The proxy copies its options at each request, so a getter gives each one the current server.
+  get target() {
+    return target();
+  },
   configure: (server) => {
     server.on("proxyRes", (res, _req, out) => {
       if (!String(res.headers["content-type"]).startsWith("text/event-stream")) return;

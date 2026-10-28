@@ -208,12 +208,21 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@effect/platform-node':
+        specifier: 4.0.6
+        version: 4.0.6(effect@4.0.6)(redis@6.3.0)
+      '@octodo/client':
+        specifier: workspace:*
+        version: link:../../packages/client
       '@octodo/engine':
         specifier: workspace:*
         version: link:../../packages/engine
       '@octodo/server':
         specifier: workspace:*
         version: link:../../packages/server
+      effect:
+        specifier: 4.0.6
+        version: 4.0.6
     devDependencies:
       electron:
         specifier: ^45.0.0

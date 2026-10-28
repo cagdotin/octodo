@@ -91,7 +91,7 @@ instead of keeping the code because it exists.
 | `packages/cli`      | `octo` CLI on `effect/cli`, its commands and the bundled agent skill generated from the catalog; run it with `bin/octo`                                                                                                                                                            |
 | `packages/ui`       | The UI kit the app and the plugins' web halves share: shadcn components, `cn`, date labels, `styles.css` (design tokens, fonts); imports no octodo package                                                                                                                         |
 | `apps/web`          | Vite + React, TanStack Router/Query, XState; its components come from `@octodo/ui`                                                                                                                                                                                                 |
-| `apps/desktop`      | Electron shell: starts the server in the main process and opens the web app                                                                                                                                                                                                        |
+| `apps/desktop`      | Electron shell: attaches to the running server or spawns and restarts one as a child, and opens its web app                                                                                                                                                                        |
 | `apps/site`         | Static landing page (plain HTML, no build); icons come from `brand/`                                                                                                                                                                                                               |
 | `brand/`            | `glyph.svg` and `build.ts` (`pnpm brand`), which renders every icon, banner and social image                                                                                                                                                                                       |
 
@@ -129,7 +129,8 @@ OCT-69.
 - Toolchain: `mise run setup` (Node 26, pnpm 12). Node runs the TypeScript sources directly, so
   keep to erasable syntax (no enums, namespaces or parameter properties) and import with `.ts`
   extensions.
-- `pnpm dev`: Vite on 5520 plus Electron, with the server (127.0.0.1:4520) inside Electron.
+- `pnpm dev`: Vite on 5520 plus Electron, which attaches to the server `server.json` names or
+  spawns one (127.0.0.1:4520); Vite proxies to whichever `server.json` names.
 - `pnpm dev:web`: API plus Vite, for the browser; open the URL the API prints.
 - `pnpm dev:site`: the landing page on 5530.
 - `pnpm check`: format check, lint, typecheck, tests. Lefthook runs format, lint and typecheck on

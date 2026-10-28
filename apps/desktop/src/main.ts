@@ -1,37 +1,35 @@
 /**
- * The desktop app: starts the octodo server (API, MCP endpoint and web app) inside the Electron
- * main process and shows the web app in a window.
+ * The desktop app: shows the web app of the octodo server it attaches to or spawns (decision 0021)
+ * in a window.
  */
 import { defaultHome } from "@octodo/engine";
-import { DEFAULT_PORT, startServer, type RunningServer } from "@octodo/server";
+import { DEFAULT_PORT } from "@octodo/server";
 import { BrowserWindow, app, dialog, ipcMain, shell } from "electron";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { startBackend, type Problem } from "./backend.ts";
+import { ANSWERS, problemPage } from "./problem.ts";
 
 const devUrl = process.env["OCTODO_DEV_URL"];
 const home = defaultHome(process.env, homedir());
 
-let server: RunningServer | undefined;
+/** What the app window shows: nothing yet, the web app of a server, or why there is none. */
+type View =
+  | { readonly kind: "waiting" }
+  | { readonly kind: "app"; readonly url: string }
+  | {
+      readonly kind: "problem";
+      readonly problem: Problem;
+      readonly answer: (retry: boolean) => void;
+    };
+
+let view: View = { kind: "waiting" };
 
 const webDir = () =>
   app.isPackaged
     ? join(process.resourcesPath, "web")
     : fileURLToPath(new URL("../../web/dist", import.meta.url));
-
-const start = async (): Promise<RunningServer> => {
-  const options = { home, webDir: webDir() };
-  try {
-    return await startServer({
-      ...options,
-      port: Number(process.env["OCTODO_PORT"] ?? DEFAULT_PORT),
-    });
-  } catch (error) {
-    // Another octodo (e.g. `octo serve`) may hold the usual port; any free port will do then.
-    if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE" || devUrl !== undefined) throw error;
-    return await startServer({ ...options, port: 0 });
-  }
-};
 
 /**
  * Packaged builds take their icon from the app bundle (build/icon.icns); unpackaged runs would show
@@ -85,7 +83,27 @@ ipcMain.handle("octodo:show-folder", async (_event, folder: unknown) => {
   await shell.openPath(folder);
 });
 
-const createWindow = async (running: RunningServer) => {
+/**
+ * Brings a window to the current view. A web app on another origin (a new server, or Vite in
+ * development, which follows `server.json` itself) loads at the same route.
+ */
+const render = async (window: BrowserWindow) => {
+  if (view.kind === "waiting") return;
+  if (view.kind === "problem") return window.loadURL(problemPage(view.problem));
+  const target = new URL(devUrl ?? view.url);
+  const shown = URL.parse(window.webContents.getURL());
+  if (shown?.origin === target.origin) return;
+  if (devUrl !== undefined) await waitFor(devUrl);
+  const route = shown?.protocol === "http:" ? shown.pathname + shown.search + shown.hash : "/";
+  return window.loadURL(new URL(route, target).href);
+};
+
+const show = (next: View) => {
+  view = next;
+  for (const window of BrowserWindow.getAllWindows()) void render(window);
+};
+
+const createWindow = () => {
   const mac = process.platform === "darwin";
   const window = new BrowserWindow({
     width: 1280,
@@ -110,21 +128,23 @@ const createWindow = async (running: RunningServer) => {
   window.on("leave-full-screen", () => window.webContents.send("octodo:full-screen", false));
 
   // Links to other sites open in the default browser, never inside the app window.
-  const origin = new URL(devUrl ?? running.url).origin;
   window.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
     return { action: "deny" };
   });
   window.webContents.on("will-navigate", (event, url) => {
-    if (new URL(url).origin !== origin) {
+    if (view.kind === "problem" && (url === ANSWERS.retry || url === ANSWERS.quit)) {
+      event.preventDefault();
+      view.answer(url === ANSWERS.retry);
+      return;
+    }
+    if (view.kind === "app" && new URL(url).origin !== new URL(devUrl ?? view.url).origin) {
       event.preventDefault();
       void shell.openExternal(url);
     }
   });
 
-  const base = devUrl ?? running.url;
-  if (devUrl !== undefined) await waitFor(devUrl);
-  await window.loadURL(base);
+  void render(window);
 };
 
 if (!app.requestSingleInstanceLock()) {
@@ -142,22 +162,40 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0 && server !== undefined)
-      void createWindow(server);
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 
-  let closing = false;
+  const backend = startBackend({
+    home,
+    port: Number(process.env["OCTODO_PORT"] ?? DEFAULT_PORT),
+    webDir: webDir(),
+    script: fileURLToPath(new URL("./server.mjs", import.meta.url)),
+    onServer: (url) => {
+      console.log(`octodo server on ${url}`);
+      show({ kind: "app", url });
+    },
+    onProblem: (problem) => {
+      console.error(`${problem.title}: ${problem.detail}`);
+      return new Promise((answer) => show({ kind: "problem", problem, answer }));
+    },
+  });
+  void backend.running.then((keepGoing) => {
+    if (!keepGoing) app.quit();
+  });
+
+  let stopped = false;
   app.on("before-quit", (event) => {
-    if (server === undefined || closing) return;
-    closing = true;
+    if (stopped) return;
     event.preventDefault();
-    void server.close().finally(() => app.quit());
+    void backend.stop().finally(() => {
+      stopped = true;
+      // Electron ignores a quit asked for in the same turn as the one this handler prevented.
+      setTimeout(() => app.quit());
+    });
   });
 
-  void app.whenReady().then(async () => {
+  void app.whenReady().then(() => {
     if (devIcon !== undefined) app.dock?.setIcon(devIcon);
-    server = await start();
-    console.log(`octodo server on ${server.url} (MCP at ${server.mcpUrl})`);
-    await createWindow(server);
+    createWindow();
   });
 }

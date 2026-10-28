@@ -1,4 +1,4 @@
-import { connect, Connection } from "@octodo/client";
+import { connect, Connection, findServer } from "@octodo/client";
 import {
   FixAction,
   InvalidRequest,
@@ -219,6 +219,11 @@ const serveCommand = Command.make(
     ),
   },
   Effect.fn(function* (options) {
+    const running = yield* findServer(home);
+    if (Option.isSome(running))
+      return yield* new InvalidRequest({
+        message: `octodo already runs at ${running.value.url} (pid ${running.value.pid}). Use it, or stop it first.`,
+      });
     const defaultWeb = fileURLToPath(new URL("../../../apps/web/dist", import.meta.url));
     const server = yield* Effect.acquireRelease(
       Effect.promise(() =>
@@ -234,7 +239,11 @@ const serveCommand = Command.make(
     yield* Console.log(`MCP: ${server.mcpUrl}`);
     return yield* Effect.never;
   }, Effect.scoped),
-).pipe(Command.withDescription("Serve the web app, API and MCP endpoint"));
+).pipe(
+  Command.withDescription(
+    "Serve the web app, API and MCP endpoint, unless an octodo server already runs",
+  ),
+);
 
 const mcpCommand = Command.make(
   "mcp",

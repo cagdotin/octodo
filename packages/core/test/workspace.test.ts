@@ -341,13 +341,10 @@ describe("workspace", () => {
     await run(initWorkspace(root));
     const uuid = () => crypto.randomUUID();
     write(root, "HM-1-a/task.md", "---\nid: HM-1\n---\n");
-    const leftover = [
-      `HM-1-a/.task.md.${uuid()}.tmp`,
-      `.new-${uuid()}/task.md`,
+    const leftover = [`HM-1-a/.task.md.${uuid()}.tmp`, `.new-${uuid()}/task.md`];
+    const kept = [
       `.new-${uuid()} 2/task.md`,
       `HM-1-a/.task.md.${uuid()} 2.tmp`,
-    ];
-    const kept = [
       `.DS_Store`,
       `.DS_Store 2`,
       `HM-1-a/.notes.tmp`,

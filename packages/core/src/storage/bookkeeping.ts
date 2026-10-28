@@ -5,7 +5,7 @@ import { OWNER_LOCK_FILE } from "./owner-lock.ts";
 /** Dot names are octodo's bookkeeping (the owner lock, temporary files), which scans never read. */
 export const isHidden = (name: string): boolean => name.startsWith(".");
 
-/** Patterns in `.octodo/.gitignore` matching every bookkeeping name and its conflict copies. */
+/** Patterns in `.octodo/.gitignore` matching every bookkeeping name. */
 const IGNORED = [`${OWNER_LOCK_FILE}*`, ".new-*", ".*.tmp"];
 
 /** Adds the bookkeeping patterns `.octodo/.gitignore` lacks, keeping the lines it has. */

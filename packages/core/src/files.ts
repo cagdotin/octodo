@@ -12,13 +12,10 @@ export const tempName = {
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const LEFTOVER = new RegExp(`^\\.(?:.+\\.${UUID}\\.tmp|new-${UUID})$`);
 
-/** The name a sync tool's conflict copy of a temporary name copies: `.new-<uuid> 2` copies `.new-<uuid>`. */
-const copied = (name: string) => name.replace(/ \d+(?=(?:\.tmp)?$)/, "");
+/** Whether `name` is one of octodo's temporary files or folders. */
+export const isLeftover = (name: string): boolean => LEFTOVER.test(name);
 
-/** Whether `name` is one of octodo's temporary files or folders, or a sync tool's copy of one. */
-export const isLeftover = (name: string): boolean => LEFTOVER.test(copied(name));
-
-/** Writes through a temporary sibling and a rename, so readers and sync tools never see half a file. */
+/** Writes through a temporary sibling and a rename, so a crash or a reader never sees half a file. */
 export const writeFileAtomic = Effect.fnUntraced(function* (
   file: string,
   content: string | Uint8Array,

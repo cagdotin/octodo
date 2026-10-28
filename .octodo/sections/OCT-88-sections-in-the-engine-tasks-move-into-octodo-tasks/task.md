@@ -1,7 +1,7 @@
 ---
 id: OCT-88
 title: "Sections in the engine: tasks move into .octodo/tasks/"
-status: todo
+status: done
 priority: high
 tags:
   - architecture

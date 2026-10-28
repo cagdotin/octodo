@@ -3,8 +3,9 @@ import type { WorkspaceConfig } from "@octodo/contract";
 import { configFile, editedConfig } from "./config.ts";
 
 /**
- * Names of the temporary files and folders writes build and rename into place. Both are dot
- * names, which a scan never reads, and distinct enough that `removeLeftovers` takes only octodo's.
+ * Names of the temporary files and folders writes build and rename into place, or rename away
+ * before removing them. Both are dot names, which a scan never reads, and distinct enough that
+ * `removeLeftovers` takes only octodo's.
  */
 export const tempName = {
   file: (name: string) => `.${name}.${crypto.randomUUID()}.tmp`,
@@ -52,7 +53,10 @@ export interface Files {
   readonly moveFolder: (dir: string, container: string) => Change<string>;
   /** Renames the folder `dir` to `name` unless that is taken. Returns the path it has. */
   readonly renameFolder: (dir: string, name: string) => Change<string>;
-  /** Removes a file, or a folder with everything in it. */
+  /**
+   * Removes a file, or a folder with everything in it. It is renamed to a temporary name first, so
+   * a crash leaves it whole or gone, and the leftover is removed when a process next takes the lock.
+   */
   readonly remove: (path: string) => Change;
   /**
    * Sets the keys `edit` returns in config.json and keeps every other key, unknown ones included,
@@ -161,7 +165,15 @@ export const makeFiles = (
         }),
         (renamed) => [dir, renamed ?? path.dirname(dir)],
       ),
-    remove: (at) => reporting(fs.remove(at, { recursive: true }), () => [at]),
+    remove: (at) =>
+      reporting(
+        Effect.gen(function* () {
+          const doomed = path.join(path.dirname(at), tempName.folder());
+          yield* fs.rename(at, doomed);
+          yield* fs.remove(doomed, { recursive: true });
+        }),
+        () => [at],
+      ),
     editConfig: (edit) =>
       Effect.gen(function* () {
         const text = yield* editedConfig(root, edit);

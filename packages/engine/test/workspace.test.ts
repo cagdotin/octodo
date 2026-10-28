@@ -671,6 +671,33 @@ describe("workspace", () => {
     expect(files(root)).toEqual(["HM-3-keep/task.md"]);
   });
 
+  it("deletes a task whole or not at all when removing its files stops halfway", async () => {
+    const root = fresh();
+    await run(initWorkspace(root));
+    write(root, "HM-1-a/task.md", "---\nid: HM-1\n---\n");
+    write(root, "HM-1-a/HM-2-b/task.md", "---\nid: HM-2\n---\n");
+    write(root, "HM-3-keep/task.md", "---\nid: HM-3\n---\n");
+    const stopsHalfway = patchedFileSystem((fs) => ({
+      remove: (path) =>
+        Effect.andThen(
+          Effect.ignore(fs.remove(join(path, "task.md"))),
+          Effect.fail(new Error("crashed") as never),
+        ),
+    }));
+    const failed = await run(
+      Effect.flatMap(makeWorkspace("test", root), (ws) => Effect.exit(ws.deleteTask("HM-1"))),
+      stopsHalfway,
+    );
+    expect(Exit.isFailure(failed)).toBe(true);
+    const snapshot = await run(Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot));
+    expect(snapshot.tasks.map((task) => task.id)).toEqual(["HM-3"]);
+    expect(snapshot.diagnostics).toEqual([]);
+    await run(
+      Effect.flatMap(makeWorkspace("test", root), (ws) => ws.updateTask("HM-3", { title: "Kept" })),
+    );
+    expect(files(root)).toEqual(["HM-3-kept/task.md"]);
+  });
+
   it("updates and moves a task that another process moved or renamed since the last read", async () => {
     const root = fresh();
     const result = await run(

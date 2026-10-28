@@ -1,5 +1,4 @@
-import { Cause, DateTime, Duration, Effect, Path, Scope, Semaphore, Stream } from "effect";
-import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
+import { Duration, Effect, Path, Scope, Stream } from "effect";
 import {
   DEFAULT_STATUSES,
   InvalidRequest,
@@ -7,7 +6,6 @@ import {
   TaskNotFound,
   type CreateListInput,
   type CreateTaskInput,
-  type Diagnostic,
   type FixRequest,
   type FixResult,
   type List,
@@ -20,33 +18,15 @@ import {
   type WorkspaceConfig,
   type WorkspaceSnapshot,
 } from "./domain.ts";
-import {
-  LINK_KINDS,
-  LIST_FILE,
-  MAX_LIST_DEPTH,
-  TASK_FILE,
-  defaultStatus,
-  deriveKey,
-  humanize,
-  isWorkspaceKey,
-  listDepth,
-  listMoveError,
-  movedListId,
-  slugify,
-  sortStatuses,
-  taskFolderName,
-  taskSubtree,
-} from "./layout.ts";
-import { patchFrontmatter } from "./frontmatter.ts";
-import { applyFix } from "./health/fixes.ts";
-import { newListFile } from "./lists/list-file.ts";
-import { editTaskFile, keepLinks, needsId, newTaskFile } from "./tasks/task-file.ts";
-import { fileText, scanWorkspace, type Scan } from "./scan.ts";
-import { isHidden } from "./storage/bookkeeping.ts";
+import { fixAll, fixDiagnostic } from "./health/operations.ts";
+import { deriveKey, humanize, isWorkspaceKey } from "./layout.ts";
+import { createList, moveList } from "./lists/operations.ts";
+import { makeState, storageError } from "./state.ts";
+import { reorderStatuses } from "./statuses/operations.ts";
 import { hasConfig } from "./storage/config.ts";
-import type { Files } from "./storage/files.ts";
-import { createWorkspace, makeStorage, type Ids, type Platform } from "./storage/storage.ts";
-import { MARKERS } from "./storage/tree.ts";
+import { createWorkspace, type Platform } from "./storage/storage.ts";
+import { attachmentPath, writeAttachment } from "./tasks/attachments.ts";
+import { createTask, deleteTask, getTask, moveTask, updateTask } from "./tasks/operations.ts";
 
 /** One workspace on disk: a folder with a `.octodo/` directory. The files are the source of truth. */
 export interface Workspace {
@@ -116,38 +96,6 @@ export interface Workspace {
   readonly changes: Stream.Stream<void>;
 }
 
-/** Where a task sits: in a list (or `.octodo/` for null), or under a parent task in that list. */
-interface Container {
-  readonly list: string | null;
-  readonly parent: string | null;
-}
-
-const TOP: Container = { list: null, parent: null };
-
-const storageError =
-  (message: string) =>
-  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, StorageError, R> =>
-    Effect.mapError(effect, (cause) => new StorageError({ message, cause }));
-
-const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
-
-const orderBetween = (
-  siblings: ReadonlyArray<{ readonly id: string; readonly order: string }>,
-  input: { readonly before?: string | undefined; readonly after?: string | undefined },
-) => {
-  if (input.before !== undefined) {
-    const index = siblings.findIndex((item) => item.id === input.before);
-    if (index !== -1)
-      return generateKeyBetween(siblings[index - 1]?.order ?? null, siblings[index]!.order);
-  }
-  if (input.after !== undefined) {
-    const index = siblings.findIndex((item) => item.id === input.after);
-    if (index !== -1)
-      return generateKeyBetween(siblings[index]!.order, siblings[index + 1]?.order ?? null);
-  }
-  return generateKeyBetween(siblings.at(-1)?.order ?? null, null);
-};
-
 /** Creates `.octodo/` with a config. Leaves an existing one alone. */
 export const initWorkspace = Effect.fnUntraced(function* (
   root: string,
@@ -177,471 +125,25 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     readonly lockWait?: Duration.Input;
   } = {},
 ) {
-  const storage = yield* makeStorage(root, options);
-  const path = yield* Path.Path;
-  const { tasksDir } = storage;
-  const lock = yield* Semaphore.make(1);
-
-  const scanned = Effect.map(storage.read, (read) => scanWorkspace(id, root, read));
-
-  const nextId = (ids: Ids, { nextIdNumber, snapshot }: Scan) =>
-    ids.next(snapshot.workspace.key, nextIdNumber);
-
-  /** Gives each task file without an id the next id. */
-  const giveIds = storage.write((files, ids) =>
-    Effect.gen(function* () {
-      const scan = yield* scanned;
-      for (const dir of scan.missingId) {
-        const file = path.join(dir, TASK_FILE);
-        const taskId = nextId(ids, scan);
-        yield* Effect.gen(function* () {
-          const text = yield* fileText(scan, file);
-          if (!needsId(text)) return;
-          yield* files.writeFile(file, patchFrontmatter(text, { id: taskId }));
-          yield* Effect.logInfo(`Assigned ${taskId} to ${path.relative(root, file)}`);
-        }).pipe(
-          Effect.catch((error) =>
-            Effect.logWarning(`Could not give ${path.relative(root, file)} an id`, error),
-          ),
-        );
-      }
-    }),
-  );
-
-  /** The last scan, until a file changes. Files made by hand get an id the first time it reads them. */
-  let kept: { readonly version: number; readonly scan: Scan } | undefined;
-  const state = Effect.gen(function* () {
-    if (kept?.version === storage.version()) return kept.scan;
-    let version = storage.version();
-    let scan = yield* scanned;
-    if (scan.missingId.length > 0) {
-      yield* giveIds.pipe(Effect.catch((error) => Effect.logWarning(error.message)));
-      version = storage.version();
-      scan = yield* scanned;
-    }
-    kept = { version, scan };
-    return scan;
-  });
-  const current = Effect.map(state, ({ snapshot }) => snapshot);
-
-  const findTask = (snapshot: WorkspaceSnapshot, taskId: string) => {
-    const task = snapshot.tasks.find((candidate) => candidate.id === taskId);
-    return task === undefined
-      ? Effect.fail(new TaskNotFound({ id: taskId }))
-      : Effect.succeed(task);
-  };
-
-  const invalid = (message: string) => Effect.fail(new InvalidRequest({ message }));
-
-  const checkStatus = (snapshot: WorkspaceSnapshot, status: string) =>
-    snapshot.statuses.some((known) => known.id === status)
-      ? Effect.void
-      : invalid(`Unknown status "${status}"`);
-
-  /**
-   * The container a create or move puts a task in. `parent` wins the list from its task; `list`
-   * alone takes the task to the top of that list; neither keeps `from`.
-   */
-  const destination = (
-    snapshot: WorkspaceSnapshot,
-    input: { readonly list?: string | null; readonly parent?: string | null },
-    from: Container,
-  ): Effect.Effect<Container, InvalidRequest> => {
-    if (input.parent !== undefined && input.parent !== null) {
-      if (input.list !== undefined) return invalid("Give a list or a parent task, not both");
-      const parent = snapshot.tasks.find((task) => task.id === input.parent);
-      return parent === undefined
-        ? invalid(`Unknown parent task "${input.parent}"`)
-        : Effect.succeed({ list: parent.list, parent: parent.id });
-    }
-    const list = input.list === undefined ? from.list : input.list;
-    if (list !== null && !snapshot.lists.some((known) => known.id === list))
-      return invalid(`Unknown list "${list}"`);
-    const keepParent = input.list === undefined && input.parent === undefined;
-    return Effect.succeed({ list, parent: keepParent ? from.parent : null });
-  };
-
-  const containerDir = ({ dirs }: Scan, { list, parent }: Container) =>
-    parent !== null
-      ? dirs.tasks.get(parent)!
-      : list !== null
-        ? dirs.lists.get(list)!.dir
-        : tasksDir;
-
-  /**
-   * Gives sorted items distinct, ascending order keys, renumbering them all when some have none or
-   * share one, so a new key can be placed between any two.
-   */
-  const ensureOrdered = <A extends { readonly order: string }>(
-    files: Files,
-    scan: Scan,
-    items: ReadonlyArray<A>,
-    file: (item: A) => string,
-  ) =>
-    Effect.gen(function* () {
-      const ascending = items.every(
-        (item, index) => item.order !== "" && (index === 0 || items[index - 1]!.order < item.order),
-      );
-      if (ascending) return items;
-      const keys = generateNKeysBetween(null, null, items.length);
-      const ordered: Array<A> = [];
-      for (const [index, item] of items.entries()) {
-        const order = keys[index]!;
-        const target = file(item);
-        yield* files.writeFile(target, patchFrontmatter(yield* fileText(scan, target), { order }));
-        ordered.push({ ...item, order });
-      }
-      return ordered;
-    });
-
-  /** The tasks in `container`, whatever their status, with their order keys. */
-  const orderedTasks = (files: Files, scan: Scan, { list, parent }: Container, except?: string) =>
-    ensureOrdered(
-      files,
-      scan,
-      scan.snapshot.tasks.filter(
-        (task) => task.list === list && task.parent === parent && task.id !== except,
-      ),
-      (task) => path.join(root, task.path),
-    );
-
-  /** Sibling lists under `parent` with their order keys, which the snapshot leaves out. */
-  const orderedLists = (files: Files, scan: Scan, parent: string | null, except?: string) =>
-    ensureOrdered(
-      files,
-      scan,
-      scan.snapshot.lists
-        .filter((list) => list.parent === parent && list.id !== except)
-        .map((list) => ({ id: list.id, ...scan.dirs.lists.get(list.id)! })),
-      (list) => path.join(list.dir, LIST_FILE),
-    );
-
-  /** Writes take turns with this workspace's reads, which share the kept scan. */
-  const write = <A, E>(change: (files: Files, ids: Ids) => Effect.Effect<A, E>) =>
-    lock.withPermits(1)(storage.write(change));
-
-  const readBack = storageError("Could not read the workspace back after writing it");
-
-  const reread = (taskId: string) =>
-    Effect.flatMap(current, (snapshot) => findTask(snapshot, taskId));
-
-  const createTask = (input: CreateTaskInput) =>
-    write((files, ids) =>
-      Effect.gen(function* () {
-        const scan = yield* state;
-        const { snapshot } = scan;
-        const status = input.status ?? defaultStatus(snapshot.statuses)?.id;
-        if (status === undefined) return yield* invalid("The workspace has no statuses");
-        yield* checkStatus(snapshot, status);
-        const container = yield* destination(snapshot, input, TOP);
-        const taskId = nextId(ids, scan);
-        yield* Effect.gen(function* () {
-          const siblings = yield* orderedTasks(files, scan, container);
-          const content = newTaskFile(input, {
-            id: taskId,
-            status,
-            order: orderBetween(siblings, {}),
-            now: yield* nowIso,
-          });
-          yield* files.createFolder(
-            containerDir(scan, container),
-            taskFolderName(taskId, input.title),
-            { name: TASK_FILE, content },
-          );
-        }).pipe(storageError("Could not write the task"));
-        return yield* reread(taskId).pipe(readBack);
-      }),
-    );
-
-  /**
-   * The ids a link field gets: each once, none of them `taskId`, and each an existing task or one
-   * the field already had.
-   */
-  const checkLinks = (snapshot: WorkspaceSnapshot, task: Task, ids: ReadonlyArray<string>) => {
-    const known = new Set([...snapshot.tasks.map(({ id }) => id), ...task.blockedBy]);
-    const unknown = ids.filter((id) => !known.has(id));
-    if (unknown.length > 0) return invalid(`Unknown task ${unknown.join(", ")}`);
-    if (ids.includes(task.id)) return invalid("A task cannot be linked to itself");
-    return Effect.succeed([...new Set(ids)]);
-  };
-
-  const updateTask = (taskId: string, given: UpdateTaskInput) =>
-    write((files) =>
-      Effect.gen(function* () {
-        const scan = yield* state;
-        const { snapshot, dirs } = scan;
-        const task = yield* findTask(snapshot, taskId);
-        const input =
-          given.blocked_by === undefined
-            ? given
-            : { ...given, blocked_by: yield* checkLinks(snapshot, task, given.blocked_by) };
-        yield* Effect.gen(function* () {
-          const text = yield* fileText(scan, path.join(root, task.path));
-          const dir =
-            input.title === undefined
-              ? dirs.tasks.get(taskId)!
-              : yield* files.renameFolder(
-                  dirs.tasks.get(taskId)!,
-                  taskFolderName(taskId, input.title),
-                );
-          yield* files.writeFile(path.join(dir, TASK_FILE), editTaskFile(text, input));
-        }).pipe(storageError("Could not write the task"));
-        return yield* reread(taskId).pipe(readBack);
-      }),
-    );
-
-  const moveTask = (taskId: string, input: MoveTaskInput) =>
-    write((files) =>
-      Effect.gen(function* () {
-        const scan = yield* state;
-        const { snapshot } = scan;
-        const task = yield* findTask(snapshot, taskId);
-        const status = input.status ?? task.status;
-        yield* checkStatus(snapshot, status);
-        const container = yield* destination(snapshot, input, task);
-        if (container.parent !== null && taskSubtree(snapshot.tasks, taskId).has(container.parent))
-          return yield* invalid("A task cannot move inside itself or its subtasks");
-        yield* Effect.gen(function* () {
-          const changes: Record<string, string> = {};
-          if (input.status !== undefined) changes["status"] = input.status;
-          const placed = input.before !== undefined || input.after !== undefined;
-          if (placed || container.list !== task.list || container.parent !== task.parent)
-            changes["order"] = orderBetween(
-              yield* orderedTasks(files, scan, container, taskId),
-              input,
-            );
-          const text = yield* fileText(scan, path.join(root, task.path));
-          const dir = yield* files.moveFolder(
-            scan.dirs.tasks.get(taskId)!,
-            containerDir(scan, container),
-          );
-          yield* files.writeFile(path.join(dir, TASK_FILE), patchFrontmatter(text, changes));
-        }).pipe(storageError("Could not move the task"));
-        return yield* reread(taskId).pipe(readBack);
-      }),
-    );
-
-  const deleteTask = (taskId: string) =>
-    write((files) =>
-      Effect.gen(function* () {
-        const scan = yield* state;
-        const { snapshot, dirs } = scan;
-        yield* findTask(snapshot, taskId);
-        const removed = taskSubtree(snapshot.tasks, taskId);
-        const isRemoved = (id: string) => removed.has(id);
-        const linking = snapshot.tasks.filter(
-          (task) =>
-            !removed.has(task.id) && LINK_KINDS.some((kind) => task[kind.forward].some(isRemoved)),
-        );
-        yield* Effect.gen(function* () {
-          for (const task of linking) {
-            const file = path.join(root, task.path);
-            const original = yield* fileText(scan, file);
-            const text = LINK_KINDS.reduce(
-              (text, kind) =>
-                keepLinks(text, kind.field, (id) => !isRemoved(id), snapshot.workspace.key) ?? text,
-              original,
-            );
-            if (text !== original) yield* files.writeFile(file, text);
-          }
-          yield* files.remove(dirs.tasks.get(taskId)!);
-        }).pipe(storageError("Could not delete the task"));
-      }),
-    );
-
-  const findList = (snapshot: WorkspaceSnapshot, list: string) => {
-    const found = snapshot.lists.find((known) => known.id === list);
-    return found === undefined ? invalid(`Unknown list "${list}"`) : Effect.succeed(found);
-  };
-
-  const rereadList = (list: string) =>
-    Effect.flatMap(current, (snapshot) => findList(snapshot, list));
-
-  const createList = (input: CreateListInput) =>
-    write((files) =>
-      Effect.gen(function* () {
-        const scan = yield* state;
-        const { snapshot } = scan;
-        const parent = input.parent ?? null;
-        if (parent !== null) yield* findList(snapshot, parent);
-        if (listDepth(parent) >= MAX_LIST_DEPTH)
-          return yield* invalid(`Lists nest at most ${MAX_LIST_DEPTH} levels deep`);
-        const slug = slugify(input.name);
-        if (slug.length === 0) return yield* invalid("The list name needs a letter or digit");
-        const listId = parent === null ? slug : `${parent}/${slug}`;
-        const dir = containerDir(scan, { list: parent, parent: null });
-        if (
-          snapshot.lists.some((known) => known.id === listId) ||
-          (yield* storageError("Could not read the workspace")(
-            storage.exists(path.join(dir, slug)),
-          ))
-        )
-          return yield* invalid(`There is already a list "${listId}"`);
-        yield* Effect.gen(function* () {
-          const siblings = yield* orderedLists(files, scan, parent);
-          const content = newListFile({ name: input.name, order: orderBetween(siblings, {}) });
-          yield* files.createFolder(dir, slug, { name: LIST_FILE, content });
-        }).pipe(storageError("Could not create the list"));
-        return yield* rereadList(listId).pipe(readBack);
-      }),
-    );
-
-  const moveList = (listId: string, input: MoveListInput) =>
-    write((files) =>
-      Effect.gen(function* () {
-        const scan = yield* state;
-        const { snapshot, dirs } = scan;
-        const list = yield* findList(snapshot, listId);
-        const parent = input.parent === undefined ? list.parent : input.parent;
-        if (parent !== null) yield* findList(snapshot, parent);
-        const refused = listMoveError(snapshot.lists, listId, parent);
-        if (refused !== null) return yield* invalid(refused);
-        const dir = dirs.lists.get(listId)!.dir;
-        const container = containerDir(scan, { list: parent, parent: null });
-        const moved = path.join(container, path.basename(dir));
-        if (
-          parent !== list.parent &&
-          (yield* storageError("Could not read the workspace")(storage.exists(moved)))
-        )
-          return yield* invalid(`There is already a folder ${path.relative(root, moved)}`);
-        yield* Effect.gen(function* () {
-          const order = orderBetween(yield* orderedLists(files, scan, parent, listId), input);
-          const file = path.join(dir, LIST_FILE);
-          yield* files.writeFile(file, patchFrontmatter(yield* fileText(scan, file), { order }));
-          if (parent !== list.parent) yield* files.moveFolder(dir, container);
-        }).pipe(storageError("Could not move the list"));
-        return yield* rereadList(movedListId(listId, parent)).pipe(readBack);
-      }),
-    );
-
-  const reorderStatuses = (input: ReorderStatusesInput) =>
-    write((files) =>
-      Effect.gen(function* () {
-        const snapshot = yield* current;
-        const known = new Map(snapshot.statuses.map((status) => [status.id, status]));
-        if (
-          input.order.length !== known.size ||
-          new Set(input.order).size !== known.size ||
-          input.order.some((status) => !known.has(status))
-        ) {
-          return yield* invalid(
-            `The order must list every status once: ${[...known.keys()].join(", ")}`,
-          );
-        }
-        const statuses = sortStatuses(input.order.map((status) => known.get(status)!));
-        yield* files
-          .editConfig(() => ({ statuses }))
-          .pipe(storageError("Could not reorder the statuses"));
-        return (yield* current).statuses;
-      }),
-    );
-
-  /** The task folder and the path segments of a file inside it, refusing anything else. */
-  const attachmentTarget = (taskId: string, relativePath: string) =>
-    Effect.gen(function* () {
-      const { snapshot, dirs } = yield* state;
-      yield* findTask(snapshot, taskId);
-      const dir = dirs.tasks.get(taskId)!;
-      const segments = relativePath.split(/[\\/]/).filter((part) => part !== "" && part !== ".");
-      if (path.isAbsolute(relativePath) || segments.length === 0)
-        return yield* invalid("Give a path relative to the task folder");
-      if (segments.some(isHidden))
-        return yield* invalid("Attachment paths cannot leave the task folder or name hidden files");
-      // A case-insensitive file system (macOS, Windows) takes `Task.MD` for `task.md`.
-      if (segments.some((part) => MARKERS.includes(part.toLowerCase())))
-        return yield* invalid(
-          `An attachment cannot be named ${TASK_FILE} or ${LIST_FILE}: that would make a subtask or a list`,
-        );
-      const subtask = yield* Effect.orElseSucceed(
-        storage.exists(path.join(dir, segments[0]!, TASK_FILE)),
-        () => false,
-      );
-      if (subtask) return yield* invalid("That path is inside a subtask");
-      if (
-        !(yield* storageError("Could not read the task folder")(storage.staysInside(dir, segments)))
-      )
-        return yield* invalid("Attachment paths cannot follow symlinks out of the task folder");
-      return { dir, segments };
-    });
-
-  const attachmentPath = (taskId: string, relativePath: string) =>
-    lock.withPermits(1)(
-      Effect.map(attachmentTarget(taskId, relativePath), ({ dir, segments }) =>
-        path.join(dir, ...segments),
-      ),
-    );
-
-  const writeAttachment = (taskId: string, relativePath: string, bytes: Uint8Array) =>
-    write((files) =>
-      Effect.gen(function* () {
-        const { dir, segments } = yield* attachmentTarget(taskId, relativePath);
-        return yield* Effect.gen(function* () {
-          // One level at a time, so a task folder that has gone is not created again.
-          let folder = dir;
-          for (const segment of segments.slice(0, -1)) {
-            folder = path.join(folder, segment);
-            yield* files.ensureFolder(folder);
-          }
-          const name = yield* files.createFile(folder, segments.at(-1)!, bytes);
-          return [...segments.slice(0, -1), name].join("/");
-        }).pipe(storageError("Could not save the attachment"));
-      }),
-    );
-
-  /**
-   * Fixes, one at a time and each against a fresh scan, the problems `wanted` picks, trying each
-   * problem once so a fix that does not take cannot loop.
-   */
-  const fixWhere = (wanted: (diagnostic: Diagnostic) => boolean) =>
-    write((files, ids) =>
-      Effect.gen(function* () {
-        const fixed: Array<Diagnostic> = [];
-        const failed: Array<{ diagnostic: Diagnostic; error: string }> = [];
-        const tried = new Set<string>();
-        const key = (diagnostic: Diagnostic) =>
-          JSON.stringify([diagnostic.kind, diagnostic.path, diagnostic.field]);
-        while (true) {
-          yield* storage.forget;
-          const scan = yield* state;
-          const next = scan.snapshot.diagnostics.find(
-            (diagnostic) =>
-              diagnostic.fix !== null && wanted(diagnostic) && !tried.has(key(diagnostic)),
-          );
-          if (next === undefined) return { fixed, failed, diagnostics: scan.snapshot.diagnostics };
-          tried.add(key(next));
-          const exit = yield* Effect.exit(applyFix(files, scan, next, () => nextId(ids, scan)));
-          if (exit._tag === "Success") fixed.push(next);
-          else failed.push({ diagnostic: next, error: String(Cause.squash(exit.cause)) });
-        }
-      }),
-    );
-
-  const fixDiagnostic = (request: FixRequest) =>
-    fixWhere(
-      (diagnostic) =>
-        diagnostic.path === request.path &&
-        diagnostic.kind === request.kind &&
-        diagnostic.fix?.action === request.action,
-    );
-
+  const state = yield* makeState(id, root, options);
   return {
     id,
     root,
-    snapshot: lock.withPermits(1)(current),
-    getTask: (taskId) =>
-      Effect.flatMap(lock.withPermits(1)(current), (snapshot) => findTask(snapshot, taskId)),
-    createTask,
-    updateTask,
-    moveTask,
-    deleteTask,
-    createList,
-    moveList,
-    reorderStatuses,
-    attachmentPath,
-    writeAttachment,
-    fixDiagnostic,
-    fixAll: fixWhere((diagnostic) => diagnostic.fix?.inFixAll === true),
-    changes: storage.changes,
+    snapshot: state.read(Effect.map(state.scan, (scan) => scan.snapshot)),
+    getTask: (taskId) => getTask(state, taskId),
+    createTask: (input) => createTask(state, input),
+    updateTask: (taskId, input) => updateTask(state, taskId, input),
+    moveTask: (taskId, input) => moveTask(state, taskId, input),
+    deleteTask: (taskId) => deleteTask(state, taskId),
+    createList: (input) => createList(state, input),
+    moveList: (listId, input) => moveList(state, listId, input),
+    reorderStatuses: (input) => reorderStatuses(state, input),
+    attachmentPath: (taskId, relativePath) => attachmentPath(state, taskId, relativePath),
+    writeAttachment: (taskId, relativePath, bytes) =>
+      writeAttachment(state, taskId, relativePath, bytes),
+    fixDiagnostic: (request) => fixDiagnostic(state, request),
+    fixAll: fixAll(state),
+    changes: state.storage.changes,
   } satisfies Workspace;
 });
 

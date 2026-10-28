@@ -5,8 +5,6 @@ import {
   type Diagnostic,
   type DiagnosticKind,
   type List,
-  type StatusDefinition,
-  type Task,
   type WorkspaceSnapshot,
 } from "./domain.ts";
 import { isNotFound } from "./storage/files.ts";
@@ -18,11 +16,12 @@ import {
   defaultStatus,
   humanize,
   idNumber,
-  sortStatuses,
 } from "./layout.ts";
 import { frontmatterId, hasFrontmatter, readFrontmatter } from "./frontmatter.ts";
 import { diagnostic, type DiagnosticOptions } from "./health/problems.ts";
 import { readListFile } from "./lists/list-file.ts";
+import { compareOrder, compareTasks } from "./place.ts";
+import { shownStatuses } from "./statuses/statuses.ts";
 import { linkTasks } from "./tasks/links.ts";
 import {
   readTaskFile,
@@ -51,37 +50,6 @@ export interface Scan {
   /** What the scan read, as the folder grammar has it. */
   readonly tree: Tree;
 }
-
-/** Orders by fractional key, keys before no key, then by folder name. */
-const compareOrder = (
-  a: { readonly order: string; readonly name: string },
-  b: { readonly order: string; readonly name: string },
-): number => {
-  if (a.order !== b.order) {
-    if (a.order === "") return 1;
-    if (b.order === "") return -1;
-    return a.order < b.order ? -1 : 1;
-  }
-  return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
-};
-
-const compareTasks =
-  (key: string) =>
-  (a: Pick<Task, "id" | "order">, b: Pick<Task, "id" | "order">): number => {
-    if (a.order !== b.order) {
-      if (a.order === "") return 1;
-      if (b.order === "") return -1;
-      return a.order < b.order ? -1 : 1;
-    }
-    const byNumber = (idNumber(a.id, key) ?? Infinity) - (idNumber(b.id, key) ?? Infinity);
-    return byNumber !== 0 && !Number.isNaN(byNumber)
-      ? byNumber
-      : a.id < b.id
-        ? -1
-        : a.id > b.id
-          ? 1
-          : 0;
-  };
 
 type Read<A> = Result.Result<A, PlatformError.PlatformError>;
 
@@ -146,8 +114,8 @@ export const scanWorkspace = (
 
   for (const { kind, detail, field } of configProblems)
     report(kind, join(tasksDir, CONFIG_FILE), detail, { field });
-  const statuses: Array<StatusDefinition> = [...(config.statuses ?? DEFAULT_STATUSES)];
-  const fallbackStatus = defaultStatus(statuses)?.id ?? "todo";
+  const configured = config.statuses ?? DEFAULT_STATUSES;
+  const fallbackStatus = defaultStatus(configured)?.id ?? "todo";
 
   const lists: Array<List> = [];
   const taskFiles: Array<TaskFile> = [];
@@ -310,9 +278,8 @@ export const scanWorkspace = (
   for (let next = waiting.shift(); next !== undefined; next = waiting.shift()) serveTask(next);
 
   for (const stray of strays) reportStray(stray);
-  for (const task of taskFiles) {
-    if (statuses.some((known) => known.id === task.status)) continue;
-    statuses.push({ id: task.status, name: humanize(task.status), category: "unstarted" });
+  const { statuses, unknown } = shownStatuses(configured, taskFiles);
+  for (const task of unknown) {
     report(
       "unknown-status",
       join(root, task.path),
@@ -331,7 +298,7 @@ export const scanWorkspace = (
   return {
     snapshot: {
       workspace: { id, name: config.name, key: config.key, root },
-      statuses: sortStatuses(statuses),
+      statuses,
       lists,
       tasks,
       diagnostics,

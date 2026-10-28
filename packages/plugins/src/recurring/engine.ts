@@ -3,6 +3,7 @@ import { definePlugin, type KindProblem } from "@octodo/engine";
 import { Effect } from "effect";
 import {
   badLines,
+  kindLog,
   listOccurrences,
   LOG,
   logOccurrence,
@@ -63,9 +64,9 @@ export const recurring = definePlugin(recurringShared, {
       Effect.flatMap(checkRule(repeat), (rule) => ws.createOfKind(input, { repeat: rule })),
     set_repeat: (ws, { id, repeat }) =>
       Effect.flatMap(checkRule(repeat), (rule) => ws.editOfKind(id, { keys: { repeat: rule } })),
-    log_occurrence: (ws, { id, at }) => logOccurrence(ws, id, at, "done"),
-    remove_occurrence: (ws, { id, at }) => removeOccurrence(ws, id, at, "occurrence"),
-    list_occurrences: (ws, { id }) => listOccurrences(ws, id),
+    log_occurrence: (ws, { id, at }) => logOccurrence(kindLog(ws, id), at, "done"),
+    remove_occurrence: (ws, { id, at }) => removeOccurrence(kindLog(ws, id), at, "occurrence"),
+    list_occurrences: (ws, { id }) => listOccurrences(kindLog(ws, id)),
   },
   complete: (at) => ({ files: { [LOG]: (text) => withOccurrence(text, at, "done") } }),
 });

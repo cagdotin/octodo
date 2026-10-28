@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { plugins } from "../src/index.ts";
-import { webPlugins } from "../src/web.ts";
+import { webPlugins, webSections } from "../src/web.ts";
 
 const registry = makeRegistry(plugins);
 
@@ -48,9 +48,10 @@ const day = (offset: number) => {
   return localDay(date);
 };
 
-describe("a task's due day", () => {
-  it("is one function per kind, the same in the engine and the app", () => {
-    expect(plugins.map(({ shared }) => [shared.id, webPlugins[shared.id]?.day])).toEqual(
+describe("a task's or an entry's day", () => {
+  it("is one function per plugin, the same in the engine and the app", () => {
+    const web = { ...webPlugins, ...webSections };
+    expect(plugins.map(({ shared }) => [shared.id, web[shared.id]?.day])).toEqual(
       plugins.map(({ shared }) => [shared.id, shared.day]),
     );
   });
@@ -66,28 +67,50 @@ describe("a task's due day", () => {
     await call("log_occurrence", { id: bins, at: day(-5) });
     const sheets = await id("create_recurring", { title: "Sheets", repeat: "every 6 days" });
     await call("log_occurrence", { id: sheets, at: day(0) });
-    const birthday = await id("create_anniversary", {
+    const birthday = await id("create_counter", {
       title: "Mum",
+      type: "yearly",
       date: `1961-${day(0).slice(5)}`,
     });
-    const wedding = await id("create_anniversary", {
+    const wedding = await id("create_counter", {
       title: "Wedding",
+      type: "yearly",
       date: `2015-${day(5).slice(5)}`,
     });
-    await id("create_counter", { title: "Days since coffee" });
-    const dueBy = async (last: string) =>
-      ((await call("list_tasks", { due_by: last })) as Array<{ id: string }>).map(
-        (task) => task.id,
-      );
-    expect(await dueBy(day(0)), "today").toEqual([plain, late, water, bins, birthday]);
+    await id("create_counter", { title: "Party", type: "yearly", date: `2015-${day(9).slice(5)}` });
+    await id("create_counter", { title: "Days since coffee", type: "since" });
+    const dueBy = async (last: string, filters: Record<string, unknown> = {}) =>
+      (
+        (await call("list_tasks", { due_by: last, ...filters })) as Array<{
+          id: string;
+          day?: string;
+        }>
+      ).map((row) => (row.day === undefined ? row.id : `${row.id} on ${row.day}`));
+    expect(await dueBy(day(0)), "today").toEqual([
+      plain,
+      late,
+      water,
+      bins,
+      `${birthday} on ${day(0)}`,
+    ]);
     expect(await dueBy(day(7)), "the next 7 days").toEqual([
       plain,
       late,
       water,
       bins,
       sheets,
-      birthday,
-      wedding,
+      `${birthday} on ${day(0)}`,
+      `${wedding} on ${day(5)}`,
+    ]);
+    expect(await dueBy(day(7), { query: "wed" }), "a query finds entries too").toEqual([
+      `${wedding} on ${day(5)}`,
+    ]);
+    expect(await dueBy(day(7), { ready: true }), "a filter of tasks leaves entries out").toEqual([
+      plain,
+      late,
+      water,
+      bins,
+      sheets,
     ]);
   });
 });

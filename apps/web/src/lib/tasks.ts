@@ -130,10 +130,10 @@ export const allTags = (tasks: ReadonlyArray<Task>) =>
 export const filterTasks = (
   { tasks: all }: Pick<WorkspaceSnapshot, "tasks">,
   list: string | undefined,
-  kindDay: DayContext["kindDay"],
+  kindDay: DayContext["pluginDay"],
   today: string,
 ): ReadonlyArray<Task> => {
-  const context = { today, kindDay };
+  const context = { today, pluginDay: kindDay };
   const dueBy = (last: string) => all.filter((task) => isDueBy(task, last, context));
   const tasks = all.filter((task) => task.parent === null);
   switch (list) {

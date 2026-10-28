@@ -89,8 +89,10 @@ describe("enabling and disabling a plugin", () => {
     await call("create_recurring", { workspace: root, title: "Water", repeat: "every 3 days" });
     expect((await snapshot(root)).tasks[0]!.kind?.id).toBe("recurring");
 
-    expect(await call("disable_plugin", { workspace: root, plugin: "recurring" })).toEqual([]);
-    expect(config(root).plugins).toEqual([]);
+    expect(await call("disable_plugin", { workspace: root, plugin: "recurring" })).toEqual([
+      "counters",
+    ]);
+    expect(config(root).plugins).toEqual(["counters"]);
     const disabled = await snapshot(root);
     expect(disabled.tasks[0]!.kind).toBeUndefined();
     expect(disabled.diagnostics.map((diagnostic) => diagnostic.kind)).toEqual(["unknown-kind"]);
@@ -99,12 +101,14 @@ describe("enabling and disabling a plugin", () => {
     ).rejects.toMatchObject({ _tag: "PluginNotEnabled" });
 
     expect(await call("enable_plugin", { workspace: root, plugin: "recurring" })).toEqual([
+      "counters",
       "recurring",
     ]);
     expect(await call("enable_plugin", { workspace: root, plugin: "recurring" })).toEqual([
+      "counters",
       "recurring",
     ]);
-    expect(config(root).plugins).toEqual(["recurring"]);
+    expect(config(root).plugins).toEqual(["counters", "recurring"]);
     const enabled = await snapshot(root);
     expect(enabled.tasks[0]!.kind?.id).toBe("recurring");
     expect(enabled.diagnostics).toEqual([]);

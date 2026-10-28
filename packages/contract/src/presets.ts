@@ -44,9 +44,9 @@ export const PRESETS = {
   chores: {
     name: "Chores",
     description:
-      "A checklist whose tasks can repeat: water the plants every 3 days, take the bins out every Monday.",
+      "A checklist whose tasks can repeat, with counters: water the plants every 3 days, days since the last descaling, birthdays.",
     statuses: CHECKLIST_STATUSES,
-    plugins: ["recurring"],
+    plugins: ["recurring", "counters"],
   },
 } as const satisfies Record<string, Preset>;
 

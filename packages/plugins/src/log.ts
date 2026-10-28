@@ -1,12 +1,12 @@
 /**
- * `log.jsonl`, the history of a recurring task or a days-since counter: one line per time the
+ * `log.jsonl`, the history of a recurring task or a since counter: one line per time the
  * thing happened, `{"at":"2026-10-25T09:12:00Z","event":"done"}` (decisions 0009, 0019).
  * Occurrences are whole minutes, and the log holds each minute once, so logging one again changes
  * nothing. Every event counts as an occurrence for every kind that reads the log, so a task whose
  * `type` changes between them keeps its history.
  */
 import { InvalidRequest } from "@octodo/contract";
-import type { PluginWorkspace } from "@octodo/engine";
+import type { KindChange, PluginWorkspace } from "@octodo/engine";
 import { DateTime, Effect } from "effect";
 
 export const LOG = "log.jsonl";
@@ -109,35 +109,56 @@ export const occurrenceAt = (at: string | undefined) =>
     return toMinute(when);
   });
 
-/** Logs `event` at `at` (now when omitted) in the task's log. */
-export const logOccurrence = (
-  ws: PluginWorkspace,
-  id: string,
+/** Where a log is: in a task of a plugin's kind or in an entry of its section. */
+export interface LogHolder<A, E> {
+  readonly id: string;
+  /** The text of each of the plugin's files it has. */
+  readonly files: Effect.Effect<ReadonlyMap<string, string>, E>;
+  readonly edit: (change: KindChange) => Effect.Effect<A, E>;
+}
+
+/** The log of a task of the plugin's kind. */
+export const kindLog = (ws: PluginWorkspace, id: string) => ({
+  id,
+  files: ws.filesOfKind(id),
+  edit: (change: KindChange) => ws.editOfKind(id, change),
+});
+
+/** The log of an entry of the plugin's section. */
+export const sectionLog = (ws: PluginWorkspace, id: string) => ({
+  id,
+  files: ws.filesInSection(id),
+  edit: (change: KindChange) => ws.editInSection(id, change),
+});
+
+/** Logs `event` at `at` (now when omitted). */
+export const logOccurrence = <A, E>(
+  log: LogHolder<A, E>,
   at: string | undefined,
   event: LogEvent,
 ) =>
   Effect.flatMap(occurrenceAt(at), (minute) =>
-    ws.editOfKind(id, { files: { [LOG]: (text) => withOccurrence(text, minute, event) } }),
+    log.edit({ files: { [LOG]: (text) => withOccurrence(text, minute, event) } }),
   );
 
-/** Takes the occurrence at `at` out of the task's log, refusing a time the log does not have. */
-export const removeOccurrence = (ws: PluginWorkspace, id: string, at: string, noun: string) =>
+/** Takes the occurrence at `at` out of the log, refusing a time the log does not have. */
+export const removeOccurrence = <A, E>(log: LogHolder<A, E>, at: string, noun: string) =>
   Effect.gen(function* () {
     const time = new Date(at);
     if (Number.isNaN(time.getTime()))
       return yield* new InvalidRequest({ message: `${at} is not a date and time` });
     const minute = toMinute(time);
-    const text = (yield* ws.filesOfKind(id)).get(LOG) ?? "";
+    const text = (yield* log.files).get(LOG) ?? "";
     if (!readLog(text).occurrences.includes(minute))
-      return yield* new InvalidRequest({ message: `${id} has no ${noun} at ${minute}` });
-    return yield* ws.editOfKind(id, {
+      return yield* new InvalidRequest({ message: `${log.id} has no ${noun} at ${minute}` });
+    return yield* log.edit({
       files: { [LOG]: (current) => withoutOccurrence(current ?? "", minute) },
     });
   });
 
-/** Every occurrence in the task's log, newest first. */
-export const listOccurrences = (ws: PluginWorkspace, id: string) =>
-  Effect.map(ws.filesOfKind(id), (texts) =>
+/** Every occurrence in the log, newest first. */
+export const listOccurrences = <A, E>(log: LogHolder<A, E>) =>
+  Effect.map(log.files, (texts) =>
     readLog(texts.get(LOG) ?? "")
       .occurrences.toReversed()
       .map((at) => ({ at })),

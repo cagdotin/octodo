@@ -25,7 +25,7 @@ const run = (words: ReadonlyArray<string>, argv: ReadonlyArray<string>) => {
 describe("a generated command", () => {
   it("takes --json even when its result has no renderer, so a script can always pass it", async () => {
     for (const words of [
-      ["counter", "history"],
+      ["counters", "history"],
       ["recurring", "history"],
     ])
       expect(await run(words, ["HM-1", "--json"])).toEqual(["[]"]);

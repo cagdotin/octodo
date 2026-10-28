@@ -1,8 +1,7 @@
 import type { CreateTaskInput, Task } from "@octodo/contract";
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
-import { counterWeb } from "./counter/web.tsx";
-import { anniversaryWeb } from "./anniversary/web.tsx";
+import { countersWeb } from "./counters/web.ts";
 import { recurringWeb } from "./recurring/web.tsx";
 
 /** A task of a plugin's kind, with `kind.fields` as the plugin's `fields` schema encodes them. */
@@ -70,6 +69,15 @@ type KindFields = Readonly<Record<string, unknown>>;
 /** Every plugin's web half, by its id, as `task.kind.id` names it. */
 export const webPlugins: Readonly<Record<string, PluginWeb<KindFields>>> = {
   recurring: recurringWeb as unknown as PluginWeb<KindFields>,
-  counter: counterWeb as unknown as PluginWeb<KindFields>,
-  anniversary: anniversaryWeb as unknown as PluginWeb<KindFields>,
+};
+
+/** A section plugin's `web` half. */
+export interface SectionWeb<Fields> {
+  /** The day an entry falls on, as its shared half's `day` gives it (decisions 0025, 0027). */
+  readonly day?: (fields: Fields, today: string) => string | null;
+}
+
+/** Every section plugin's web half, by its id, as `entry.section` names it. */
+export const webSections: Readonly<Record<string, SectionWeb<KindFields>>> = {
+  counters: countersWeb as unknown as SectionWeb<KindFields>,
 };

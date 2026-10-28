@@ -1,4 +1,4 @@
-import type { Task, TaskKind, TaskRef } from "@octodo/contract";
+import type { Entry, EntryDay, Task, TaskKind, TaskRef, TaskSummary } from "@octodo/contract";
 import type { OperationName } from "@octodo/contract/catalog";
 import type { OperationSuccess } from "@octodo/engine";
 
@@ -40,6 +40,18 @@ export const line = (task: Shown, label = noLabel) =>
     .filter((part) => part !== "")
     .join("  ");
 
+/** An entry of a plugin's section: its id, its section, its title and its plugin's label. */
+export const entryLine = (
+  entry: Pick<Entry, "id" | "section" | "title" | "fields">,
+  label = noLabel,
+) =>
+  [
+    ...heading({ ...entry, status: entry.section }),
+    label({ id: entry.section, fields: entry.fields }),
+  ]
+    .filter((part) => part !== "")
+    .join("  ");
+
 /**
  * `tasks` in their order with each subtask right after its parent, one level deeper. A subtask
  * whose parent is not in `tasks` stays at depth 0.
@@ -61,6 +73,8 @@ const tree = <T extends { readonly id: string; readonly parent: string | null }>
   for (const task of roots) walk(task, 0);
   return rows;
 };
+
+const isEntryDay = (row: TaskSummary | EntryDay): row is EntryDay => "section" in row;
 
 const named = (refs: ReadonlyArray<TaskRef>) =>
   refs
@@ -87,13 +101,23 @@ export const renderers: {
 } = {
   list_workspaces: (all) =>
     all.map((info) => `${info.id.padEnd(20)} ${info.key.padEnd(6)} ${info.root}`),
-  list_tasks: (tasks, label) =>
-    tasks.length === 0
+  list_tasks: (rows, label) => {
+    const tasks = rows.filter((row): row is TaskSummary => !isEntryDay(row));
+    const days = rows.filter(isEntryDay);
+    return rows.length === 0
       ? ["No tasks"]
-      : tree(tasks).map(({ task, depth }) => {
-          const under = depth === 0 && task.parent !== null ? `  (under ${task.parent})` : "";
-          return `${"  ".repeat(depth)}${line(task, label)}${under}`;
-        }),
+      : [
+          ...tree(tasks).map(({ task, depth }) => {
+            const under = depth === 0 && task.parent !== null ? `  (under ${task.parent})` : "";
+            return `${"  ".repeat(depth)}${line(task, label)}${under}`;
+          }),
+          ...days.map((entry) =>
+            heading({ ...entry, status: entry.section })
+              .concat(`on ${entry.day}`)
+              .join("  "),
+          ),
+        ];
+  },
   get_task: (task, label) => [
     line(task, label),
     ...(task.parent === null ? [] : [`parent: ${task.parent}`]),

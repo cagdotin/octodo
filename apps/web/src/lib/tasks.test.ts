@@ -243,17 +243,13 @@ describe("due dates", () => {
       id: "recurring",
       fields: { repeat: "every 3 days", next, last: null, count: 0, recent: [] },
     });
-    const anniversary = (date: string | null) => ({ id: "anniversary", fields: { date } });
     const tasks = [
       task("HM-1", { due: day(0) }),
       task("HM-2", { kind: recurring(day(0)) }),
       task("HM-3", { kind: recurring(day(-4)) }),
       task("HM-4", { kind: recurring(day(5)) }),
-      task("HM-5", { kind: anniversary(`1990-${day(0).slice(5)}`) }),
-      task("HM-6", { kind: anniversary(`1990-${day(6).slice(5)}`) }),
-      task("HM-7", { kind: { id: "counter", fields: { since: day(-2) } } }),
       task("HM-8", { kind: recurring(day(20)), due: day(0) }),
-      task("HM-9", { kind: anniversary(null) }),
+      task("HM-9", { kind: { id: "tally", fields: {} }, due: day(0) }),
       task("HM-10", { due: day(-1) }),
     ];
     const ids = (list: string) =>
@@ -262,7 +258,6 @@ describe("due dates", () => {
       "HM-1",
       "HM-2",
       "HM-3",
-      "HM-5",
       "HM-10",
     ]);
     expect(ids(SMART.upcoming), "and what comes back within a week").toEqual([
@@ -270,8 +265,6 @@ describe("due dates", () => {
       "HM-2",
       "HM-3",
       "HM-4",
-      "HM-5",
-      "HM-6",
       "HM-10",
     ]);
   });

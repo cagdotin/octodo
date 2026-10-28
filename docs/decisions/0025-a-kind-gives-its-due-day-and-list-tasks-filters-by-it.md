@@ -1,7 +1,15 @@
 # 0025. A kind gives its due day, and Today, Next 7 days and `list_tasks` filter by it
 
-- Status: accepted
+- Status: accepted, amended by 0027
 - Date: 2026-10-28
+
+> Amended by [0027](0027-plugins-add-sections-tasks-is-the-built-in-one.md) (OCT-89): the day is a plugin's, not only a kind's. `PluginShared.day` gives the
+> day of a task of its kind or of an entry of its section; `DayContext.pluginDay` (was `kindDay`)
+> looks it up by plugin id, and `entriesDueBy` in the rules lists the entries due by a day as
+> `EntryDay` rows `{ id, section, title, day }`. `list_tasks` with `due_by` gives them after the
+> tasks, unless a filter only tasks have (status, list, parent, tag, ready) is set. The
+> anniversary kind is gone; a yearly counter gives its next occurrence. A section's web half names
+> the same `day` (`webSections`), and the test holds both halves to it.
 
 ## Context
 

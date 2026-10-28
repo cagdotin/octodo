@@ -3,7 +3,15 @@
  * the same way: plain functions with no Effect code, so `@octodo/contract/rules` pulls no runtime
  * into the web app.
  */
-import type { Diagnostic, List, StatusCategory, StatusDefinition, Task } from "./domain.ts";
+import type {
+  Diagnostic,
+  Entry,
+  EntryDay,
+  List,
+  StatusCategory,
+  StatusDefinition,
+  Task,
+} from "./domain.ts";
 
 /** How deep lists nest: a top-level list, its sublists and theirs. */
 export const MAX_LIST_DEPTH = 3;
@@ -372,8 +380,11 @@ export const readiness = (
 export const isProblem = (diagnostic: Pick<Diagnostic, "kind">): boolean =>
   diagnostic.kind !== "note";
 
-/** A plugin's due day for a task of its kind, from its `kind.fields` and today (decision 0025). */
-export type KindDay = (fields: never, today: string) => string | null;
+/**
+ * The day a plugin gives a task of its kind or an entry of its section, from its fields and today
+ * (decisions 0025, 0027): a recurring task's next day, a yearly counter's next occurrence.
+ */
+export type PluginDay = (fields: never, today: string) => string | null;
 
 /** Today where this runs, `YYYY-MM-DD`: the person's computer (decision 0010). */
 export const localDay = (now = new Date()): string =>
@@ -381,21 +392,21 @@ export const localDay = (now = new Date()): string =>
     .map((part, index) => String(part).padStart(index === 0 ? 4 : 2, "0"))
     .join("-");
 
-/** What a task's due day depends on besides the task: today, and each kind's `day`. */
+/** What a task's or an entry's day depends on besides itself: today, and each plugin's `day`. */
 export interface DayContext {
   readonly today: string;
-  /** The `day` of the plugin with this id; undefined for a kind that has no due day. */
-  readonly kindDay: (kind: string) => KindDay | undefined;
+  /** The `day` of the plugin with this id; undefined for a plugin that gives none. */
+  readonly pluginDay: (plugin: string) => PluginDay | undefined;
 }
 
 /**
  * The day a task is due on: a plain task's `due` day; for a task of a kind, the day its plugin
- * gives (a recurring task's next, an anniversary's next occurrence), never its `due` (0025).
+ * gives (a recurring task's next), never its `due` (0025).
  */
 export const taskDay = (task: Pick<Task, "due" | "kind">, context: DayContext): string | null =>
   task.kind === undefined
     ? (task.due?.slice(0, 10) ?? null)
-    : (context.kindDay(task.kind.id)?.(task.kind.fields as never, context.today) ?? null);
+    : (context.pluginDay(task.kind.id)?.(task.kind.fields as never, context.today) ?? null);
 
 /** Whether a task is due on or before `last`, overdue included, as Today and Next 7 days list it. */
 export const isDueBy = (
@@ -406,3 +417,19 @@ export const isDueBy = (
   const day = taskDay(task, context);
   return day !== null && day <= last;
 };
+
+/**
+ * The entries whose section's plugin gives them a day on or before `last`, by day, then as given:
+ * the rows Today and Next 7 days show beside the tasks (decision 0027).
+ */
+export const entriesDueBy = (
+  entries: ReadonlyArray<Pick<Entry, "id" | "section" | "title" | "fields">>,
+  last: string,
+  context: DayContext,
+): Array<EntryDay> =>
+  entries
+    .flatMap(({ id, section, title, fields }) => {
+      const day = context.pluginDay(section)?.(fields as never, context.today) ?? null;
+      return day === null || day > last ? [] : [{ id, section, title, day }];
+    })
+    .toSorted((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));

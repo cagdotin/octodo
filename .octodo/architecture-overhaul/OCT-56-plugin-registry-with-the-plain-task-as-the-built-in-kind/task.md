@@ -1,7 +1,7 @@
 ---
 id: OCT-56
 title: Plugin registry, with the plain task as the built-in kind
-status: todo
+status: done
 priority: high
 tags:
   - architecture

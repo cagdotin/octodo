@@ -25,3 +25,11 @@ Decision `docs/decisions/0008-statuses-per-workspace-presets-as-data.md`.
 ## Done when
 
 - Creating a workspace from each preset on a scratch `OCTODO_HOME` writes the expected `config.json`.
+
+## From OCT-56
+
+- `config.json`'s `plugins` is already read and validated (an id octodo has no plugin for is an `invalid-config` diagnostic). `initWorkspace` and `createWorkspace` need a `plugins` option so a preset can write it.
+- Enabling or disabling later is a `config.json` write through `files.editConfig`, e.g. a `set_plugins` catalog operation. Disabling turns that kind's tasks into plain tasks with `unknown-kind`, and their plugin files become attachments again.
+- An `enable-plugin` fix for `unknown-kind`, like `add-status` for `unknown-status`, would fit; it isn't built.
+- No API lists the plugins octodo has (the engine has `Workspaces.plugins`), so the settings page needs one.
+- Add and remove workspace, reorder statuses and fix-all are still hand-declared HTTP endpoints (0015); presets touch add-workspace, so moving it into the catalog here is natural.

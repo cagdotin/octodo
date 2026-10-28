@@ -46,7 +46,9 @@ the risks of that walk. With [0001](0001-octodo-is-the-only-writer.md) and
   of any age (no write that owns one can still be running), and adds missing `.gitignore` lines.
   At 5,000 tasks that walk takes about 350 ms, so it runs once per process, not at every handover.
 - The holder assigns the next id from its scan's highest id on disk, and never hands out a number
-  twice in one process.
+  twice in one process. Ids in a task folder whose `task.md` is not read count too: the ids its
+  subtasks and other markdown files hold, and the id its `<id>-<slug>` folder name starts with,
+  which is the one place a folder name counts (it only raises the next number).
 
 ## Evidence
 

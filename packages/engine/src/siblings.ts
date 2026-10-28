@@ -24,7 +24,10 @@ const ensureOrdered = <A extends { readonly order: string }>(
     for (const [index, item] of items.entries()) {
       const order = keys[index]!;
       const target = file(item);
-      yield* files.writeFile(target, patchFrontmatter(yield* fileText(scan, target), { order }));
+      yield* files.writeFile(
+        target,
+        yield* patchFrontmatter(yield* fileText(scan, target), { order }),
+      );
       ordered.push({ ...item, order });
     }
     return ordered;
@@ -46,13 +49,19 @@ export const orderedTasks = (
     (task) => join(scan.snapshot.workspace.root, task.path),
   );
 
-/** Sibling lists under `parent` with their order keys, which the snapshot leaves out. */
+/**
+ * Sibling lists under `parent` with their order keys, which the snapshot leaves out. A list whose
+ * `list.md` does not read has no key to place around and is left as it is.
+ */
 export const orderedLists = (files: Files, scan: Scan, parent: string | null, except?: string) =>
   ensureOrdered(
     files,
     scan,
-    scan.snapshot.lists
-      .filter((list) => list.parent === parent && list.id !== except)
-      .map((list) => ({ id: list.id, ...scan.dirs.lists.get(list.id)! })),
+    scan.snapshot.lists.flatMap((list) => {
+      const { dir, order } = scan.dirs.lists.get(list.id)!;
+      return list.parent === parent && list.id !== except && order !== null
+        ? [{ id: list.id, dir, order }]
+        : [];
+    }),
     (list) => join(list.dir, LIST_FILE),
   );

@@ -14,7 +14,7 @@ of a write only because the workspace wrapped `FileSystem` in a reporting copy.
 
 ## Decision
 
-- Only `packages/engine/src/storage/` (`packages/core` until OCT-51) imports `FileSystem` or `node:fs`. A lint rule
+- Only `packages/engine/src/storage/` imports `FileSystem` or `node:fs`. A lint rule
   (`no-restricted-imports` in `.oxlintrc.json`) fails any other module in `packages/engine/src` that
   does.
 - `makeStorage(root)` returns a `Storage`, passed as a plain argument rather than an Effect

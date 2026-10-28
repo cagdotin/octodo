@@ -47,6 +47,11 @@ export interface Storage {
   /** Counts the changes so far: what a caller made from a read holds while this stays the same. */
   readonly version: () => number;
   readonly forget: Effect.Effect<void>;
+  /**
+   * Forgets what was read unless a watcher reports every change, so the next read sees what other
+   * processes wrote: without one (`watch: false`, or a watcher that stopped) nothing else would.
+   */
+  readonly refresh: Effect.Effect<void>;
   readonly exists: (path: string) => Effect.Effect<boolean, PlatformError.PlatformError>;
   /**
    * The attachments in the task folder `dir`, as the folder grammar reads them, leaving out the
@@ -102,6 +107,7 @@ export const makeStorage = (
       );
 
     const forget = Effect.sync(() => reads.clear());
+    const refresh = Effect.suspend(() => (watching ? Effect.void : forget));
 
     /** Whether this process removed a crashed write's leftovers yet, which it does once. */
     let cleaned = false;
@@ -131,7 +137,7 @@ export const makeStorage = (
         .hold(
           Effect.ensuring(
             Effect.suspend(() => change(files, ids)),
-            Effect.suspend(() => (watching ? Effect.void : forget)),
+            refresh,
           ),
         )
         .pipe(
@@ -192,6 +198,7 @@ export const makeStorage = (
       read: withPlatform(Effect.all({ config: readConfig(root), tree: reads.read(tasksDir) })),
       version: reads.version,
       forget,
+      refresh,
       exists: (at) => fs.exists(at),
       attachments: (dir, owned) => withPlatform(readAttachments(dir, owned)),
       readBytes: (file) => fs.readFile(file),

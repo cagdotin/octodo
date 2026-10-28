@@ -341,6 +341,36 @@ describe("workspace", () => {
     expect(created.id).toBe("HM-14");
   });
 
+  it("gives new tasks ids past a task.md it cannot read: its subtasks' ids and its folder's id", async () => {
+    const created = await Promise.all(
+      [
+        {
+          "HM-1-locked/task.md": "---\nid: HM-1\n---\n",
+          "HM-1-locked/HM-7-sub/task.md": "---\nid: HM-7\n---\n",
+        },
+        { "HM-1-a/task.md": "---\nid: HM-1\n---\n", "HM-9-locked/task.md": "---\nid: HM-9\n---\n" },
+      ].map(async (tree) => {
+        const root = fresh();
+        await run(initWorkspace(root));
+        for (const [file, content] of Object.entries(tree)) write(root, file, content);
+        const locked = join(
+          root,
+          ".octodo",
+          Object.keys(tree).find((file) => file.includes("locked"))!,
+        );
+        chmodSync(locked, 0o000);
+        try {
+          return await run(
+            Effect.flatMap(makeWorkspace("test", root), (ws) => ws.createTask({ title: "New" })),
+          );
+        } finally {
+          chmodSync(locked, 0o644);
+        }
+      }),
+    );
+    expect(created.map((task) => task.id)).toEqual(["HM-8", "HM-10"]);
+  });
+
   it("removes temporary files a crashed write left behind once it holds the owner lock, however fresh", async () => {
     const root = fresh();
     await run(initWorkspace(root));
@@ -641,6 +671,33 @@ describe("workspace", () => {
     expect(files(root)).toEqual(["HM-3-keep/task.md"]);
   });
 
+  it("deletes a task whole or not at all when removing its files stops halfway", async () => {
+    const root = fresh();
+    await run(initWorkspace(root));
+    write(root, "HM-1-a/task.md", "---\nid: HM-1\n---\n");
+    write(root, "HM-1-a/HM-2-b/task.md", "---\nid: HM-2\n---\n");
+    write(root, "HM-3-keep/task.md", "---\nid: HM-3\n---\n");
+    const stopsHalfway = patchedFileSystem((fs) => ({
+      remove: (path) =>
+        Effect.andThen(
+          Effect.ignore(fs.remove(join(path, "task.md"))),
+          Effect.fail(new Error("crashed") as never),
+        ),
+    }));
+    const failed = await run(
+      Effect.flatMap(makeWorkspace("test", root), (ws) => Effect.exit(ws.deleteTask("HM-1"))),
+      stopsHalfway,
+    );
+    expect(Exit.isFailure(failed)).toBe(true);
+    const snapshot = await run(Effect.flatMap(makeWorkspace("test", root), (ws) => ws.snapshot));
+    expect(snapshot.tasks.map((task) => task.id)).toEqual(["HM-3"]);
+    expect(snapshot.diagnostics).toEqual([]);
+    await run(
+      Effect.flatMap(makeWorkspace("test", root), (ws) => ws.updateTask("HM-3", { title: "Kept" })),
+    );
+    expect(files(root)).toEqual(["HM-3-kept/task.md"]);
+  });
+
   it("updates and moves a task that another process moved or renamed since the last read", async () => {
     const root = fresh();
     const result = await run(
@@ -736,6 +793,30 @@ describe("workspace", () => {
       list: "b/c",
       path: ".octodo/b/c/HM-1-inside-c/task.md",
     });
+  });
+
+  it("orders lists around a sibling whose list.md does not read, and leaves that file alone", async () => {
+    const root = fresh();
+    await run(initWorkspace(root));
+    const broken = "---\nname: [unclosed\n---\n";
+    write(root, "a/list.md", "---\norder: a0\n---\n");
+    write(root, "b/list.md", broken);
+    write(root, "c/list.md", "---\norder: a1\n---\n");
+    const result = await run(
+      Effect.gen(function* () {
+        const ws = yield* makeWorkspace("test", root);
+        yield* ws.createList({ name: "D" });
+        yield* ws.moveList("c", { before: "a" });
+        const refused = yield* Effect.flip(ws.moveList("b", { before: "a" }));
+        return { refused, lists: (yield* ws.snapshot).lists.map((list) => list.id) };
+      }),
+    );
+    expect(result.refused).toMatchObject({
+      _tag: "InvalidRequest",
+      message: expect.stringContaining("b/list.md"),
+    });
+    expect(result.lists).toEqual(["c", "a", "d", "b"]);
+    expect(read(root, "b/list.md")).toBe(broken);
   });
 
   it("refuses to move a list into itself or deeper than three levels", async () => {

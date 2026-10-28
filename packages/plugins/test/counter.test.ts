@@ -173,7 +173,7 @@ describe("a counter in a workspace", () => {
     expect((await ws.call("get_task", { id: "HM-1" })).value.kind.fields.resets).toBe(1);
   });
 
-  it("reads as a plain task where the plugin is not enabled, its log an attachment", async () => {
+  it("reads as a plain task where the plugin is not enabled, its log still private", async () => {
     const ws = await fresh([]);
     expect((await ws.call("create_counter", { title: "Smoked" })).error).toMatch(
       /^PluginNotEnabled/,
@@ -187,7 +187,7 @@ describe("a counter in a workspace", () => {
     ws.write("HM-1-smoked/log.jsonl", '{"at":"2026-10-20T08:00:00Z","event":"reset"}\n');
     const plain = (await ws.call("get_task", { id: "HM-1" })).value;
     expect(plain.kind).toBeUndefined();
-    expect(plain.attachments.map((a: { path: string }) => a.path)).toEqual(["log.jsonl"]);
+    expect(plain.attachments).toEqual([]);
   });
 
   it("gives the command line a label from its fields", () => {

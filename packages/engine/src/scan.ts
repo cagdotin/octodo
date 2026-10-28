@@ -1,6 +1,13 @@
 import { Effect, PlatformError, Result } from "effect";
 import { join, relative } from "node:path";
-import { CONFIG_FILE, LIST_FILE, TASK_FILE, TASKS_DIR, idNumber } from "./layout.ts";
+import {
+  CONFIG_FILE,
+  LIST_FILE,
+  TASK_FILE,
+  TASKS_DIR,
+  folderIdNumber,
+  idNumber,
+} from "./layout.ts";
 import {
   DEFAULT_STATUSES,
   type Diagnostic,
@@ -31,8 +38,8 @@ import { markdownTexts, type ListFolder, type TaskFolder, type Tree } from "./st
 export interface Scan {
   readonly snapshot: WorkspaceSnapshot;
   readonly dirs: {
-    /** Each list's absolute folder and the order key from its `list.md`. */
-    readonly lists: ReadonlyMap<string, { readonly dir: string; readonly order: string }>;
+    /** Each list's absolute folder and the order key from its `list.md`, null when it does not read. */
+    readonly lists: ReadonlyMap<string, { readonly dir: string; readonly order: string | null }>;
     /** Each task's absolute folder. */
     readonly tasks: ReadonlyMap<string, string>;
   };
@@ -46,6 +53,8 @@ export interface Scan {
   readonly tree: Tree;
   /** The text of each plugin file of each task of a plugin's kind, by task id and file name. */
   readonly kindFiles: ReadonlyMap<string, ReadonlyMap<string, string>>;
+  /** The `type` each task's frontmatter names, by task id, whether the workspace enables it or not. */
+  readonly types: ReadonlyMap<string, string>;
 }
 
 type Read<A> = Result.Result<A, PlatformError.PlatformError>;
@@ -126,7 +135,8 @@ export const scanWorkspace = (
   const lists: Array<List> = [];
   const taskFiles: Array<TaskFile> = [];
   const kindFiles = new Map<string, ReadonlyMap<string, string>>();
-  const listDirs = new Map<string, { dir: string; order: string }>();
+  const types = new Map<string, string>();
+  const listDirs = new Map<string, { dir: string; order: string | null }>();
   const taskDirs = new Map<string, string>();
   const taskTexts = new Map<string, string>();
   const missingId: Array<string> = [];
@@ -141,6 +151,14 @@ export const scanWorkspace = (
   };
   const takeIds = (texts: ReadonlyArray<string>) => {
     for (const text of texts) takeId(frontmatterId(text));
+  };
+  /**
+   * The ids in a task folder whose `task.md` is not read: those its markdown files have, and as a
+   * floor for new ids, the one its `<id>-<slug>` name gives, in case `task.md` holds it.
+   */
+  const takeUnreadTask = (folder: TaskFolder) => {
+    takeIds(markdownIn(folder));
+    highestId = Math.max(highestId, folderIdNumber(folder.name, config.key) ?? 0);
   };
 
   /**
@@ -180,7 +198,10 @@ export const scanWorkspace = (
       folder.file,
       `Could not read it; this task and its subtasks are not read`,
     );
-    if (text === null) return;
+    if (text === null) {
+      takeUnreadTask(folder);
+      return;
+    }
     const read = parseTask(folder.file, text, {
       list,
       parent,
@@ -193,7 +214,7 @@ export const scanWorkspace = (
     if (read._tag === "Invalid") {
       const { kind, field, detail } = read.problem;
       report(kind, file, `${detail}; this task and its subtasks are not read`, { field });
-      takeIds(markdownIn(folder));
+      takeUnreadTask(folder);
       return;
     }
     waiting.push({ folder, text, list, read });
@@ -220,6 +241,8 @@ export const scanWorkspace = (
       takeId(id);
       taskDirs.set(id, folder.path);
       taskTexts.set(id, text);
+      const type = read.frontmatter["type"];
+      if (typeof type === "string") types.set(id, type);
       const ownFiles = (plugin: Plugin) => {
         const texts = new Map<string, string>();
         for (const [name, read] of folder.owned) {
@@ -259,7 +282,13 @@ export const scanWorkspace = (
   };
 
   const readList = (folder: Tree | ListFolder, list: string | null) => {
-    const children: Array<{ name: string; order: string; folder: ListFolder; list: List }> = [];
+    const children: Array<{
+      name: string;
+      order: string;
+      readable: boolean;
+      folder: ListFolder;
+      list: List;
+    }> = [];
     for (const child of readAhead(folder.path, folder.children) ?? []) {
       if (child.type === "unread") {
         report(child.problem.kind, child.path, child.problem.detail);
@@ -286,6 +315,7 @@ export const scanWorkspace = (
         children.push({
           name: child.name,
           order: listFile?.order ?? "",
+          readable: listFile !== null,
           folder: child,
           list: {
             id: listId,
@@ -298,7 +328,10 @@ export const scanWorkspace = (
     }
     for (const child of children.toSorted(compareOrder)) {
       lists.push(child.list);
-      listDirs.set(child.list.id, { dir: child.folder.path, order: child.order });
+      listDirs.set(child.list.id, {
+        dir: child.folder.path,
+        order: child.readable ? child.order : null,
+      });
       readList(child.folder, child.list.id);
     }
   };
@@ -339,6 +372,7 @@ export const scanWorkspace = (
     missingId,
     tree,
     kindFiles,
+    types,
   };
 };
 

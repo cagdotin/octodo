@@ -59,7 +59,8 @@ Effect 4.0.6's `McpServer` was checked in a stdio prototype:
 ### Files a plugin owns
 
 - A file a plugin owns is that plugin's storage, not part of the API. `read_attachment` refuses it
-  with the same not-found error as a missing file, and the task detail does not list it.
+  with the same not-found error as a missing file, and the task detail does not list it. That
+  holds in every task whose `type` names the plugin, also while the workspace does not enable it.
 - What such a file holds reaches clients only through the plugin's computed fields and its
   read-only operations. The recurring plugin computes the next due date and has an operation that
   lists the occurrences from `log.jsonl`.

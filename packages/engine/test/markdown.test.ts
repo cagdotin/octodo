@@ -1,8 +1,13 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
-import { patchFrontmatter } from "../src/frontmatter.ts";
+import { newFrontmatter, patchFrontmatter } from "../src/frontmatter.ts";
 import { newListFile, readListFile } from "../src/lists/list-file.ts";
 import { editTaskFile, newTaskFile, readTaskFile } from "../src/tasks/task-file.ts";
 import type { AssignedId } from "../src/storage/storage.ts";
+
+const edit = (...args: Parameters<typeof editTaskFile>) => Effect.runSync(editTaskFile(...args));
+const patch = (...args: Parameters<typeof patchFrontmatter>) =>
+  Effect.runSync(patchFrontmatter(...args));
 
 /** Only storage mints an assigned id; these tests write fixed ones. */
 const assigned = (id: string) => id as AssignedId;
@@ -127,7 +132,7 @@ describe("writing task files", () => {
 
   it("keeps unknown keys, their order and comments when updating, and writes no updated key", () => {
     const original = "---\n# owner note\nestimate: 3 # points\nid: GA-1\ntitle: Old\n---\n\nBody\n";
-    expect(editTaskFile(original, { title: "New", priority: "high" })).toBe(
+    expect(edit(original, { title: "New", priority: "high" })).toBe(
       "---\n# owner note\nestimate: 3 # points\nid: GA-1\ntitle: New\npriority: high\n---\n\nBody\n",
     );
   });
@@ -135,14 +140,14 @@ describe("writing task files", () => {
   it("leaves the lines of keys an edit does not touch byte for byte, flow lists included", () => {
     const text =
       "---\nid: GA-1\ntitle: Fix the gate\ntags: [a, b]\nblocked_by: [GA-2, GA-3]\n---\n";
-    expect(editTaskFile(text, { title: "Mend the gate", priority: "high" })).toBe(
+    expect(edit(text, { title: "Mend the gate", priority: "high" })).toBe(
       "---\nid: GA-1\ntitle: Mend the gate\ntags: [a, b]\nblocked_by: [GA-2, GA-3]\npriority: high\n---\n",
     );
   });
 
   it("removes a field set back to its default, and replaces the body", () => {
     expect(
-      editTaskFile("---\nid: GA-1\npriority: high\ntags: [a]\ndue: 2026-01-01\n---\nold\n", {
+      edit("---\nid: GA-1\npriority: high\ntags: [a]\ndue: 2026-01-01\n---\nold\n", {
         due: null,
         priority: "none",
         tags: [],
@@ -152,13 +157,13 @@ describe("writing task files", () => {
   });
 
   it("keeps a title that reads like a default value", () => {
-    expect(editTaskFile("---\nid: GA-1\n---\n", { title: "none" })).toBe(
+    expect(edit("---\nid: GA-1\n---\n", { title: "none" })).toBe(
       "---\nid: GA-1\ntitle: none\n---\n",
     );
   });
 
   it("round-trips: what an update writes reads back as the edited task", () => {
-    const text = editTaskFile("---\nid: GA-1\nestimate: 3\n---\n", {
+    const text = edit("---\nid: GA-1\nestimate: 3\n---\n", {
       title: "Fix it",
       tags: ["x"],
       due: "2026-12-24",
@@ -171,15 +176,29 @@ describe("writing task files", () => {
     });
   });
 
+  it("round-trips a title ending in --- with the keys after it", () => {
+    const text = edit(
+      "---\nid: GA-1\ntitle: Notes ---\ncreated: 2026-10-01T00:00:00.000Z\norder: a0\n---\n\nBody\n",
+      { priority: "high" },
+    );
+    expect(readTask(text)).toMatchObject({
+      title: "Notes ---",
+      priority: "high",
+      created: "2026-10-01T00:00:00.000Z",
+      order: "a0",
+      body: "Body\n",
+    });
+  });
+
   it("adds an id to a hand-written file without touching anything else", () => {
-    expect(patchFrontmatter("Just notes\n", { id: assigned("GA-7") })).toBe(
+    expect(patch("Just notes\n", { id: assigned("GA-7") })).toBe(
       "---\nid: GA-7\n---\n\nJust notes\n",
     );
   });
 
   it("writes only an id the owner-lock holder assigned", () => {
     // @ts-expect-error a plain string is not an assigned id
-    const written = patchFrontmatter(null, { id: "GA-7" });
+    const written = newFrontmatter({ id: "GA-7" });
     expect(written, "the type refuses it, not the runtime").toBe("---\nid: GA-7\n---\n");
   });
 });

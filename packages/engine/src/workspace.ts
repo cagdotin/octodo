@@ -1,4 +1,4 @@
-import { Duration, Effect, Path, Scope, Stream } from "effect";
+import { Duration, Effect, Path, Stream } from "effect";
 import { isWorkspaceKey } from "./layout.ts";
 import {
   InvalidRequest,
@@ -31,7 +31,7 @@ import { makeState, storageError } from "./state.ts";
 import { setPluginEnabled } from "./settings/plugins.ts";
 import { reorderStatuses } from "./statuses/operations.ts";
 import { hasConfig } from "./storage/config.ts";
-import { createWorkspace, type Platform } from "./storage/storage.ts";
+import { createWorkspace } from "./storage/storage.ts";
 import {
   getAttachment,
   listAttachments,
@@ -226,5 +226,3 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     changes: state.storage.changes,
   } satisfies Workspace;
 });
-
-export type MakeWorkspaceRequirements = Platform | Scope.Scope;

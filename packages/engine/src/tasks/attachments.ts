@@ -4,7 +4,6 @@ import {
   type Attachment,
   type AttachmentContent,
   type AttachmentFile,
-  type Task,
 } from "@octodo/contract";
 import { MAX_ATTACHMENT_BYTES } from "@octodo/contract/rules";
 import { Effect } from "effect";
@@ -23,8 +22,8 @@ const attachmentTarget = (
   relativePath: string,
 ) =>
   Effect.gen(function* () {
-    const { snapshot, dirs } = yield* scan;
-    const task = yield* findTask(snapshot, taskId);
+    const { snapshot, dirs, types } = yield* scan;
+    yield* findTask(snapshot, taskId);
     const dir = dirs.tasks.get(taskId)!;
     const segments = relativePath.split(/[\\/]/).filter((part) => part !== "" && part !== ".");
     if (isAbsolute(relativePath) || segments.length === 0)
@@ -45,12 +44,15 @@ const attachmentTarget = (
       !(yield* storageError("Could not read the task folder")(storage.staysInside(dir, segments)))
     )
       return yield* invalid("Attachment paths cannot follow symlinks out of the task folder");
-    return { dir, segments, owned: ownedFiles(plugins, task) };
+    return { dir, segments, owned: ownedFiles(plugins, types.get(taskId)) };
   });
 
-/** The files the plugin of the task's kind owns, which are not its attachments. */
-const ownedFiles = (plugins: State["plugins"], task: Task): ReadonlyArray<string> =>
-  plugins.find((plugin) => plugin.shared.id === task.kind?.id)?.shared.files ?? [];
+/**
+ * The files the plugin the task's `type` names owns, which are not its attachments, whether the
+ * workspace enables that plugin or not.
+ */
+const ownedFiles = (plugins: State["plugins"], type: string | undefined): ReadonlyArray<string> =>
+  plugins.find((plugin) => plugin.shared.id === type)?.shared.files ?? [];
 
 const listed = ({ storage }: State, dir: string, owned: ReadonlyArray<string>) =>
   Effect.map(
@@ -62,9 +64,13 @@ const listed = ({ storage }: State, dir: string, owned: ReadonlyArray<string>) =
 export const listAttachments = (state: State, taskId: string) =>
   state.read(
     Effect.gen(function* () {
-      const { snapshot, dirs } = yield* state.scan;
-      const task = yield* findTask(snapshot, taskId);
-      return yield* listed(state, dirs.tasks.get(taskId)!, ownedFiles(state.plugins, task));
+      const { snapshot, dirs, types } = yield* state.scan;
+      yield* findTask(snapshot, taskId);
+      return yield* listed(
+        state,
+        dirs.tasks.get(taskId)!,
+        ownedFiles(state.plugins, types.get(taskId)),
+      );
     }),
   );
 

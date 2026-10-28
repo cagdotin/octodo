@@ -196,7 +196,9 @@ describe("a plugin's kind in a workspace", () => {
       Command.withSubcommands([
         Command.make("tally").pipe(
           Command.withSubcommands(
-            operationCommands(registry, workspace)
+            operationCommands(registry.operations, (name, input) =>
+              registry.run(name, input, () => workspace),
+            )
               .filter(({ words }) => words[0] === "tally")
               .map(({ command }) => command),
           ),

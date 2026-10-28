@@ -1,6 +1,14 @@
-import { FixAction, InvalidRequest, type Diagnostic } from "@octodo/contract";
+import { connect, Connection } from "@octodo/client";
+import {
+  FixAction,
+  InvalidRequest,
+  type Diagnostic,
+  type FixResult,
+  type WorkspaceOverview,
+} from "@octodo/contract";
+import { inOneWorkspace } from "@octodo/contract/catalog";
 import { isProblem } from "@octodo/contract/rules";
-import { Workspaces, defaultHome, makeRegistry } from "@octodo/engine";
+import { defaultHome, makeRegistry } from "@octodo/engine";
 import { stdioLayer } from "@octodo/mcp";
 import { plugins } from "@octodo/plugins";
 import { DEFAULT_PORT, startServer } from "@octodo/server";
@@ -12,6 +20,9 @@ import { json, operationCommands } from "./commands.ts";
 import { SKILL } from "./skill.ts";
 
 export const home = defaultHome(process.env, homedir());
+
+/** The operations of the catalog and of every plugin octodo has. */
+export const registry = makeRegistry(plugins);
 
 const root = Command.make("octo").pipe(
   Command.withSharedFlags({
@@ -32,23 +43,29 @@ const target = Effect.map(root, (flags) => Option.getOrElse(flags.workspace, () 
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
 /**
- * The workspace named by `--workspace`, or the one containing the current directory. Prints what
- * its files have wrong on stderr, notes aside, and points at `octo doctor` when some of it can be
- * fixed.
+ * Runs an operation in the workspace named by `--workspace`, or the one containing the current
+ * directory. First prints what its files have wrong on stderr, notes aside, and points at
+ * `octo doctor` when some of it can be fixed.
  */
-const workspace = Effect.gen(function* () {
-  const ws = yield* (yield* Workspaces).open(yield* target);
-  const problems = (yield* ws.snapshot).diagnostics.filter(isProblem);
-  for (const diagnostic of problems)
-    yield* Console.error(`warning: ${diagnostic.path}: ${diagnostic.message}`);
-  if (problems.some((diagnostic) => diagnostic.fix?.inFixAll === true))
-    yield* Console.error("Run `octo doctor --fix` to fix what octodo can.");
-  else if (problems.some((diagnostic) => diagnostic.fix !== null))
-    yield* Console.error("Run `octo doctor` to pick the fixes to apply.");
-  return ws;
-});
+const runInWorkspace = (name: string, input: object) =>
+  Effect.gen(function* () {
+    const connection = yield* Connection;
+    if (!inOneWorkspace(registry.operations[name]!)) return yield* connection.run(name, input);
+    const workspace = yield* target;
+    const diagnostics = (yield* connection.run("list_diagnostics", {
+      workspace,
+    })) as ReadonlyArray<Diagnostic>;
+    const problems = diagnostics.filter(isProblem);
+    for (const diagnostic of problems)
+      yield* Console.error(`warning: ${diagnostic.path}: ${diagnostic.message}`);
+    if (problems.some((diagnostic) => diagnostic.fix?.inFixAll === true))
+      yield* Console.error("Run `octo doctor --fix` to fix what octodo can.");
+    else if (problems.some((diagnostic) => diagnostic.fix !== null))
+      yield* Console.error("Run `octo doctor` to pick the fixes to apply.");
+    return yield* connection.run(name, { ...input, workspace });
+  });
 
-const generated = operationCommands(makeRegistry(plugins), workspace);
+const generated = operationCommands(registry.operations, runInWorkspace);
 
 /** The generated commands run by `words`, which start with the group's name when it has one. */
 const commandsIn = (...group: ReadonlyArray<string>) =>
@@ -88,24 +105,33 @@ const doctorCommand = Command.make(
     json,
   },
   Effect.fn(function* (options) {
-    const ws = yield* (yield* Workspaces).open(yield* target);
+    const connection = yield* Connection;
+    const workspace = yield* target;
+    const overview = connection
+      .run("get_workspace", { workspace })
+      .pipe(Effect.map((value) => value as WorkspaceOverview));
     const applyOne = (action: FixAction) =>
       Effect.gen(function* () {
         if (Option.isNone(options.path))
           return yield* new InvalidRequest({ message: "--apply needs the problem's path" });
         const path = options.path.value;
-        const offered = (yield* ws.snapshot).diagnostics.find(
+        const offered = (yield* overview).diagnostics.find(
           (diagnostic) => diagnostic.path === path && diagnostic.fix?.action === action,
         );
         if (offered === undefined)
           return yield* new InvalidRequest({ message: `No problem at ${path} offers ${action}` });
-        return yield* ws.fixDiagnostic({ path, kind: offered.kind, action });
+        return (yield* connection.run("fix_diagnostic", {
+          workspace,
+          path,
+          kind: offered.kind,
+          action,
+        })) as FixResult;
       });
-    const result = Option.isSome(options.apply)
+    const result: FixResult = Option.isSome(options.apply)
       ? yield* applyOne(options.apply.value)
       : options.fix
-        ? yield* ws.fixAll
-        : { fixed: [], failed: [], diagnostics: (yield* ws.snapshot).diagnostics };
+        ? yield* connection.fixAll(workspace)
+        : { fixed: [], failed: [], diagnostics: (yield* overview).diagnostics };
     const problems = result.diagnostics.filter(isProblem);
     if (problems.length > 0) process.exitCode = 1;
     if (options.json) return yield* Console.log(JSON.stringify(result, null, 2));
@@ -113,7 +139,8 @@ const doctorCommand = Command.make(
       yield* Console.log(`fixed: ${fixed.path}: ${fixed.fix?.label ?? fixed.kind}`);
     for (const { diagnostic, error } of result.failed)
       yield* Console.error(`could not fix ${diagnostic.path}: ${error}`);
-    if (result.diagnostics.length === 0) return yield* Console.log(`No problems in ${ws.root}`);
+    if (result.diagnostics.length === 0)
+      return yield* Console.log(`No problems in ${(yield* overview).workspace.root}`);
     if (result.fixed.length > 0 || result.failed.length > 0) yield* Console.log("");
     yield* Console.log(result.diagnostics.map(describeDiagnostic).join("\n\n"));
     const fixable = problems.filter((diagnostic) => diagnostic.fix?.inFixAll === true).length;
@@ -136,7 +163,7 @@ const initCommand = Command.make(
     key: Flag.String("key").pipe(Flag.withDescription("Id prefix, e.g. CT"), Flag.optional),
   },
   Effect.fn(function* ({ dir, name, key }) {
-    const info = yield* (yield* Workspaces).add(dir, {
+    const info = yield* (yield* Connection).addWorkspace(dir, {
       name: Option.getOrUndefined(name),
       key: Option.getOrUndefined(key),
     });
@@ -154,7 +181,7 @@ const workspaceCommand = Command.make("workspace").pipe(
       "remove",
       { id: Argument.String("id") },
       Effect.fn(function* ({ id }) {
-        yield* (yield* Workspaces).remove(id);
+        yield* (yield* Connection).removeWorkspace(id);
         yield* Console.log(`Unregistered ${id}; its files are untouched`);
       }),
     ).pipe(Command.withDescription("Forget a workspace without touching its files")),
@@ -198,13 +225,15 @@ const mcpCommand = Command.make(
   {},
   Effect.fn(function* () {
     const flags = yield* root;
-    const defaultDir = Option.getOrElse(flags.workspace, () => process.cwd());
+    const connection = yield* connect({ home, registry, watch: true });
     return yield* Layer.launch(
-      stdioLayer({ defaultDir }).pipe(
-        Layer.provide(Workspaces.layer({ home, watch: true, plugins })),
-      ),
+      stdioLayer({
+        defaultDir: Option.getOrElse(flags.workspace, () => process.cwd()),
+        operations: connection.operations,
+        run: connection.run,
+      }),
     );
-  }),
+  }, Effect.scoped),
 ).pipe(Command.withDescription("Run the MCP server over stdio, for agents"));
 
 const skillsCommand = Command.make("skills").pipe(

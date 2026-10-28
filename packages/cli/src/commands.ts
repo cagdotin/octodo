@@ -1,25 +1,22 @@
-import type { AttachmentContent, PluginNotEnabled } from "@octodo/contract";
+import type { AttachmentContent } from "@octodo/contract";
 import {
   FileSuccess,
   type CliCommand,
   type Operation,
   type OperationName,
 } from "@octodo/contract/catalog";
-import {
-  type OperationError,
-  type Registry,
-  type Workspace,
-  type Workspaces,
-} from "@octodo/engine";
+import type { Registry } from "@octodo/engine";
 import { Console, Effect, FileSystem, Option, Schema, type PlatformError } from "effect";
 import { Command, Flag } from "effect/cli";
 import { renderers } from "./render.ts";
 import { schemaFlags } from "./schema-flags.ts";
 
+/** Runs an operation by name on its decoded input, without the `workspace` field. */
+export type RunOperation<E, R> = (name: string, input: object) => Effect.Effect<unknown, E, R>;
+
 /**
  * A command generated from an operation, with the words that run it. Its types are stated here,
- * since it is built from the registry at runtime: it fails as any operation can, or as `E` when
- * opening the workspace does.
+ * since it is built from the registry at runtime: it fails as `run` does, or as saving a file.
  */
 export interface OperationCommand<E, R> {
   readonly words: CliCommand["command"];
@@ -27,8 +24,8 @@ export interface OperationCommand<E, R> {
     string,
     unknown,
     {},
-    E | OperationError<OperationName> | PluginNotEnabled | PlatformError.PlatformError,
-    R | Workspaces | FileSystem.FileSystem
+    E | PlatformError.PlatformError,
+    R | FileSystem.FileSystem
   >;
 }
 
@@ -53,12 +50,27 @@ const writeStdout = (bytes: Uint8Array) =>
     process.stdout.write(bytes, () => resume(Effect.void));
   });
 
-/** Prints a success: the renderer's lines, or JSON when there is none or `--json` asks for it. */
-const print = (name: string, result: unknown, asJson: boolean) => {
+/**
+ * Prints a success: the renderer's lines, or JSON when there is none or `--json` asks for it. The
+ * JSON is the success as its schema encodes it, as MCP and HTTP send it, whichever process ran it.
+ */
+const print = (name: string, operation: Operation, result: unknown, asJson: boolean) => {
   const render = renderers[name as OperationName] as
     | ((result: unknown) => ReadonlyArray<string>)
     | undefined;
-  if (render === undefined || asJson) return Console.log(JSON.stringify(result, null, 2));
+  if (render === undefined || asJson)
+    return Console.log(
+      JSON.stringify(
+        Schema.encodeUnknownSync(
+          Schema.toCodecJson(operation.success as Schema.Top) as unknown as Schema.Codec<
+            unknown,
+            unknown
+          >,
+        )(result),
+        null,
+        2,
+      ),
+    );
   return Effect.forEach(render(result), (text) => Console.log(text), { discard: true });
 };
 
@@ -73,11 +85,10 @@ const save = (file: AttachmentContent, to: Option.Option<string>) =>
   });
 
 const commandFor = <E, R>(
-  registry: Registry,
   name: string,
   operation: Operation,
   cli: CliCommand,
-  workspace: Effect.Effect<Workspace, E, R>,
+  run: RunOperation<E, R>,
 ) => {
   const { workspace: _selector, ...fields } = operation.input.fields;
   const flags = schemaFlags(Schema.Struct(fields));
@@ -96,9 +107,9 @@ const commandFor = <E, R>(
       readonly output?: Option.Option<string>;
     }) {
       const input = yield* flags.decode(parsed.input);
-      const result = yield* registry.run(name, input, () => workspace);
+      const result = yield* run(name, input);
       if (isFile) return yield* save(result as AttachmentContent, parsed.output ?? Option.none());
-      yield* print(name, result, parsed.json === true);
+      yield* print(name, operation, result, parsed.json === true);
     }),
   ).pipe(
     Command.validate(({ input }) => Effect.asVoid(flags.decode(input))),
@@ -112,26 +123,23 @@ const commandFor = <E, R>(
 };
 
 /**
- * One command for each of the registry's operations with a `cli` entry. `workspace` opens the
- * workspace the command line names; the operation's `workspace` field is not a flag of its own.
+ * One command for each operation with a `cli` entry. `run` runs it in the workspace the command
+ * line names; the operation's `workspace` field is not a flag of its own.
  */
 export const operationCommands = <E, R>(
-  registry: Registry,
-  workspace: Effect.Effect<Workspace, E, R>,
+  operations: Registry["operations"],
+  run: RunOperation<E, R>,
 ): Array<OperationCommand<E, R>> =>
-  Object.entries(registry.operations).flatMap(([name, operation]) =>
+  Object.entries(operations).flatMap(([name, operation]) =>
     operation.cli === undefined
       ? []
       : [
           {
             words: operation.cli.command,
-            command: commandFor(
-              registry,
-              name,
-              operation,
-              operation.cli,
-              workspace,
-            ) as unknown as OperationCommand<E, R>["command"],
+            command: commandFor(name, operation, operation.cli, run) as unknown as OperationCommand<
+              E,
+              R
+            >["command"],
           },
         ],
   );

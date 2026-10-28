@@ -345,6 +345,9 @@ importers:
       '@effect/platform-node':
         specifier: 4.0.6
         version: 4.0.6(effect@4.0.6)(redis@6.3.0)
+      '@octodo/client':
+        specifier: workspace:*
+        version: link:../client
       '@octodo/contract':
         specifier: workspace:*
         version: link:../contract
@@ -360,6 +363,18 @@ importers:
       '@octodo/server':
         specifier: workspace:*
         version: link:../server
+      effect:
+        specifier: 4.0.6
+        version: 4.0.6
+
+  packages/client:
+    dependencies:
+      '@octodo/contract':
+        specifier: workspace:*
+        version: link:../contract
+      '@octodo/engine':
+        specifier: workspace:*
+        version: link:../engine
       effect:
         specifier: 4.0.6
         version: 4.0.6

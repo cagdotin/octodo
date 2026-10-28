@@ -1,4 +1,5 @@
 import { NodeServices } from "@effect/platform-node";
+import { Connection } from "@octodo/client";
 import {
   catalog,
   FileSuccess,
@@ -17,7 +18,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { octo } from "../src/octo.ts";
+import { octo, registry } from "../src/octo.ts";
 
 /** What a surface gave back, made comparable: a value, a file's bytes, or an error's message. */
 type Outcome =
@@ -278,9 +279,14 @@ const httpSurface = async (): Promise<Surface> => {
   };
 };
 
-const cliSurface = async (): Promise<Surface> => {
-  const { home, root } = await workspaceFor("cli");
-  const saved = join(scratch, "cli", "saved");
+let cliServer: RunningServer | undefined;
+
+/** The CLI on the engine in-process, or through a server running in its octodo home. */
+const cliSurface = async (mode: "embedded" | "served"): Promise<Surface> => {
+  const surface = mode === "embedded" ? "cli" : "cli-served";
+  const { home, root } = await workspaceFor(surface);
+  if (mode === "served") cliServer = await startServer({ home, port: 0 });
+  const saved = join(scratch, surface, "saved");
   return {
     root,
     run: async ({ argv, name }) => {
@@ -307,9 +313,10 @@ const cliSurface = async (): Promise<Surface> => {
           }),
         ),
         Effect.provide(
-          Layer.mergeAll(Workspaces.layer({ home, watch: false }), TestConsole.layer).pipe(
-            Layer.provideMerge(NodeServices.layer),
-          ),
+          Layer.mergeAll(
+            Connection.layer({ home, registry, watch: false }),
+            TestConsole.layer,
+          ).pipe(Layer.provideMerge(NodeServices.layer)),
         ),
       );
       return Effect.runPromise(run as Effect.Effect<Outcome>);
@@ -325,18 +332,19 @@ const comparable = (outcome: Outcome, root: string) =>
       .replaceAll(/"(created|updated)":"[^"]+"/g, '"$1":"<time>"'),
   );
 
-let surfaces: Record<"engine" | "mcp" | "http" | "cli", Surface>;
+let surfaces: Record<"engine" | "mcp" | "http" | "cli" | "cli-served", Surface>;
 
 beforeAll(async () => {
   surfaces = {
     engine: await engineSurface(),
     mcp: await mcpSurface(),
     http: await httpSurface(),
-    cli: await cliSurface(),
+    cli: await cliSurface("embedded"),
+    "cli-served": await cliSurface("served"),
   };
 });
 
-afterAll(() => Promise.all([server?.close(), httpServer?.close()]));
+afterAll(() => Promise.all([server?.close(), httpServer?.close(), cliServer?.close()]));
 
 describe("every operation on every surface", () => {
   it("covers every catalog operation, and every command, in the table", () => {
@@ -351,12 +359,13 @@ describe("every operation on every surface", () => {
     ).toEqual([]);
   });
 
-  it("gives the same result, file or error on the engine, over MCP, over HTTP and from the CLI", async () => {
+  it("gives the same result, file or error on the engine, over MCP, over HTTP and from the CLI with and without a server", async () => {
     const seen = {
       engine: [] as Array<unknown>,
       mcp: [] as Array<unknown>,
       http: [] as Array<unknown>,
       cli: [] as Array<unknown>,
+      "cli-served": [] as Array<unknown>,
     };
     for (const row of ROWS) {
       const step = `${row.name} ${JSON.stringify(row.input)}`;
@@ -366,7 +375,7 @@ describe("every operation on every surface", () => {
         row.before?.(root);
         let outcome = await run(row);
         // The server learns of a hand-made change from its file watcher, a moment later.
-        const served = surface === "mcp" || surface === "http";
+        const served = surface === "mcp" || surface === "http" || surface === "cli-served";
         for (let wait = 0; served && row.before !== undefined && wait < 20; wait++) {
           if (isDeepStrictEqual(comparable(outcome!, root), seen.engine.at(-1))) break;
           await new Promise((resolve) => setTimeout(resolve, 100));
@@ -394,5 +403,6 @@ describe("every operation on every surface", () => {
       ),
     );
     expect(on("cli")).toEqual(without("cli", (row) => row.argv === undefined));
+    expect(on("cli-served")).toEqual(without("cli-served", (row) => row.argv === undefined));
   });
 });

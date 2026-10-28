@@ -1,9 +1,9 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Workspaces } from "@octodo/engine";
-import { plugins } from "@octodo/plugins";
+import { Connection } from "@octodo/client";
+import { VERSION } from "@octodo/contract/api";
 import { Console, Effect } from "effect";
 import { Command } from "effect/cli";
-import { home, octo } from "./octo.ts";
+import { home, octo, registry } from "./octo.ts";
 
 const fail = (message: string) =>
   Effect.andThen(
@@ -12,7 +12,7 @@ const fail = (message: string) =>
   );
 
 octo.pipe(
-  Command.run({ version: "0.0.0" }),
+  Command.run({ version: VERSION }),
   Effect.catchTags({
     TaskNotFound: (error) => fail(error.message),
     WorkspaceNotFound: (error) => fail(`${error.message}. Run \`octo init\` or pass --workspace.`),
@@ -20,10 +20,12 @@ octo.pipe(
     AttachmentNotFound: (error) => fail(error.message),
     AttachmentTooLarge: (error) => fail(error.message),
     PluginNotEnabled: (error) => fail(error.message),
+    ServerMismatch: (error) => fail(error.message),
+    ServerUnavailable: (error) => fail(error.message),
     StorageError: (error) => fail(`${error.message}: ${String(error.cause)}`),
     PlatformError: (error) => fail(error.message),
   }),
-  Effect.provide(Workspaces.layer({ home, watch: false, plugins })),
+  Effect.provide(Connection.layer({ home, registry, watch: false })),
   Effect.provide(NodeServices.layer),
   NodeRuntime.runMain,
 );

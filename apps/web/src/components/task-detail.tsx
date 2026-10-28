@@ -26,7 +26,7 @@ import {
   TagChips,
 } from "@/components/task-bits";
 import { TagsEditor } from "@/components/tags-editor";
-import { KindPanel } from "@/components/task-kind";
+import { KindPanel, offersDue } from "@/components/task-kind";
 import { TaskRelations, useMentions } from "@/components/task-relations";
 import { ParentLink, SubtasksGoing, TaskSubtasks } from "@/components/task-subtasks";
 import {
@@ -251,21 +251,23 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <DuePicker value={task.due} onChange={setDue}>
-          <Button
-            variant="ghost"
-            size="sm"
-            title={task.due ? `Due ${format(parseISO(task.due), "EEE, MMM d, yyyy")}` : undefined}
-            className={cn(
-              "font-mono text-xs font-normal text-muted-foreground",
-              due && "text-foreground",
-              due?.overdue && "text-destructive hover:text-destructive",
-            )}
-          >
-            <CalendarIcon data-icon="inline-start" />
-            {due ? due.label : "Due"}
-          </Button>
-        </DuePicker>
+        {offersDue(task) && (
+          <DuePicker value={task.due} onChange={setDue}>
+            <Button
+              variant="ghost"
+              size="sm"
+              title={task.due ? `Due ${format(parseISO(task.due), "EEE, MMM d, yyyy")}` : undefined}
+              className={cn(
+                "font-mono text-xs font-normal text-muted-foreground",
+                due && "text-foreground",
+                due?.overdue && "text-destructive hover:text-destructive",
+              )}
+            >
+              <CalendarIcon data-icon="inline-start" />
+              {due ? due.label : "Due"}
+            </Button>
+          </DuePicker>
+        )}
 
         <PriorityMenu workspace={workspace} task={task}>
           <Button

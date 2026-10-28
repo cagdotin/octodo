@@ -58,6 +58,7 @@ export class Workspaces extends Context.Service<
   /** `plugins` are the plugins octodo has; a set that cannot all be installed throws. */
   static readonly layer = (options: {
     readonly home: string;
+    /** False only for a process that runs one operation and exits, such as an `octo` command. */
     readonly watch: boolean;
     readonly plugins?: ReadonlyArray<Plugin>;
   }) =>

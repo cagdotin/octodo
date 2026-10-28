@@ -48,8 +48,8 @@ export interface Storage {
   readonly version: () => number;
   readonly forget: Effect.Effect<void>;
   /**
-   * Forgets what was read unless a watcher reports every change, so the next read sees what other
-   * processes wrote: without one (`watch: false`, or a watcher that stopped) nothing else would.
+   * Forgets what was read once the watcher has stopped, so a long-lived process still sees what
+   * others wrote. A process opened with `watch: false` runs one operation, so it keeps its cache.
    */
   readonly refresh: Effect.Effect<void>;
   readonly exists: (path: string) => Effect.Effect<boolean, PlatformError.PlatformError>;
@@ -107,7 +107,8 @@ export const makeStorage = (
       );
 
     const forget = Effect.sync(() => reads.clear());
-    const refresh = Effect.suspend(() => (watching ? Effect.void : forget));
+    let watcherStopped = false;
+    const refresh = Effect.suspend(() => (watcherStopped ? forget : Effect.void));
 
     /** Whether this process removed a crashed write's leftovers yet, which it does once. */
     let cleaned = false;
@@ -137,7 +138,7 @@ export const makeStorage = (
         .hold(
           Effect.ensuring(
             Effect.suspend(() => change(files, ids)),
-            refresh,
+            Effect.suspend(() => (watching ? Effect.void : forget)),
           ),
         )
         .pipe(
@@ -184,6 +185,7 @@ export const makeStorage = (
         Effect.ensuring(
           Effect.sync(() => {
             watching = false;
+            watcherStopped = true;
             reads.clear();
           }),
         ),

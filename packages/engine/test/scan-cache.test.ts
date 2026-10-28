@@ -113,6 +113,7 @@ describe("the kept snapshot", () => {
           write(root, "HM-9-old/task.md", "---\nid: HM-9\ntitle: Old\nblocked_by: [HM-10]\n---\n");
           const ws = yield* makeWorkspace("test", root, { watch });
           for (const [name, change, external] of steps) {
+            if (external && !watch) continue;
             const before = yield* ws.snapshot;
             yield* change(ws, root);
             const { kept, scanned } = yield* settled(ws, root, external ? 5000 : 0);

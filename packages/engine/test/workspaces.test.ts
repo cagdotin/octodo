@@ -1,9 +1,10 @@
 import { NodeServices } from "@effect/platform-node";
-import { Effect, Layer } from "effect";
+import { Effect, FileSystem, Layer } from "effect";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { readRegistry, writeRegistry } from "../src/storage/home.ts";
 import { initWorkspace } from "../src/workspace.ts";
 import { Workspaces } from "../src/workspaces.ts";
 
@@ -135,5 +136,31 @@ describe("workspaces", () => {
     expect(result.snapshot.diagnostics.map((diagnostic) => diagnostic.kind)).toEqual([
       "invalid-config",
     ]);
+  });
+});
+
+describe("the registry file", () => {
+  it("keeps the last workspaces.json whole when a write stops halfway", async () => {
+    const home = mkdtempSync(join(tmpdir(), "octodo-home-"));
+    const stopsHalfway = Layer.effect(
+      FileSystem.FileSystem,
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        return {
+          ...fs,
+          writeFileString: (file: string, text: string) =>
+            Effect.andThen(
+              fs.writeFileString(file, text.slice(0, 5)),
+              Effect.fail(new Error("crashed") as never),
+            ),
+        };
+      }),
+    ).pipe(Layer.provideMerge(NodeServices.layer));
+    const before = { workspaces: [{ id: "home", root: join(home, "home") }] };
+    const node = <A, E>(effect: Effect.Effect<A, E, any>, layer = NodeServices.layer) =>
+      Effect.runPromise(Effect.provide(effect, layer) as Effect.Effect<A, E>);
+    await node(writeRegistry(home, before));
+    await node(Effect.exit(writeRegistry(home, { workspaces: [] })), stopsHalfway);
+    expect(await node(readRegistry(home))).toEqual(before);
   });
 });

@@ -25,17 +25,18 @@ export const readRegistry = (home: string): Effect.Effect<Registry, StorageError
     }).pipe(Effect.mapError(fail(`Could not read ${file}`)));
   });
 
-/** Writes `<home>/workspaces.json`, creating `<home>` if need be. */
+/** Writes `<home>/workspaces.json` whole, creating `<home>` if need be. */
 export const writeRegistry = (
   home: string,
   registry: Registry,
 ): Effect.Effect<void, StorageError, Platform> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const file = registryFile(yield* Path.Path, home);
+    const path = yield* Path.Path;
+    const file = registryFile(path, home);
     yield* Effect.gen(function* () {
       yield* fs.makeDirectory(home, { recursive: true });
-      yield* fs.writeFileString(file, `${JSON.stringify(registry, null, 2)}\n`);
+      yield* writeFileAtomic(fs, path, file, `${JSON.stringify(registry, null, 2)}\n`);
     }).pipe(Effect.mapError(fail(`Could not write ${file}`)));
   });
 

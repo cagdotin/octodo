@@ -1,7 +1,7 @@
 ---
 id: OCT-72
 title: Skills stop planning for sync tools and hand edits as writers
-status: todo
+status: done
 priority: medium
 tags:
   - agents

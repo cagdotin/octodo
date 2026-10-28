@@ -3,6 +3,7 @@ export * from "./workspaces.ts";
 export { readServerInfo, removeServerInfo, writeServerInfo } from "./storage/home.ts";
 export { mediaType } from "./tasks/media-type.ts";
 export type { TaskFile } from "./tasks/task-file.ts";
+export type { EntryFile } from "./entries/entry-file.ts";
 export * from "./operations.ts";
 export {
   definePlugin,
@@ -11,6 +12,7 @@ export {
   type KindInput,
   type KindProblem,
   type KindRead,
+  type NewEntry,
   type Plugin,
   type PluginHandler,
   type PluginWorkspace,

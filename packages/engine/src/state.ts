@@ -1,6 +1,5 @@
 import { Duration, Effect, Scope, Semaphore } from "effect";
-import { join, relative } from "node:path";
-import { TASK_FILE } from "./layout.ts";
+import { relative } from "node:path";
 import { InvalidRequest, StorageError, type WorkspaceBusy } from "@octodo/contract";
 import { patchFrontmatter } from "./frontmatter.ts";
 import { fileText, scanWorkspace, type Scan } from "./scan.ts";
@@ -45,10 +44,9 @@ export const readBack = storageError("Could not read the workspace back after wr
 export const nextId = (ids: Ids, { nextIdNumber, snapshot }: Scan): AssignedId =>
   ids.next(snapshot.workspace.key, nextIdNumber);
 
-/** Gives each task file without an id the next id. */
+/** Gives each task or entry file without an id the next id. */
 const giveIds = (files: Files, ids: Ids, scan: Scan) =>
-  Effect.forEach(scan.missingId, (dir) => {
-    const file = join(dir, TASK_FILE);
+  Effect.forEach(scan.missingId, (file) => {
     const shown = relative(scan.snapshot.workspace.root, file);
     const taskId = nextId(ids, scan);
     return Effect.gen(function* () {
@@ -73,6 +71,11 @@ export const makeState = (
     const storage = yield* makeStorage(root, {
       ...options,
       owned: [...new Set(plugins.flatMap((plugin) => plugin.shared.files))],
+      sections: new Map(
+        plugins.flatMap(({ shared }) =>
+          shared.section === undefined ? [] : [[shared.id, shared.section.marker] as const],
+        ),
+      ),
     });
     const lock = yield* Semaphore.make(1);
     const scanned = Effect.map(storage.read, (read) => scanWorkspace(id, root, read, plugins));

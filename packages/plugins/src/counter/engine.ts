@@ -30,10 +30,10 @@ const runStarts = (created: string | null, resets: ReadonlyArray<string>) => {
 };
 
 export const counter = definePlugin(counterShared, {
-  read: ({ task, files }) => {
+  read: ({ entry, files }) => {
     const log = readLog(files.get(LOG) ?? "");
     const resets = log.occurrences;
-    const starts = runStarts(task.created, resets);
+    const starts = runStarts(entry.created, resets);
     const fields: CounterFields = {
       since: starts.at(-1) ?? null,
       last: resets.at(-1) ?? null,

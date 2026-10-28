@@ -1,8 +1,9 @@
 import { Data, Effect, Predicate } from "effect";
 import { generateKeyBetween } from "fractional-indexing";
 import { isMap, parseDocument, type Document } from "yaml";
-import { isLinkField } from "./layout.ts";
+import { isLinkField, isTaskId } from "./layout.ts";
 import type { Problem } from "@octodo/contract";
+import { humanize } from "@octodo/contract/rules";
 import type { AssignedId } from "./storage/storage.ts";
 
 export type FrontmatterRead<A> =
@@ -16,6 +17,31 @@ export const absent = (value: unknown): boolean =>
 
 export const stringOrNull = (value: unknown): string | null =>
   typeof value === "string" && value.length > 0 ? value : null;
+
+/** The title of a task or entry without one, from its `<id>-<slug>` folder name. */
+export const folderTitle = (folder: string, id: string): string =>
+  humanize(folder.startsWith(id) ? folder.slice(id.length) : folder) || id;
+
+/** The `id` in a task's or entry's frontmatter, or why the file is not read with one. */
+export const readId = (
+  data: Readonly<Record<string, unknown>>,
+  key: string,
+):
+  | string
+  | { readonly _tag: "MissingId" }
+  | { readonly _tag: "Invalid"; readonly problem: Problem } => {
+  const id = data["id"];
+  if (absent(id)) return { _tag: "MissingId" };
+  if (typeof id === "string" && isTaskId(id, key)) return id;
+  return {
+    _tag: "Invalid",
+    problem: {
+      kind: "malformed-id",
+      field: "id",
+      detail: `The id ${JSON.stringify(id)} is not a task id such as HM-1`,
+    },
+  };
+};
 
 /** A fractional order key, or "" (unordered) for none or one written by hand that is not a key. */
 export const readOrder = (value: unknown): string => {

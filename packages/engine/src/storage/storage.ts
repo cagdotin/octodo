@@ -87,15 +87,20 @@ export const makeStorage = (
     readonly watch?: boolean;
     /** How long a write waits for another process to release the owner lock. */
     readonly lockWait?: Duration.Input;
-    /** The files plugins own at the top of a task folder, which reads take in too. */
+    /** The files plugins own at the top of a task or entry folder, which reads take in too. */
     readonly owned?: ReadonlyArray<string>;
+    /** The marker file of each section a plugin adds, by the section's id. */
+    readonly sections?: ReadonlyMap<string, string>;
   } = {},
 ): Effect.Effect<Storage, never, Platform | Scope.Scope> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const dir = path.join(root, OCTODO_DIR);
-    const reads = makeTreeReader(options.owned);
+    const reads = makeTreeReader({
+      owned: options.owned ?? [],
+      sections: options.sections ?? new Map(),
+    });
     const files = makeFiles(fs, path, root, reads.changed);
     const changes = yield* PubSub.sliding<void>(16);
     let watching = options.watch === true;

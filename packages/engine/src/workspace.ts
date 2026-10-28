@@ -12,6 +12,7 @@ import {
   TaskNotFound,
   type CreateListInput,
   type CreateTaskInput,
+  type Entry,
   type FixRequest,
   type FixResult,
   type List,
@@ -39,7 +40,8 @@ import {
   readAttachment,
   writeAttachment,
 } from "./tasks/attachments.ts";
-import type { KindChange, Plugin } from "./plugins/plugin.ts";
+import { createEntry } from "./entries/operations.ts";
+import type { KindChange, NewEntry, Plugin } from "./plugins/plugin.ts";
 import {
   createTask,
   deleteTask,
@@ -73,6 +75,15 @@ export interface Workspace {
     taskId: string,
     change: KindChange,
   ) => Effect.Effect<Task, TaskNotFound | InvalidRequest | StorageError | WorkspaceBusy>;
+  /**
+   * Creates an entry in the section the plugin `plugin` adds, with that plugin's keys. Its plugin's
+   * handlers reach it as `createEntry`.
+   */
+  readonly createEntry: (
+    plugin: string,
+    input: NewEntry,
+    keys: Readonly<Record<string, unknown>>,
+  ) => Effect.Effect<Entry, InvalidRequest | StorageError | WorkspaceBusy>;
   /** The text of the plugin `plugin`'s files in a task of its kind, refusing any other task. */
   readonly kindFiles: (
     plugin: string,
@@ -219,6 +230,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     getTask: (taskId) => getTask(state, taskId),
     createTask: (input, kind?: NewKind) => createTask(state, input, kind),
     editKind: (plugin, taskId, change) => editKind(state, plugin, taskId, change),
+    createEntry: (plugin, input, keys) => createEntry(state, plugin, input, keys),
     kindFiles: (plugin, taskId) => kindFiles(state, plugin, taskId),
     updateTask: (taskId, input) => updateTask(state, taskId, input),
     moveTask: (taskId, input) => moveTask(state, taskId, input),

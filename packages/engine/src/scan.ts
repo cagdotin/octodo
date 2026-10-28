@@ -13,6 +13,7 @@ import {
   DEFAULT_STATUSES,
   type Diagnostic,
   type CoreDiagnosticKind,
+  type Entry,
   type List,
   type WorkspaceSnapshot,
 } from "@octodo/contract";
@@ -20,7 +21,8 @@ import { defaultStatus, humanize } from "@octodo/contract/rules";
 import { isNotFound } from "./storage/files.ts";
 import { frontmatterId, hasFrontmatter, readFrontmatter } from "./frontmatter.ts";
 import { diagnostic, kindDiagnostic, type DiagnosticOptions } from "./health/problems.ts";
-import { applyKind, enabledPlugins } from "./plugins/kinds.ts";
+import { readEntryFile } from "./entries/entry-file.ts";
+import { applyKind, enabledPlugins, readOwn } from "./plugins/kinds.ts";
 import type { Plugin } from "./plugins/plugin.ts";
 import { readListFile } from "./lists/list-file.ts";
 import { compareOrder, compareTasks } from "./place.ts";
@@ -35,7 +37,9 @@ import {
 import type { StorageRead } from "./storage/storage.ts";
 import {
   markdownTexts,
+  type EntryFolder,
   type ListFolder,
+  type SectionFolder,
   type TaskFolder,
   type TasksFolder,
   type Tree,
@@ -50,16 +54,21 @@ export interface Scan {
     readonly lists: ReadonlyMap<string, { readonly dir: string; readonly order: string | null }>;
     /** Each task's absolute folder. */
     readonly tasks: ReadonlyMap<string, string>;
+    /** Each entry's absolute folder, in the sections the workspace enables. */
+    readonly entries: ReadonlyMap<string, string>;
   };
-  /** Every id a markdown file on disk has, in tasks read or not: links to them are not broken. */
+  /**
+   * Every id a markdown file on disk has outside sections' entries, in tasks read or not: links to
+   * them are not broken.
+   */
   readonly idsOnDisk: ReadonlySet<string>;
-  /** The number of the next new task id: past every id on disk, in tasks read or not. */
+  /** The number of the next new id: past every id on disk, in every section, read or not. */
   readonly nextIdNumber: number;
-  /** Task folders whose `task.md` has no id yet, each reported as `missing-id`. */
+  /** Each `task.md` or entry marker file that has no id yet, each reported as `missing-id`. */
   readonly missingId: ReadonlyArray<string>;
   /** What the scan read, as the folder grammar has it. */
   readonly tree: Tree;
-  /** The text of each plugin file of each task of a plugin's kind, by task id and file name. */
+  /** The text of each plugin file of each task of a plugin's kind or entry, by id and file name. */
   readonly kindFiles: ReadonlyMap<string, ReadonlyMap<string, string>>;
   /** The `type` each task's frontmatter names, by task id, whether the workspace enables it or not. */
   readonly types: ReadonlyMap<string, string>;
@@ -146,6 +155,10 @@ export const scanWorkspace = (
   const types = new Map<string, string>();
   const listDirs = new Map<string, { dir: string; order: string | null }>();
   const taskDirs = new Map<string, string>();
+  const entryDirs = new Map<string, string>();
+  const entries: Array<Omit<Entry, "mentionedIn">> = [];
+  /** The ids in sections' folders, read or not, which a link to a task cannot name. */
+  const sectionIds = new Set<string>();
   const taskTexts = new Map<string, string>();
   const missingId: Array<string> = [];
   /** Markdown files loose in a list, which are not tasks. */
@@ -232,7 +245,7 @@ export const scanWorkspace = (
     const file = join(folder.path, TASK_FILE);
     let id: string | null = null;
     if (read._tag === "MissingId") {
-      missingId.push(folder.path);
+      missingId.push(file);
       report("missing-id", file, "This task has no id yet", { field: "id" });
     } else if (taskDirs.has(read.value.id)) {
       const original = taskDirs.get(read.value.id)!;
@@ -251,16 +264,10 @@ export const scanWorkspace = (
       taskTexts.set(id, text);
       const type = read.frontmatter["type"];
       if (typeof type === "string") types.set(id, type);
-      const ownFiles = (plugin: Plugin) => {
-        const texts = new Map<string, string>();
-        for (const [name, read] of folder.owned) {
-          if (!plugin.shared.files.includes(name)) continue;
-          const content = readAhead(join(folder.path, name), read);
-          if (content !== null) texts.set(name, content);
-        }
-        return texts;
-      };
-      const kind = applyKind(read.value, read.frontmatter, ownFiles, { installed, enabled });
+      const kind = applyKind(read.value, read.frontmatter, (plugin) => ownFiles(folder, plugin), {
+        installed,
+        enabled,
+      });
       taskFiles.push(kind.task);
       for (const problem of [...read.problems, ...kind.problems])
         report(problem.kind, file, problem.detail, problem);
@@ -284,6 +291,17 @@ export const scanWorkspace = (
       if (child.type === "task") readTask(child, list, id);
       else if (child.type === "unread") reportUnread(child);
     }
+  };
+
+  /** The text of each of `plugin`'s files the folder has, by name. */
+  const ownFiles = (folder: TaskFolder | EntryFolder, plugin: Plugin) => {
+    const texts = new Map<string, string>();
+    for (const [name, read] of folder.owned) {
+      if (!plugin.shared.files.includes(name)) continue;
+      const content = readAhead(join(folder.path, name), read);
+      if (content !== null) texts.set(name, content);
+    }
+    return texts;
   };
 
   const reportUnread = (child: Unread) => {
@@ -344,11 +362,94 @@ export const scanWorkspace = (
     }
   };
 
+  /** The ids in an entry folder whose marker file is not read, as `takeUnreadTask` takes them. */
+  const takeUnreadEntry = (folder: EntryFolder) => {
+    if (Result.isSuccess(folder.file)) takeIds([folder.file.success]);
+    highestId = Math.max(highestId, folderIdNumber(folder.name, config.key) ?? 0);
+  };
+
+  const readEntry = (folder: EntryFolder, plugin: Plugin, marker: string) => {
+    const file = join(folder.path, marker);
+    const text = readAhead(file, folder.file, "Could not read it; this entry is not read");
+    if (text === null) return takeUnreadEntry(folder);
+    const read = readEntryFile(text, {
+      path: rel(file),
+      folder: folder.name,
+      updated: folder.updated === null ? null : folder.updated.toISOString(),
+      key: config.key,
+    });
+    if (read._tag === "Invalid") {
+      const { kind, field, detail } = read.problem;
+      report(kind, file, `${detail}; this entry is not read`, { field });
+      return takeUnreadEntry(folder);
+    }
+    if (read._tag === "MissingId") {
+      missingId.push(file);
+      report("missing-id", file, "This entry has no id yet", { field: "id" });
+      return;
+    }
+    const { value } = read;
+    const original = taskDirs.get(value.id) ?? entryDirs.get(value.id);
+    if (original !== undefined) {
+      report("duplicate-id", file, `${rel(original)} already has the id ${value.id}`, {
+        field: "id",
+        fix: null,
+      });
+      return takeIds([text]);
+    }
+    takeId(value.id);
+    entryDirs.set(value.id, folder.path);
+    const files = ownFiles(folder, plugin);
+    const { extra, fields, problems } = readOwn(plugin, value, read.frontmatter, files);
+    entries.push({ ...value, extra, section: plugin.shared.id, fields });
+    kindFiles.set(value.id, files);
+    for (const problem of problems)
+      diagnostics.push(
+        kindDiagnostic(
+          plugin.shared,
+          problem,
+          rel(problem.file === undefined ? file : join(folder.path, problem.file)),
+        ),
+      );
+    if (idNumber(value.id, config.key) === null)
+      report(
+        "foreign-id",
+        file,
+        `The id ${value.id} does not use the workspace key ${config.key}`,
+        {
+          field: "id",
+        },
+      );
+  };
+
+  /** A section's entries; only their ids when the workspace does not enable its plugin. */
+  const readSection = (folder: SectionFolder) => {
+    const plugin = enabled.find((candidate) => candidate.shared.id === folder.name);
+    const children =
+      plugin === undefined
+        ? Result.isSuccess(folder.children)
+          ? folder.children.success
+          : []
+        : (readAhead(folder.path, folder.children) ?? []);
+    const before = new Set(idsOnDisk);
+    for (const child of children) {
+      if (plugin === undefined) {
+        if (child.type === "unread") takeIds(child.markdown);
+        else takeUnreadEntry(child);
+      } else if (child.type === "unread") reportUnread(child);
+      else readEntry(child, plugin, folder.marker);
+    }
+    for (const taken of idsOnDisk) if (!before.has(taken)) sectionIds.add(taken);
+  };
+
+  const sections: Array<SectionFolder> = [];
   for (const child of readAhead(tree.path, tree.children) ?? []) {
     if (child.type === "tasks") readList(child, null);
+    else if (child.type === "section") sections.push(child);
     else reportUnread(child);
   }
   for (let next = waiting.shift(); next !== undefined; next = waiting.shift()) serveTask(next);
+  for (const section of sections) readSection(section);
 
   for (const stray of strays) reportStray(stray);
   const { statuses, unknown } = shownStatuses(configured, taskFiles);
@@ -362,23 +463,26 @@ export const scanWorkspace = (
   }
 
   const compare = compareTasks(config.key);
-  const { tasks, diagnostics: linkDiagnostics } = linkTasks(
+  const linkable = new Set([...idsOnDisk].filter((onDisk) => !sectionIds.has(onDisk)));
+  const linked = linkTasks(
     taskFiles.toSorted(compare),
     statuses,
-    idsOnDisk,
+    linkable,
+    entries.toSorted(compare),
   );
-  diagnostics.push(...linkDiagnostics);
+  diagnostics.push(...linked.diagnostics);
   return {
     snapshot: {
       workspace: { id, name: config.name, key: config.key, root },
       statuses,
       lists,
-      tasks,
+      tasks: linked.tasks,
+      ...(linked.entries.length === 0 ? {} : { entries: linked.entries }),
       diagnostics,
       ...(enabled.length === 0 ? {} : { plugins: enabled.map((plugin) => plugin.shared.id) }),
     },
-    dirs: { lists: listDirs, tasks: taskDirs },
-    idsOnDisk,
+    dirs: { lists: listDirs, tasks: taskDirs, entries: entryDirs },
+    idsOnDisk: linkable,
     nextIdNumber: highestId + 1,
     missingId,
     tree,

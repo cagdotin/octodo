@@ -65,7 +65,32 @@ export interface TasksFolder {
   readonly children: Read<ReadonlyArray<ListChild>>;
 }
 
-export type TopChild = TasksFolder | Unread;
+/** A folder in a section's folder that holds the section's marker file. */
+export interface EntryFolder {
+  readonly type: "entry";
+  readonly name: string;
+  readonly path: string;
+  /** The text of its marker file. */
+  readonly file: Read<string>;
+  /** When its marker file last changed. */
+  readonly updated: Date | null;
+  /** The text of each file it has that a plugin owns, by name. */
+  readonly owned: ReadonlyMap<string, Read<string>>;
+}
+
+/** `.octodo/<section>/`, the folder of a section a plugin adds, whether the workspace enables it or not. */
+export interface SectionFolder {
+  readonly type: "section";
+  /** The section's id: the id of the plugin that adds it. */
+  readonly name: string;
+  readonly path: string;
+  /** The marker file its entries hold. */
+  readonly marker: string;
+  /** In name order. */
+  readonly children: Read<ReadonlyArray<EntryFolder | Unread>>;
+}
+
+export type TopChild = TasksFolder | SectionFolder | Unread;
 
 /** `.octodo/`: its sections, and what else is at its top besides config.json and bookkeeping. */
 export interface Tree {
@@ -130,10 +155,16 @@ const unread = (path: string, problem: Problem, markdown: ReadonlyArray<string> 
   markdown,
 });
 
+/** What the reader reads besides tasks: the files plugins own, and each section's marker by id. */
+interface Plugged {
+  readonly owned: ReadonlyArray<string>;
+  readonly sections: ReadonlyMap<string, string>;
+}
+
 const readWith = (
   dir: string,
   cache: Cache,
-  owned: ReadonlyArray<string>,
+  { owned, sections }: Plugged,
 ): Effect.Effect<Tree, never, Platform> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -328,8 +359,8 @@ const readWith = (
       }).pipe(Effect.map((found) => Result.succeed(found.filter((child) => child !== null))));
     };
 
-    /** What is at `at` at the top of `.octodo/`, which is not a section: never read. */
-    const misplaced = (at: string, node: Node) =>
+    /** The folder or file at `at`, which is not where it belongs: never read. */
+    const misplaced = (at: string, node: Node, detail: string) =>
       Effect.gen(function* () {
         const text = node.type === "file" && at.endsWith(".md") ? yield* textAt(at) : null;
         const markdown =
@@ -338,16 +369,46 @@ const readWith = (
             : Result.isSuccess(text)
               ? [text.success]
               : [];
-        return unread(
-          at,
-          {
-            kind: "misplaced",
-            field: null,
-            detail: "This is neither config.json nor the folder of a section",
-          },
-          markdown,
-        );
+        return unread(at, { kind: "misplaced", field: null, detail }, markdown);
       });
+
+    /** The entry `name` in the section folder `dir`, whose entries hold `marker`. */
+    const sectionEntry = (
+      dir: string,
+      name: string,
+      marker: string,
+    ): Effect.Effect<EntryFolder | Unread | null> => {
+      const at = path.join(dir, name);
+      const notEntry = `This is not a folder with ${marker}`;
+      return Effect.gen(function* () {
+        const node = yield* nodeAt(at);
+        if (node === null) return null;
+        if (node.type === "symlink")
+          return unread(at, {
+            kind: "symlink",
+            field: null,
+            detail: `This is a link to ${node.target}`,
+          });
+        if (node.type !== "folder") return yield* misplaced(at, node, notEntry);
+        const file = path.join(at, marker);
+        const found = yield* cache.read(
+          file,
+          "marker",
+          readMarker(node.names, file),
+          (read) => read !== null && (read.type !== "file" || Result.isSuccess(read.text)),
+        );
+        if (found === null) return yield* misplaced(at, node, notEntry);
+        if (found.type === "symlink") return yield* linkedFolder(at, node, marker, found);
+        return {
+          type: "entry" as const,
+          name,
+          path: at,
+          file: found.text,
+          updated: found.mtime,
+          owned: yield* ownedIn(at, node.names),
+        };
+      }).pipe(unreadOnError(at));
+    };
 
     /** The entry `name` at the top of `.octodo/`; null for config.json. */
     const top = (name: string): Effect.Effect<TopChild | null> => {
@@ -362,9 +423,28 @@ const readWith = (
             field: null,
             detail: `This is a link to ${node.target}`,
           });
-        if (node.type !== "folder" || name !== TASKS_SECTION) return yield* misplaced(at, node);
-        const children = yield* childrenOf(at, node.names, { kind: "list", depth: 0 });
-        return { type: "tasks" as const, path: at, children };
+        const marker = sections.get(name);
+        if (node.type !== "folder" || (name !== TASKS_SECTION && marker === undefined))
+          return yield* misplaced(
+            at,
+            node,
+            "This is neither config.json nor the folder of a section",
+          );
+        if (marker === undefined) {
+          const children = yield* childrenOf(at, node.names, { kind: "list", depth: 0 });
+          return { type: "tasks" as const, path: at, children };
+        }
+        const { names } = node;
+        const children = Result.isFailure(names)
+          ? Result.fail(names.failure)
+          : Result.succeed(
+              (yield* Effect.forEach(
+                visible(names.success),
+                (child) => sectionEntry(at, child, marker),
+                { concurrency: ENTRIES_AT_ONCE },
+              )).filter((child) => child !== null),
+            );
+        return { type: "section" as const, name, path: at, marker, children };
       }).pipe(unreadOnError(at));
     };
 
@@ -392,11 +472,16 @@ const unreadOnError =
       ),
     );
 
-/** `owned` names the files at the top of a task folder that plugins own, which it reads too. */
-export const makeTreeReader = (owned: ReadonlyArray<string> = []): TreeReader => {
+/**
+ * `owned` names the files at the top of a task or entry folder that plugins own, which it reads
+ * too; `sections` the marker file of each section a plugin adds, by the section's id.
+ */
+export const makeTreeReader = (
+  plugged: Plugged = { owned: [], sections: new Map() },
+): TreeReader => {
   const cache = makeCache();
   return {
-    read: (dir) => readWith(dir, cache, owned),
+    read: (dir) => readWith(dir, cache, plugged),
     changed: cache.changed,
     clear: cache.clear,
     version: cache.version,
@@ -413,7 +498,10 @@ const tasksOf = (tree: Tree): Read<ReadonlyArray<ListChild>> => {
 
 const textsByTree = new WeakMap<Tree, ReadonlyMap<string, string>>();
 
-/** The text of every `task.md`, `list.md` and other markdown file the tree read, by absolute path. */
+/**
+ * The text of every `task.md`, `list.md`, entry marker and other markdown file the tree read, by
+ * absolute path.
+ */
 export const markdownTexts = (tree: Tree): ReadonlyMap<string, string> => {
   const kept = textsByTree.get(tree);
   if (kept !== undefined) return kept;
@@ -431,6 +519,10 @@ export const markdownTexts = (tree: Tree): ReadonlyMap<string, string> => {
     }
   };
   visit(tasksOf(tree));
+  for (const section of Result.isSuccess(tree.children) ? tree.children.success : [])
+    if (section.type === "section" && Result.isSuccess(section.children))
+      for (const entry of section.children.success)
+        if (entry.type === "entry") add(`${entry.path}${sep}${section.marker}`, entry.file);
   textsByTree.set(tree, texts);
   return texts;
 };

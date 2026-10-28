@@ -189,7 +189,7 @@ describe("scanWorkspace", () => {
     ).pipe(Layer.provideMerge(NodeServices.layer));
 
     const { snapshot, missingId } = await run(scan(root), refuseWrites);
-    expect(missingId).toEqual([dirname(file)]);
+    expect(missingId).toEqual([file]);
     expect(snapshot.diagnostics.map((diagnostic) => diagnostic.kind)).toEqual(["missing-id"]);
     expect(readFileSync(file, "utf8")).toBe("Pull the weeds\n");
   });

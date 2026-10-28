@@ -108,7 +108,7 @@ export const PROBLEMS = {
   },
   misplaced: {
     remedy:
-      "The top of .octodo/ holds only config.json and the folders of sections, such as tasks/; move it into one or delete it. Until then it is not read",
+      "The top of .octodo/ holds only config.json and the folders of sections, such as tasks/, and a section's folder only its entries; move it where it belongs or delete it. Until then it is not read",
     fixes: [],
   },
 } as const satisfies Record<CoreDiagnosticKind, Remedy>;

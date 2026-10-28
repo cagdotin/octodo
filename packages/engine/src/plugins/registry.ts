@@ -30,6 +30,7 @@ const forPlugin = (workspace: Workspace, plugin: string): PluginWorkspace => ({
   ...workspace,
   createOfKind: (input, keys) => workspace.createTask(input, { id: plugin, keys }),
   editOfKind: (taskId, change) => workspace.editKind(plugin, taskId, change),
+  createInSection: (input, keys) => workspace.createEntry(plugin, input, keys),
   filesOfKind: (taskId) => workspace.kindFiles(plugin, taskId),
 });
 

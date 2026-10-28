@@ -4,6 +4,7 @@ import {
   Tags,
   type AttachmentContent,
   type CreateTaskInput,
+  type Entry,
   type InvalidRequest,
   type StorageError,
   type WorkspaceBusy,
@@ -14,9 +15,10 @@ import { catalog, type FileSuccess, type Operation } from "@octodo/contract/cata
 import type { PluginShared } from "@octodo/contract/plugin";
 import { LINK_KINDS } from "@octodo/contract/rules";
 import { Schema, type Effect } from "effect";
+import { ENTRY_KEYS, type EntryFile } from "../entries/entry-file.ts";
+import { TASKS_SECTION } from "../layout.ts";
 import { MARKERS } from "../storage/tree.ts";
 import { isHidden } from "../storage/bookkeeping.ts";
-import type { TaskFile } from "../tasks/task-file.ts";
 import type { Workspace } from "../workspace.ts";
 
 /** The plain task: the kind of a task without `type`, and the frontmatter keys every task has. */
@@ -45,9 +47,12 @@ export const plainTask = {
   problems: {},
 } satisfies PluginShared;
 
-/** A task of a plugin's kind as its reader gets it: read as a plain task, with its keys and files. */
+/**
+ * A task of a plugin's kind, or an entry of its section, as its reader gets it: with what every
+ * task and entry has, its keys and its files.
+ */
 export interface KindInput {
-  readonly task: TaskFile;
+  readonly entry: EntryFile;
   /** The values of the plugin's keys the frontmatter has, not yet decoded. */
   readonly keys: Readonly<Record<string, unknown>>;
   /** The text of each of the plugin's files the task folder has, by name. */
@@ -80,8 +85,19 @@ export interface KindChange {
   readonly files?: Readonly<Record<string, (text: string | null) => string>>;
 }
 
-/** The workspace a plugin's handler gets: the plain task's, and writes of its own kind. */
+/** What a new entry of a plugin's section starts with besides its plugin's keys. */
+export interface NewEntry {
+  readonly title: string;
+  readonly body?: string | undefined;
+}
+
+/** The workspace a plugin's handler gets: the plain task's, and writes of its own kind or section. */
 export interface PluginWorkspace extends Workspace {
+  /** Creates an entry in the plugin's section with these keys, last in its order. */
+  readonly createInSection: (
+    input: NewEntry,
+    keys: Readonly<Record<string, unknown>>,
+  ) => Effect.Effect<Entry, InvalidRequest | StorageError | WorkspaceBusy>;
   /** Creates a task of the plugin's kind with these keys. */
   readonly createOfKind: (
     input: CreateTaskInput,
@@ -112,11 +128,11 @@ export type PluginHandler<O extends Operation = Operation> = (
   input: Omit<O["input"]["Type"], "workspace">,
 ) => Effect.Effect<Success<O>, O["error"]["Type"]>;
 
-/** A plugin's `engine` half: its shared half, the reader of its tasks, and its handlers. */
+/** A plugin's `engine` half: its shared half, the reader of its tasks or entries, its handlers. */
 export interface Plugin {
   readonly shared: PluginShared;
-  /** Reads a task of its kind into its computed fields and the problems it has. */
-  readonly read: (task: KindInput) => KindRead;
+  /** Reads a task of its kind, or an entry of its section, into its fields and its problems. */
+  readonly read: (input: KindInput) => KindRead;
   readonly handlers: Readonly<Record<string, PluginHandler>>;
   /**
    * What completing a task of its kind writes instead of closing it: a move into a completed
@@ -149,14 +165,15 @@ export const definePlugin = <S extends PluginShared>(
   };
 };
 
-const reserved = (name: string) =>
-  name.includes("/") || name.includes("\\") || isHidden(name) || name.endsWith(".md");
+const plain = (name: string) => !name.includes("/") && !name.includes("\\") && !isHidden(name);
 
 /**
  * Throws on a set of plugins that cannot all be installed: two with one id, a key or an operation
- * name that two claim (the plain task included), a file a task folder cannot hold as plugin data,
- * an operation that does not run in a workspace, or a handler missing. Files are not claimed: a
- * plugin's file is its data only in tasks of its kind, so two kinds may own one name.
+ * name that two claim (the plain task included), a key every entry has, a marker that is not a
+ * plain markdown name or that another section or the tasks section has, a file a folder cannot
+ * hold as plugin data, an operation that does not run in a workspace, or a handler missing. Keys
+ * are claimed per section. Files are not claimed: a plugin's file is its data only in its own
+ * tasks or entries, so two plugins may own one name.
  */
 export const checkPlugins = (plugins: ReadonlyArray<Plugin>): void => {
   const claims = new Map<string, string>();
@@ -166,14 +183,27 @@ export const checkPlugins = (plugins: ReadonlyArray<Plugin>): void => {
       throw new Error(`The ${owner} plugin claims ${what}, which ${other} already has`);
     claims.set(what, owner);
   };
-  for (const { id, keys, operations } of [plainTask, ...plugins.map((plugin) => plugin.shared)]) {
+  claim(`the folder ${TASKS_SECTION}`, plainTask.id);
+  for (const marker of MARKERS) claim(`the marker ${marker}`, plainTask.id);
+  for (const { id, keys, operations, section } of [
+    plainTask as PluginShared,
+    ...plugins.map((plugin) => plugin.shared),
+  ]) {
     claim(`the kind ${id}`, id);
-    for (const key of Object.keys(keys.fields)) claim(`the key ${key}`, id);
+    const among = section === undefined ? "" : ` of ${id} entries`;
+    if (section !== undefined) {
+      if (!plain(section.marker) || !section.marker.endsWith(".md"))
+        throw new Error(`The ${id} plugin's marker ${section.marker} is not a markdown file name`);
+      claim(`the folder ${id}`, id);
+      claim(`the marker ${section.marker.toLowerCase()}`, id);
+      for (const key of ENTRY_KEYS) claim(`the key ${key}${among}`, "every entry");
+    }
+    for (const key of Object.keys(keys.fields)) claim(`the key ${key}${among}`, id);
     for (const name of Object.keys(operations)) claim(`the operation ${name}`, id);
   }
   for (const { shared, handlers } of plugins) {
     for (const file of shared.files) {
-      if (reserved(file) || MARKERS.includes(file.toLowerCase()))
+      if (!plain(file) || file.toLowerCase().endsWith(".md"))
         throw new Error(`The ${shared.id} plugin cannot own ${file}: name a plain file`);
     }
     for (const [name, operation] of Object.entries(shared.operations)) {

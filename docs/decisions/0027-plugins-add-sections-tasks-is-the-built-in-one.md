@@ -73,6 +73,46 @@ The model has to stay small: two ideas, one level deep.
 - A workspace in the old layout after that is outside the contract: it reads with diagnostics like
   any other file in the wrong place.
 
+### How the engine builds it (amended by OCT-88)
+
+Building phase 1 settled what the decision left open, keeping to two ideas one level deep:
+
+- **A plugin is a kind of task or a section, not both.** `PluginShared.section` is
+  `{ marker }`, and with it everything the plugin declares (`keys`, `files`, `fields`, its reader,
+  its problems) is about its section's entries. Its section's id and folder are the plugin's id:
+  `.octodo/<plugin id>/`. One name for the three makes two sections in one folder impossible by
+  construction, where three names would each need a uniqueness rule. A plugin adds at most one
+  section.
+- **A section's kinds are its plugin's business.** Counters' `since` and `yearly` are values of a
+  `type` key that the counters plugin declares and its reader reads. The engine models kinds only
+  in tasks, where each is a plugin; "a kind names its section" becomes: a plugin without a section
+  is a kind of task.
+- **A plugin's section is flat for now.** Its entries are the folders in its section's folder that
+  hold its marker, with no lists and no sub-entries, and there is no flag saying so: no section
+  needs them yet, and a flag nothing reads is a promise without code. The first section that needs
+  lists adds the flag together with its reader.
+- **Keys are claimed per section.** A section plugin's keys never clash with the keys of tasks or
+  of another section, since they live in different files. `id`, `title`, `created` and `order` are
+  every entry's, so no section plugin declares them. Markers are claimed across sections, with
+  `task.md` and `list.md` the tasks section's, so a marker file names its section wherever it is
+  copied.
+- **A disabled plugin's section is read for its ids only.** It has no entries and no diagnostics,
+  but the ids in its markdown raise the id floor like an unread task's, so enabling it again never
+  finds a new task holding one of its ids.
+- **Folders.** `octo init` makes `tasks/`. A plugin's section folder is made with its first entry,
+  inside `.octodo/`, which exists. A missing section folder reads as an empty section.
+- **Entries.** The snapshot's `entries` (absent when there are none) carry each entry's `section`,
+  its plugin's `fields`, `mentions` and `mentionedIn`. An entry without an id gets one when it is
+  read, as a task does. Tasks are read before sections, so of a task and an entry with one id the
+  task wins; the entry is a `duplicate-id` diagnostic without a fix, since `fresh-id` renames task
+  folders. A `blocked_by` that names an entry is a `broken-link`: links name tasks only.
+- **The plugin API.** A plugin's reader gets `{ entry, keys, files }`, where `entry` is what every
+  task and entry has (a task is passed whole). A section plugin's handlers create an entry with
+  `createInSection(input, keys)`; editing and deleting entries come with the first plugin that
+  needs them (counters, OCT-89).
+- What is neither `config.json`, a section folder nor dot bookkeeping at the top of `.octodo/`, and
+  what is not an entry in a section's folder, is a `misplaced` diagnostic.
+
 ## Consequences
 
 - The tree reader learns sections: it reads `.octodo/<section>/` for each section the workspace

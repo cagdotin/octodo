@@ -20,9 +20,14 @@ instead of keeping the code because it exists.
 
 - `.octodo/` holds `config.json`, the folder of each section and dot bookkeeping; anything else at
   its top is a `misplaced` diagnostic. Tasks is the built-in section: `.octodo/tasks/` is the root
-  list, and everything below about tasks and lists happens inside it
+  list, and everything below about tasks and lists happens inside it. A plugin may add a section
+  instead of a kind of task (`PluginShared.section: { marker }`): its entries are the folders in
+  `.octodo/<plugin id>/` holding its marker file, whose frontmatter has `id`, `title`, `created`,
+  `order` and the plugin's keys; they have no lists or sub-entries, and come in the snapshot's
+  `entries`. A disabled plugin's section folder gets no diagnostic and is read only for its ids.
+  One id sequence covers every section, and mentions reach across them; links name tasks only
   ([0027](docs/decisions/0027-plugins-add-sections-tasks-is-the-built-in-one.md)). `octo init`
-  makes `tasks/`.
+  makes `tasks/`; a section's folder is made with its first entry.
 - `.octodo/config.json`: workspace `name`, id `key` (`HM` → ids `HM-1`, `HM-2`, ...) and `statuses`
   (id, display name, category). Categories have a fixed order (backlog, unstarted, started,
   completed, canceled, archived); the array only orders statuses within a category. Reordering

@@ -1,5 +1,5 @@
 import { VERSION } from "@octodo/contract/api";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -25,14 +25,38 @@ describe("server.json", () => {
     expect(existsSync(serverFile(home))).toBe(false);
   });
 
-  it("is left to the server that started last when an earlier one closes", async () => {
+  it("names one server: a second one started with it is refused, and starts once the first closes", async () => {
     const { home } = scratch();
-    const first = await startServer({ home, port: 0 });
-    const second = await startServer({ home, port: 0 });
-    await first.close();
-    expect(named(home).url).toBe(second.url);
-    await second.close();
+    const started = await Promise.allSettled([
+      startServer({ home, port: 0 }),
+      startServer({ home, port: 0 }),
+    ]);
+    const running = started.flatMap((each) => (each.status === "fulfilled" ? [each.value] : []));
+    expect(running).toHaveLength(1);
+    expect(started.find((each) => each.status === "rejected")).toMatchObject({
+      reason: {
+        code: "OCTODO_HOME_TAKEN",
+        message: `Another octodo server runs for ${home}. Use it, or stop it first.`,
+      },
+    });
+    expect(named(home).url).toBe(running[0]!.url);
+    await running[0]!.close();
+    const next = await startServer({ home, port: 0 });
+    expect(named(home).url).toBe(next.url);
+    await next.close();
     expect(existsSync(serverFile(home))).toBe(false);
+  });
+
+  it("is replaced by the next server when the one it names is gone", async () => {
+    const { home } = scratch();
+    mkdirSync(home, { recursive: true });
+    writeFileSync(
+      serverFile(home),
+      JSON.stringify({ url: "http://127.0.0.1:1", pid: 2 ** 22 + 1, version: VERSION }),
+    );
+    const server = await startServer({ home, port: 0 });
+    expect(named(home)).toEqual({ url: server.url, pid: process.pid, version: VERSION });
+    await server.close();
   });
 });
 

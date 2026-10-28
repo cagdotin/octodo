@@ -81,6 +81,17 @@ describe("task attachments over HTTP", () => {
     expect(new Uint8Array(await get.arrayBuffer())).toEqual(PNG);
   });
 
+  it("answers HEAD as GET without the body", async () => {
+    await call(file("images/head.png"), { method: "PUT", body: PNG });
+    const head = await call(file("images/head.png"), { method: "HEAD" });
+    expect(head.status).toBe(200);
+    expect(head.headers.get("content-type")).toBe("image/png");
+    expect(head.headers.get("content-length")).toBe(String(PNG.length));
+    expect(await head.text()).toBe("");
+    const missing = await call(file("images/none.png"), { method: "HEAD" });
+    expect(missing.status).toBe(404);
+  });
+
   it("gives a second upload with the same name a free one", async () => {
     const put = await call(file("images/twice.png"), { method: "PUT", body: PNG });
     const again = await call(file("images/twice.png"), { method: "PUT", body: PNG });

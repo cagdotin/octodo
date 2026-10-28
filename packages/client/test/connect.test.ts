@@ -155,6 +155,76 @@ describe("connect", () => {
   });
 });
 
+describe("a call through a connection", () => {
+  const BIG = 20 * 1024 * 1024 + 1;
+
+  /** A server of this version whose every other route answers with a file of `size` bytes. */
+  const fileServer = async (size: number, declared: boolean) => {
+    const server = createServer((request, response) => {
+      if (request.url === "/api/health") {
+        response.writeHead(200, { "content-type": "application/json" });
+        return response.end(JSON.stringify(health));
+      }
+      response.writeHead(200, {
+        "content-type": "application/octet-stream",
+        "content-location": "file:///big.bin",
+        ...(declared ? { "content-length": String(size) } : {}),
+      });
+      response.end(Buffer.alloc(size));
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  };
+
+  it("refuses a path parameter no URL can carry, the same with a server or without", async () => {
+    const { home, root } = await scratch();
+    const refusals = () =>
+      run(home, (connection) =>
+        Effect.forEach(
+          [
+            connection.run("delete_task", { workspace: root, id: ".." }),
+            connection.run("get_task", { workspace: root, id: "." }),
+            connection.run("disable_plugin", { workspace: root, plugin: "" }),
+            connection.removeWorkspace(".."),
+          ],
+          (call) => Effect.map(Effect.flip(call), ({ _tag, message }) => ({ _tag, message })),
+        ),
+      );
+    const expected = [
+      { _tag: "InvalidRequest", message: 'The id cannot be ".."' },
+      { _tag: "InvalidRequest", message: 'The id cannot be "."' },
+      { _tag: "InvalidRequest", message: 'The plugin cannot be ""' },
+      { _tag: "InvalidRequest", message: 'The workspace cannot be ".."' },
+    ];
+    expect(await refusals()).toEqual(expected);
+    const paths: Array<string> = [];
+    nameServer(
+      home,
+      await fake((path) => {
+        paths.push(path);
+        return { status: 200, body: health };
+      }),
+    );
+    expect(await refusals()).toEqual(expected);
+    expect(paths).toEqual([]);
+  });
+
+  it("refuses an attachment over the limit from a server, as declared or as read", async () => {
+    const { home, root } = await scratch();
+    for (const declared of [true, false]) {
+      nameServer(home, await fileServer(BIG, declared));
+      const error = await run(home, (connection) =>
+        Effect.flip(
+          connection.run("read_attachment", { workspace: root, id: "HM-1", path: "big.bin" }),
+        ),
+      );
+      expect(error).toMatchObject({ _tag: "AttachmentTooLarge", path: "big.bin" });
+      expect(error.message).toBe("big.bin is 21 MB; attachments are limited to 20 MB");
+    }
+  });
+});
+
 describe("findServer", () => {
   const find = (home: string) =>
     Effect.runPromise(

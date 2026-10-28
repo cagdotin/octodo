@@ -94,3 +94,13 @@ describe("task links over MCP", () => {
     expect(unknown.isError).toBe(true);
   });
 });
+
+describe("the workspace over HTTP", () => {
+  it("is refused as a relative folder, which would resolve against the server's directory", async () => {
+    for (const workspace of [".", "./house", "../house"])
+      expect(await attempt("list_tasks", { workspace })).toEqual({
+        isError: true,
+        value: { _tag: "InvalidRequest", message: "Use a workspace id or an absolute folder path" },
+      });
+  });
+});

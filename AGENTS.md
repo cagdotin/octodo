@@ -5,9 +5,14 @@ frontmatter inside a project's `.octodo/` folder, and the files are the source o
 the CLI and the MCP server are the editors, for people and agents alike: every status change, move,
 rename and link goes through them. The files are a portable format (plain markdown with custom
 properties) that reads well and copies anywhere; matching another tool's behavior on them is not a
-goal. Sync tools (iCloud, git) and stray hand edits still touch the files, so the app reads them
-strictly and reports what is wrong instead of breaking. Long-term it competes with TickTick, Todoist
-and any.do first, then Linear.
+goal. octodo's own clients are the only supported writers. A hand edit or a sync tool that breaks
+the format is outside the contract: the app reads strictly and reports what is wrong as a
+diagnostic, and does not try to repair, merge or reconcile it. Don't add code for outside writers
+beyond that. Long-term it competes with TickTick, Todoist and any.do first, then Linear.
+
+Decisions, the vision and the architecture live in `docs/` (start at `docs/README.md`). Record a
+new decision in `docs/decisions/`, not in agent memory, and update the docs in the same commit as
+the code they describe.
 
 ## The on-disk model
 
@@ -51,7 +56,7 @@ and any.do first, then Linear.
   (`octo doctor`, the app's dialog, MCP `fix_diagnostic`) and only if a fresh read still offers that
   fix there, so repeating one changes nothing. Fix-all applies only fixes that cannot lose what a
   person wrote; one that guesses (making a loose file a task) is picked one at a time.
-- Writes go to a temporary sibling and are renamed into place, so sync tools (iCloud, git) never see
+- Writes go to a temporary sibling and are renamed into place, so a crash or a reader never sees
   half a file; a new task or list folder is built under a dot name and renamed in. Writes go only
   into folders that exist: never `mkdir -p` a container. Any in-memory index is a cache that a file
   watcher invalidates.

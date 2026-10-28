@@ -13,8 +13,10 @@ as you, a server you reach from your phone over Tailscale, and software that ext
 - **Local and private by default.** Your tasks stay on your machine. The server binds to
   127.0.0.1, every request needs a token, and reaching it from elsewhere (a phone, over Tailscale)
   is something you switch on, not a cloud you sign up for. octodo should feel trustworthy.
-- **Humans and agents are equal citizens.** You plan; agents pick up work through MCP, the CLI or
-  the files themselves. One brain, many arms.
+- **Humans and agents are equal citizens.** You plan; agents pick up work through MCP or the CLI.
+  One brain, many arms. octodo's own clients are the only way to change the files; anything else
+  that edits them is outside the contract and shows up as a problem to fix
+  ([0001](decisions/0001-octodo-is-the-only-writer.md)).
 - **Simple underneath, ambitious on top.** The implementation stays boring (folders, YAML
   frontmatter, atomic renames) so the product can be bold.
 
@@ -32,21 +34,22 @@ comes later. So the app moves toward a calm, personal planner rather than an iss
 
 ## Extensible, and self-extending
 
-octodo should be extensible the way [pi](https://pi.dev) is: small at its core, with plugins that
-can change almost anything, and agents that write those plugins for you.
+octodo keeps simple primitives at its core and adds everything else on top. A workspace turns on
+only what it needs: a coding project gets a Linear-style tracker, a home workspace gets chores that
+repeat and a counter of days since the last cigarette.
 
-- **Plugins are TypeScript modules** kept as files too: per workspace in `.octodo/plugins/`, or for
-  everything in `~/.config/octodo/plugins/`. Share them as npm or git packages.
-- **What a plugin can add:** views (a calendar, a habit grid, a reading list), commands in the
-  palette and the CLI, MCP tools for agents, fields in the task panel, automations (recurring
-  tasks, auto-archive, "when a task moves to Done, ..."), importers and exporters, themes.
-- **Self-extension:** ask an agent "add a view that shows my tasks as a reading list" and it writes
-  the plugin into your workspace, octodo reloads it, and you keep going. If you like it, keep it;
-  if not, delete the file.
-- **Safe by construction:** plugins run with declared permissions (which workspaces, network or
-  not), and a plugin an agent wrote shows up for review before it runs. Trust stays the default.
+- **Plugins are first-party.** We write them, in `@octodo/plugins`: recurring tasks, days-since
+  counters and anniversaries first, a habit tracker later. Each workspace enables them in its
+  `config.json` ([0007](decisions/0007-first-party-plugins-per-workspace.md)).
+- **The built-in task goes through the same API.** If the core cannot use the plugin API for its
+  own task, the API is not ready.
+- **A plugin adds** frontmatter keys, files in a task folder, computed fields, operations (which
+  appear in the app, the CLI and MCP at once) and validators that report broken files.
+- **Presets are data:** Checklist, Project and Chores set a workspace's statuses and plugins when it
+  is created ([0008](decisions/0008-statuses-per-workspace-presets-as-data.md)).
 
-The plugin API starts as a sketch (OCT-5) and grows by turning built-in features into plugins.
+Later, when there is a reason: automations that run a command when something happens, and plugins
+written by agents or other people. Both are recorded in the Open ideas list with how to build them.
 
 ## The feeling
 

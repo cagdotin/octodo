@@ -2,7 +2,7 @@
 id: OCT-94
 title: "Discovery: list settings (icon, colour, per-list display options)"
 status: backlog
-priority: low
+priority: medium
 tags:
   - discovery
   - lists

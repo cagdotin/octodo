@@ -113,10 +113,14 @@ const UnsupportedMediaTypeAsJson = HttpRouter.middleware(
   { global: true },
 );
 
-/** The built web app, with every path that is not a file answered by its `index.html`. */
+/**
+ * The built web app, with every path that is not a file answered by its `index.html`. A browser
+ * revalidates each file, so after an update it never runs an `index.html` naming the old build's
+ * scripts.
+ */
 const webApp = (webDir: string | undefined) =>
   webDir !== undefined && existsSync(join(webDir, "index.html"))
-    ? HttpStaticServer.layer({ root: webDir, spa: true })
+    ? HttpStaticServer.layer({ root: webDir, spa: true, cacheControl: "no-cache" })
     : Layer.empty;
 
 const failure = (cause: Cause.Cause<unknown>) => {

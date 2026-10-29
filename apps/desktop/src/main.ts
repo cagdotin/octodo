@@ -4,7 +4,7 @@
  */
 import { defaultHome } from "@octodo/engine";
 import { DEFAULT_PORT } from "@octodo/server";
-import { BrowserWindow, app, dialog, ipcMain, shell } from "electron";
+import { BrowserWindow, app, dialog, ipcMain, session, shell } from "electron";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -212,8 +212,10 @@ if (!app.requestSingleInstanceLock()) {
     });
   });
 
-  void app.whenReady().then(() => {
+  void app.whenReady().then(async () => {
     if (devIcon !== undefined) app.dock?.setIcon(devIcon);
+    // Builds before the server sent no-cache left an index.html cached that names old scripts.
+    await session.defaultSession.clearCache();
     createWindow();
   });
 }

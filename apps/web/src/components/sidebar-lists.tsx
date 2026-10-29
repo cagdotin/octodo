@@ -15,7 +15,7 @@ import {
   movedListId,
 } from "@octodo/contract/rules";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useState, type ReactNode, type ReactElement } from "react";
+import { useRef, useState, type ReactNode, type ReactElement } from "react";
 import { dragData, dropData, type DragData, type DropData } from "@/components/drag-and-drop";
 import {
   DeleteListDialog,
@@ -379,6 +379,7 @@ function ListRow({
     data: { accepts: ["list", "task"], list: list.id, pointerOnly: ["task"] } satisfies DropData,
   });
   const taskOver = drop.isOver && dragData(drop.active)?.type === "task";
+  const row = useRef<HTMLDivElement>(null);
 
   const link = (
     <Link
@@ -433,7 +434,8 @@ function ListRow({
       >
         <MoreHorizontalIcon />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="right">
+      {/* Anchored to the row, its first item sits level with it: -5px takes up the popup's border and padding. */}
+      <DropdownMenuContent anchor={row} align="start" alignOffset={-5} side="right" sideOffset={8}>
         <DropdownMenuItem
           onClick={() =>
             onEdit({
@@ -462,7 +464,7 @@ function ListRow({
   return (
     <SidebarMenuItem>
       {renaming ?? (
-        <div className="group/list-row relative">
+        <div ref={row} className="group/list-row relative">
           <SidebarMenuButton isActive={active} className={ITEM} render={link as ReactElement} />
           {Array.from({ length: depth }, (_, level) => (
             <span

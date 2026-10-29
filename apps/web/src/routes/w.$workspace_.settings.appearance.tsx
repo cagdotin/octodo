@@ -24,8 +24,8 @@ const isTheme = (value: unknown): value is Theme => THEMES.some((theme) => theme
  */
 const PALETTES = {
   light: {
-    "--t-desk": "#e8e7e2",
-    "--t-paper": "#f7f6f3",
+    "--t-desk": "#f0f0f0",
+    "--t-paper": "#ffffff",
     "--t-ink": "#22211f",
     "--t-line": "rgb(34 33 31 / 9%)",
     "--t-accent": "#22211f",

@@ -158,8 +158,7 @@
 }
 
 :root {
-  /* Paper: one warm off-white surface, near-black text, one ink-blue accent. Same palette as the
-     landing page (apps/site). */
+  /* Paper: one white surface, near-black text, one ink-blue accent. */
   --ink: #33618f;
   --priority-urgent: var(--ink);
   --priority-high: #22211f;
@@ -173,22 +172,22 @@
   --sync-live: #3f9a58;
   --sync-pending: #c08a2a;
   --card-shadow: 0 1px 2px rgb(34 33 31 / 4%);
-  --background: #f7f6f3;
+  --background: #ffffff;
   --foreground: #22211f;
-  --card: #fbfaf8;
+  --card: #ffffff;
   --card-foreground: #22211f;
-  --popover: #fbfaf8;
+  --popover: #ffffff;
   --popover-foreground: #22211f;
   --primary: #22211f;
-  --primary-foreground: #f8f6f2;
-  --secondary: #efeeea;
+  --primary-foreground: #fafafa;
+  --secondary: #f7f7f7;
   --secondary-foreground: #22211f;
-  --muted: #efeeea;
+  --muted: #f7f7f7;
   --muted-foreground: #85847f;
-  --accent: #ecebe6;
+  --accent: #f4f4f4;
   --accent-foreground: #22211f;
-  --band: #f1f0ec;
-  --row-hover: #f1f0ec;
+  --band: #f9f9f9;
+  --row-hover: #f9f9f9;
   --destructive: #c4452e;
   --border: rgb(34 33 31 / 9%);
   --input: rgb(34 33 31 / 13%);
@@ -200,12 +199,12 @@
   --chart-5: oklch(0.269 0 0);
   --radius: 0.5rem;
   /* The window frame (toolbar and rail) is the desk; the sidebar and the page are paper on it. */
-  --chrome: #e8e7e2;
+  --chrome: #f0f0f0;
   --sidebar: var(--background);
   --sidebar-foreground: #504f4c;
   --sidebar-primary: #22211f;
-  --sidebar-primary-foreground: #f8f6f2;
-  --sidebar-accent: #e5e4df;
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #ededed;
   --sidebar-accent-foreground: #22211f;
   --sidebar-border: rgb(34 33 31 / 8%);
   --sidebar-ring: color-mix(in srgb, var(--ink) 70%, transparent);
@@ -217,7 +216,7 @@
   --warning: var(--color-amber-500);
   --warning-foreground: var(--color-amber-700);
   --brand: #22211f;
-  --brand-foreground: #f8f6f2;
+  --brand-foreground: #fafafa;
   --brand-ink: #22211f;
 }
 

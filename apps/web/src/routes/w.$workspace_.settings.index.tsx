@@ -1,4 +1,7 @@
+import type { WorkspaceInfo } from "@octodo/contract";
+import { WORKSPACE_KEY } from "@octodo/contract/rules";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { CopyIcon, FolderOpenIcon } from "lucide-react";
 import { toastManager } from "@octodo/ui/components/toast";
@@ -15,16 +18,14 @@ import {
   AlertDialogTrigger,
 } from "@octodo/ui/components/alert-dialog";
 import { Button } from "@octodo/ui/components/button";
-import { snapshotQuery, useRemoveWorkspace } from "@/lib/api";
+import { Input } from "@octodo/ui/components/input";
+import { Textarea } from "@octodo/ui/components/textarea";
+import { snapshotQuery, useRemoveWorkspace, useUpdateWorkspace } from "@/lib/api";
 import { desktop } from "@/lib/desktop";
 
 export const Route = createFileRoute("/w/$workspace_/settings/")({
   component: GeneralSettings,
 });
-
-const Code = ({ children }: { children: string }) => (
-  <code className="font-mono text-[11px]">{children}</code>
-);
 
 function GeneralSettings() {
   const { workspace } = Route.useParams();
@@ -38,26 +39,20 @@ function GeneralSettings() {
 
   return (
     <SettingsPage title="General" description="This workspace and the folder it lives in.">
-      <Section
-        title="Workspace"
-        description={
-          <>
-            Name and id key live in <Code>.octodo/config.json</Code>. Edit them there.
-          </>
-        }
-      >
+      <Section title="Workspace">
         <Rows>
           <Row label="Name" help="Shown in the rail and the workspace menu.">
             <Avatar label={info.key} className="size-7 rounded-lg text-[11px]" />
-            <span className="text-sm">{info.name}</span>
+            <NameInput key={info.name} info={info} />
+          </Row>
+          <Row label="Description" help="What this workspace is for, for you and for agents.">
+            <DescriptionInput key={info.description ?? ""} info={info} />
           </Row>
           <Row
             label="Task ids"
             help={`New tasks are numbered ${info.key}-${next}, ${info.key}-${next + 1}, …`}
           >
-            <span className="rounded-md border bg-muted/50 px-2 py-0.5 font-mono text-xs">
-              {info.key}
-            </span>
+            <KeyInput info={info} ids={snapshot.tasks.length} />
           </Row>
           <Row label="Folder" help={<span className="font-mono break-all">{info.root}</span>}>
             <RevealFolder root={info.root} />
@@ -104,6 +99,117 @@ function GeneralSettings() {
         </Rows>
       </Section>
     </SettingsPage>
+  );
+}
+
+/** Enter or leaving the field saves it; Escape puts the saved text back. */
+const saveKeys =
+  (saved: string) => (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      event.currentTarget.blur();
+    }
+    if (event.key === "Escape") {
+      event.currentTarget.value = saved;
+      event.currentTarget.blur();
+    }
+  };
+
+function NameInput({ info }: { info: WorkspaceInfo }) {
+  const update = useUpdateWorkspace(info.id);
+  return (
+    <Input
+      size="sm"
+      aria-label="Workspace name"
+      className="w-48"
+      defaultValue={info.name}
+      onBlur={(event) => {
+        const name = event.currentTarget.value.trim();
+        if (name === "") event.currentTarget.value = info.name;
+        else if (name !== info.name) update.mutate({ name });
+      }}
+      onKeyDown={saveKeys(info.name)}
+    />
+  );
+}
+
+function DescriptionInput({ info }: { info: WorkspaceInfo }) {
+  const update = useUpdateWorkspace(info.id);
+  const saved = info.description ?? "";
+  return (
+    <Textarea
+      size="sm"
+      aria-label="Workspace description"
+      className="w-64"
+      placeholder="Add a description"
+      defaultValue={saved}
+      onBlur={(event) => {
+        const description = event.currentTarget.value.trim();
+        if (description !== saved) update.mutate({ description: description || null });
+      }}
+      onKeyDown={saveKeys(saved)}
+    />
+  );
+}
+
+/** A new key applies only on confirm, since every id that has the old one is rewritten. */
+function KeyInput({ info, ids }: { info: WorkspaceInfo; ids: number }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const change = useUpdateWorkspace(info.id);
+  const key = (draft ?? info.key).trim();
+  const changed = key !== info.key && WORKSPACE_KEY.test(key);
+  return (
+    <>
+      <Input
+        size="sm"
+        aria-label="Id key"
+        className="w-24 font-mono"
+        maxLength={8}
+        value={draft ?? info.key}
+        onChange={(event) => setDraft(event.target.value.toUpperCase())}
+      />
+      <AlertDialog>
+        <AlertDialogTrigger
+          render={
+            <Button variant="outline" size="sm" disabled={!changed || change.isPending}>
+              Change…
+            </Button>
+          }
+        />
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Change {info.key} ids to {key}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {`Every id that starts with ${info.key} keeps its number and takes the new key: ${info.key}-1 becomes ${key}-1. octodo rewrites ${ids === 1 ? "the 1 task" : `all ${ids} tasks`}, their blockers, their [[${info.key}-1]] mentions and their folder names. Mentions inside code stay as written, and so does anything outside octodo that names the old ids.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>Cancel</AlertDialogClose>
+            <AlertDialogClose
+              render={<Button />}
+              onClick={() =>
+                change.mutate(
+                  { key },
+                  {
+                    onSuccess: () => {
+                      setDraft(null);
+                      toastManager.add({
+                        type: "success",
+                        title: `Task ids now start with ${key}`,
+                      });
+                    },
+                  },
+                )
+              }
+            >
+              Change ids
+            </AlertDialogClose>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 

@@ -7,6 +7,7 @@ import type {
   MoveTaskInput,
   Task,
   UpdateTaskInput,
+  UpdateWorkspaceInput,
   WorkspaceSnapshot,
 } from "@octodo/contract";
 import { createClient } from "@octodo/contract/client";
@@ -87,6 +88,27 @@ export const useRemoveWorkspace = () => {
     mutationFn: (ws: string) =>
       api.request("DELETE /api/workspaces/:workspace", { params: { workspace: ws } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.workspaces }),
+    onError,
+  });
+};
+
+/**
+ * Changes the workspace's name, description or key. It waits for the server rather than guessing,
+ * since a new key rewrites every id; the rail and the snapshot show it once read again.
+ */
+export const useUpdateWorkspace = (ws: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateWorkspaceInput) =>
+      api.request("PATCH /api/workspaces/:workspace", {
+        params: { workspace: ws },
+        payload: input,
+      }),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: keys.workspaces }),
+        queryClient.invalidateQueries({ queryKey: keys.snapshot(ws) }),
+      ]),
     onError,
   });
 };

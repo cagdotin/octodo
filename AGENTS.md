@@ -167,7 +167,7 @@ OCT-69.
   app and its `octo` update from them
   ([0029](docs/decisions/0029-the-desktop-app-updates-itself-from-github-releases.md)). Pull
   requests run `pnpm check` (`ci.yml`).
-- `pnpm check`: format check, lint, typecheck, tests. Lefthook runs gitleaks on the staged changes, format, lint and
+- `pnpm check`: format check, lint, React Doctor, typecheck, tests. Lefthook runs gitleaks on the staged changes, format, lint and
   typecheck on commit and `pnpm check` before push.
 - Test against scratch folders (`OCTODO_HOME=<tmp> bin/octo ...`), never a real project's
   `.octodo/`.
@@ -176,6 +176,10 @@ OCT-69.
   writes into `packages/ui`.
 - Agent config lives in `.agents/`: `skills/` and `mcp.json` (the octodo and devl MCP servers).
   `.claude/skills` and `.mcp.json` are symlinks to them, so the servers are enabled for this project only.
+- `pnpm doctor` runs React Doctor over the React packages and fails on any error-level finding.
+  It runs offline: no score API, share link, crash reports or supply-chain lookups. Suppress a
+  finding only where the rule is wrong for the code, with the reason above
+  `// react-doctor-disable-next-line <rule>`; a package-wide exception goes in its `doctor.config.json`.
 - Everything that scrolls in the web app goes through `ScrollArea` (`@octodo/ui/components/scroll-area`),
   never `overflow-auto` or a hidden scrollbar; `apps/web/src/scrolling.test.ts` enforces it.
 - The code is the documentation. A comment signals code that is too complicated or an edge case,

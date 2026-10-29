@@ -91,7 +91,7 @@ this computer only and needs no credentials.
 ```sh
 pnpm dev            # desktop app (Electron + Vite)
 pnpm dev:web        # API + Vite, use it in the browser
-pnpm check          # format, lint, typecheck, tests
+pnpm check          # format, lint, react doctor, typecheck, tests
 ```
 
 See [AGENTS.md](AGENTS.md) for the architecture and conventions.

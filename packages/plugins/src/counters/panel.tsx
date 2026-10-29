@@ -19,7 +19,6 @@ import type { EntryProps } from "../web.ts";
 import { countOf, type CounterFields } from "./count.ts";
 import {
   api,
-  DayCalendar,
   longDay,
   marks,
   occurrences,
@@ -29,7 +28,8 @@ import {
   unreset,
   useCall,
   weekday,
-} from "./common.tsx";
+} from "./common.ts";
+import { DayCalendar } from "./parts.tsx";
 
 const days = (from: string, to: string) =>
   differenceInCalendarDays(parseISO(localDay(new Date(to))), parseISO(localDay(new Date(from))));

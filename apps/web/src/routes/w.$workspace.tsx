@@ -11,7 +11,7 @@ import { ListView } from "@/components/list-view";
 import { NewTaskDialog } from "@/components/new-task-dialog";
 import { TaskDetail } from "@/components/task-detail";
 import { sectionDay } from "@/components/section";
-import { kindDay } from "@/components/task-kind";
+import { kindDay } from "@/lib/task-kind";
 import { ViewFooter, ViewHeader } from "@/components/workspace-header";
 import {
   Empty,

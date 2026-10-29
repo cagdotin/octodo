@@ -1,5 +1,3 @@
-import type { ServedApi } from "@octodo/contract/api";
-import { createClient } from "@octodo/contract/client";
 import { Button } from "@octodo/ui/components/button";
 import { Field, FieldError } from "@octodo/ui/components/field";
 import { InputGroup, InputGroupInput } from "@octodo/ui/components/input-group";
@@ -10,15 +8,14 @@ import { dueInfo, formatTimestamp } from "@octodo/ui/lib/dates";
 import { cn } from "@octodo/ui/lib/utils";
 import { RepeatIcon } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import type { CreateFieldsProps, KindProps, PluginWeb, TaskOf } from "../web.ts";
-import { dueDay, nextDue, parseRule, RULE_EXAMPLES } from "./rule.ts";
-import type { RecurringFields, recurringShared } from "./shared.ts";
-
-const api = createClient<ServedApi<typeof recurringShared.operations>>("");
+import type { CreateFieldsProps, KindProps, TaskOf } from "../web.ts";
+import { nextDue, parseRule, RULE_EXAMPLES } from "./rule.ts";
+import { api } from "./client.ts";
+import type { RecurringFields } from "./shared.ts";
 
 const ruleText = (repeat: string | null) => repeat ?? "No rule";
 
-function Row({
+export function Row({
   task,
   className,
 }: {
@@ -122,7 +119,7 @@ function RepeatEditor({ workspace, task }: KindProps<RecurringFields>) {
   );
 }
 
-interface Draft {
+export interface Draft {
   readonly repeat: string;
 }
 
@@ -136,7 +133,7 @@ const preview = (repeat: string, today: string) => {
 };
 
 /** The rule chip; it opens when Recurring is picked, since a recurring task needs a rule. */
-function CreateFields({ draft, onChange, finalFocus }: CreateFieldsProps<Draft>) {
+export function CreateFields({ draft, onChange, finalFocus }: CreateFieldsProps<Draft>) {
   const [open, setOpen] = useState(true);
   const { error, first } = preview(draft.repeat, useToday());
   const valid = draft.repeat.trim() !== "" && error === null;
@@ -183,7 +180,7 @@ function CreateFields({ draft, onChange, finalFocus }: CreateFieldsProps<Draft>)
   );
 }
 
-function Panel({ workspace, task }: KindProps<RecurringFields>) {
+export function Panel({ workspace, task }: KindProps<RecurringFields>) {
   const { next, count, recent } = task.kind.fields;
   const due = dueInfo(next, useToday());
   return (
@@ -216,22 +213,3 @@ function Panel({ workspace, task }: KindProps<RecurringFields>) {
     </section>
   );
 }
-
-export const recurringWeb: PluginWeb<RecurringFields, Draft> = {
-  Row,
-  Panel,
-  day: dueDay,
-  completesInPlace: true,
-  create: {
-    noun: "Recurring task",
-    Icon: RepeatIcon,
-    empty: { repeat: "" },
-    Fields: CreateFields,
-    ready: ({ repeat }) => repeat.trim() !== "" && !("error" in parseRule(repeat)),
-    create: (workspace, task, { repeat }) =>
-      api.request("POST /api/workspaces/:workspace/recurring", {
-        params: { workspace },
-        payload: { ...task, repeat },
-      }),
-  },
-};

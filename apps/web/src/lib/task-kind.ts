@@ -1,0 +1,32 @@
+import type { Task, WorkspaceSnapshot } from "@octodo/contract";
+import type { PluginDay } from "@octodo/contract/rules";
+import { webPlugins, type KindCreate } from "@octodo/plugins/web";
+
+/** The web half of the plugin whose kind the task is, if it has one (decision 0016). */
+export const kindWeb = (task: Task) =>
+  task.kind === undefined ? undefined : webPlugins[task.kind.id];
+
+/** The `day` of the kind with this id, which Today and Next 7 days read (decision 0025). */
+export const kindDay = (kind: string): PluginDay | undefined => webPlugins[kind]?.day;
+
+/** Whether completing the task logs it and leaves it open instead of closing it. */
+export const completesInPlace = (task: Task) => kindWeb(task)?.completesInPlace === true;
+
+/**
+ * Whether the panel offers the plain due date. A kind's row shows its own date in the date slot,
+ * so a task of a kind gets the control only to clear a `due` it already has (decision 0023).
+ */
+export const offersDue = (task: Task) => kindWeb(task) === undefined || task.due !== null;
+
+/** A kind a new task can be, by its plugin id. */
+export interface CreatableKind {
+  readonly id: string;
+  readonly create: KindCreate<unknown>;
+}
+
+/** The kinds the workspace enables, in config.json's order, that the app can create. */
+export const creatableKinds = (snapshot: Pick<WorkspaceSnapshot, "plugins">) =>
+  (snapshot.plugins ?? []).flatMap((id): Array<CreatableKind> => {
+    const web = webPlugins[id];
+    return web === undefined ? [] : [{ id, create: web.create }];
+  });

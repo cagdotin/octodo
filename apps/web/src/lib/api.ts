@@ -16,7 +16,7 @@ import type { EntryPatch, KindCreate, NewTask, SectionWeb } from "@octodo/plugin
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toastManager } from "@octodo/ui/components/toast";
 import { attachmentName, attachmentPath, type Attachments } from "@/lib/attachments";
-import { completesInPlace } from "@/components/task-kind";
+import { completesInPlace } from "@/lib/task-kind";
 import {
   applyListCreate,
   applyListDelete,

@@ -35,7 +35,8 @@ import {
 } from "@/components/task-bits";
 import { PaneFooter, PaneHeader } from "@octodo/ui/components/pane";
 import { TagsEditor } from "@/components/tags-editor";
-import { KindPanel, offersDue } from "@/components/task-kind";
+import { KindPanel } from "@/components/task-kind";
+import { offersDue } from "@/lib/task-kind";
 import { TaskRelations, useMentions } from "@/components/task-relations";
 import { ParentLink, SubtasksGoing, TaskSubtasks } from "@/components/task-subtasks";
 import {

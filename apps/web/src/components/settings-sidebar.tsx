@@ -29,7 +29,7 @@ import {
 const ITEM = "h-7 gap-2.5 px-2 text-[13px] text-sidebar-foreground/90 data-active:font-medium";
 
 /** The settings pages of one workspace, for the sidebar and the page titles. */
-export const SETTINGS_PAGES = [
+const SETTINGS_PAGES = [
   { to: "/w/$workspace/settings", label: "General", icon: <SlidersHorizontalIcon /> },
   {
     to: "/w/$workspace/settings/statuses",
@@ -40,7 +40,7 @@ export const SETTINGS_PAGES = [
 ] as const satisfies ReadonlyArray<{ to: string; label: string; icon: ReactNode }>;
 
 /** Settings for the whole app rather than one workspace. */
-export const APP_SETTINGS_PAGES = [
+const APP_SETTINGS_PAGES = [
   { to: "/w/$workspace/settings/appearance", label: "Appearance", icon: <PaletteIcon /> },
   { to: "/w/$workspace/settings/connections", label: "Connections", icon: <PlugIcon /> },
 ] as const satisfies ReadonlyArray<{ to: string; label: string; icon: ReactNode }>;

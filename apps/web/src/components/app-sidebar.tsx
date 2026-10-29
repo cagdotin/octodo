@@ -20,7 +20,7 @@ import { SectionLinks } from "@/components/section-sidebar";
 import { SyncIndicator } from "@/components/sync-indicator";
 import { ViewIcon } from "@/components/task-bits";
 import { sectionDay } from "@/components/section";
-import { kindDay } from "@/components/task-kind";
+import { kindDay } from "@/lib/task-kind";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@octodo/ui/components/button";
 import {

@@ -6,12 +6,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { m } from "motion/react";
 import { PlusIcon } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
-import {
-  COLUMN_PREFIX,
-  useTaskColumns,
-  type DragData,
-  type DropData,
-} from "@/components/drag-and-drop";
+import { COLUMN_PREFIX, useTaskColumns } from "@/components/drag-and-drop";
+import { type DragData, type DropData } from "@/lib/drag";
 import {
   ChecklistCount,
   ListChip,

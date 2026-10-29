@@ -6,12 +6,8 @@ import { isClosedCategory } from "@octodo/contract/rules";
 import { Link } from "@tanstack/react-router";
 import { ChevronRightIcon, InboxIcon, PlusIcon } from "lucide-react";
 import { useMemo, useState, type ComponentProps, type ReactNode } from "react";
-import {
-  COLUMN_PREFIX,
-  useTaskColumns,
-  type DragData,
-  type DropData,
-} from "@/components/drag-and-drop";
+import { COLUMN_PREFIX, useTaskColumns } from "@/components/drag-and-drop";
+import { type DragData, type DropData } from "@/lib/drag";
 import {
   ChecklistCount,
   ListChip,

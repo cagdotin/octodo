@@ -1,6 +1,6 @@
 import type { Task } from "@octodo/contract";
 import { describe, expect, it } from "vitest";
-import { creatableKinds, offersDue } from "./task-kind.tsx";
+import { creatableKinds, offersDue } from "./task-kind.ts";
 
 const task = (fields: Partial<Task> = {}): Task => ({
   id: "HM-1",

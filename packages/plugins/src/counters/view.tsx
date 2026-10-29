@@ -48,8 +48,6 @@ import type { SectionViewProps } from "../web.ts";
 import { countOf, type Count, type CounterFields } from "./count.ts";
 import {
   type Counter,
-  DayCalendar,
-  KindIcon,
   longDay,
   marks,
   plural,
@@ -60,8 +58,10 @@ import {
   unreset,
   useCall,
   weekday,
-} from "./common.tsx";
-import { NewCounterDialog, TEMPLATES, type Template } from "./new-counter.tsx";
+} from "./common.ts";
+import { DayCalendar, KindIcon } from "./parts.tsx";
+import { NewCounterDialog } from "./new-counter.tsx";
+import { TEMPLATES, type Template } from "./common.ts";
 
 /** Streaks worth reaching; past the last one, every whole year is the next. */
 const MILESTONES = [7, 14, 30, 60, 100, 180, 365, 500, 730, 1000];

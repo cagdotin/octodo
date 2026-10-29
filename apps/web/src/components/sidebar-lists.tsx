@@ -16,7 +16,7 @@ import {
 } from "@octodo/contract/rules";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useRef, useState, type ReactNode, type ReactElement } from "react";
-import { dragData, dropData, type DragData, type DropData } from "@/components/drag-and-drop";
+import { dragData, dropData, type DragData, type DropData } from "@/lib/drag";
 import {
   DeleteListDialog,
   ListNameInput,

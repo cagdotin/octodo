@@ -6,9 +6,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./counters/shared": "./src/counters/shared.ts",
-    "./counters/web": "./src/counters/web.tsx",
+    "./counters/web": "./src/counters/web.ts",
     "./recurring/shared": "./src/recurring/shared.ts",
-    "./recurring/web": "./src/recurring/web.tsx",
+    "./recurring/web": "./src/recurring/web.ts",
     "./web": "./src/web.ts"
   },
   "dependencies": {

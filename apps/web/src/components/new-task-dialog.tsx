@@ -16,7 +16,7 @@ import { completing } from "@/components/quick-add/editor";
 import { QuickAddInput, type QuickAddInputHandle } from "@/components/quick-add/quick-add-input";
 import { suggestionsFor, useQuickAdd } from "@/components/quick-add/use-quick-add";
 import { ListGlyph, PriorityIcon, StatusIcon } from "@/components/task-bits";
-import { creatableKinds, type CreatableKind } from "@/components/task-kind";
+import { creatableKinds, type CreatableKind } from "@/lib/task-kind";
 import { Button } from "@octodo/ui/components/button";
 import {
   Dialog,

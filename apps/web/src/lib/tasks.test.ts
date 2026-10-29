@@ -15,7 +15,7 @@ import {
   withoutSubtree,
 } from "./tasks.ts";
 import { sectionDay } from "../components/section.tsx";
-import { kindDay } from "../components/task-kind.tsx";
+import { kindDay } from "./task-kind.ts";
 
 const TODAY = format(new Date(), "yyyy-MM-dd");
 

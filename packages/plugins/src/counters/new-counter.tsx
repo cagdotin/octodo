@@ -15,59 +15,12 @@ import { RadioGroupPrimitive, RadioPrimitive } from "@octodo/ui/components/radio
 import { Spinner } from "@octodo/ui/components/spinner";
 import { useToday } from "@octodo/ui/hooks/use-today";
 import { cn } from "@octodo/ui/lib/utils";
-import {
-  CakeIcon,
-  CalendarHeartIcon,
-  CalendarIcon,
-  type LucideIcon,
-  TimerResetIcon,
-} from "lucide-react";
+import { CalendarIcon } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import { TEMPLATES, type Template } from "./common.ts";
 import { countOf, type CounterType } from "./count.ts";
-import { api, DayCalendar, longDay, marks, plural, reset, shortDay, useCall } from "./common.tsx";
-
-/**
- * What the dialog starts a counter from. A birthday and an anniversary are both yearly counters;
- * the template only words the dialog.
- */
-export const TEMPLATES = {
-  since: {
-    type: "since",
-    label: "Days since",
-    hint: "Counts up from the last time it happened.",
-    Icon: TimerResetIcon,
-    placeholder: "Since I last smoked",
-    day: "Last happened",
-  },
-  birthday: {
-    type: "yearly",
-    label: "Birthday",
-    hint: "Comes back every year on the day someone was born.",
-    Icon: CakeIcon,
-    placeholder: "Mum's birthday",
-    day: "Born on",
-  },
-  anniversary: {
-    type: "yearly",
-    label: "Anniversary",
-    hint: "Comes back every year on the day it first happened.",
-    Icon: CalendarHeartIcon,
-    placeholder: "Our wedding",
-    day: "First happened on",
-  },
-} as const satisfies Record<
-  string,
-  {
-    type: CounterType;
-    label: string;
-    hint: string;
-    Icon: LucideIcon;
-    placeholder: string;
-    day: string;
-  }
->;
-
-export type Template = keyof typeof TEMPLATES;
+import { api, longDay, marks, plural, reset, shortDay, useCall } from "./common.ts";
+import { DayCalendar } from "./parts.tsx";
 
 const isTemplate = (value: unknown): value is Template =>
   typeof value === "string" && value in TEMPLATES;

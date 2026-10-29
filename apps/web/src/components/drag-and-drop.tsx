@@ -18,46 +18,11 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { getEventCoordinates } from "@dnd-kit/utilities";
-import type { List, StatusDefinition, Task } from "@octodo/contract";
+import type { StatusDefinition, Task } from "@octodo/contract";
 import { useMemo, useState, type ReactNode } from "react";
 import { useMoveTask } from "@/lib/api";
+import { dragData, dropData, type DragData, type DragKind } from "@/lib/drag";
 import { neighbours } from "@/lib/tasks";
-
-/**
- * One drag context for the whole workspace page, so a task dragged out of the list or board can
- * land on a list in the sidebar. Draggables say what they are in `data`, droppables what they
- * take; each part of the page listens with `useDndMonitor` for the drags it cares about.
- */
-export type DragKind = "task" | "list";
-
-interface DragBase {
-  readonly overlay: () => ReactNode;
-  /**
-   * Pin the overlay's top-left corner to the pointer, for small overlays dragged from wide rows.
-   * Without it the overlay keeps the grab offset, which suits cards the size of their overlay.
-   */
-  readonly atPointer?: boolean;
-}
-
-export type DragData =
-  | (DragBase & { readonly type: "task"; readonly task: Task })
-  | (DragBase & { readonly type: "list"; readonly list: List });
-
-export interface DropData {
-  readonly accepts: ReadonlyArray<DragKind>;
-  /** A status group or column, which loses to the task rows inside it. */
-  readonly column?: string;
-  /** A list in the sidebar (null for "No list"). */
-  readonly list?: string | null;
-  /** Kinds this only takes from right under the pointer, never as the nearest fallback. */
-  readonly pointerOnly?: DragKind;
-}
-
-export const dragData = (entity: { data: { current?: unknown } } | null | undefined) =>
-  entity?.data.current as DragData | undefined;
-
-export const dropData = (entity: { data: { current?: unknown } } | null | undefined) =>
-  entity?.data.current as DropData | undefined;
 
 const accepts = (container: DroppableContainer, kind: DragKind | undefined) =>
   kind !== undefined && (dropData(container)?.accepts.includes(kind) ?? false);
@@ -107,6 +72,11 @@ const swallowNextClick = () => {
   setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 0);
 };
 
+/**
+ * One drag context for the whole workspace page, so a task dragged out of the list or board can
+ * land on a list in the sidebar. Draggables say what they are in `data`, droppables what they
+ * take; each part of the page listens with `useDndMonitor` for the drags it cares about.
+ */
 export function DragAndDrop({ children }: { children: ReactNode }) {
   const [active, setActive] = useState<DragData | null>(null);
   const sensors = useSensors(

@@ -1,8 +1,8 @@
 import type { CreateTaskInput, Entry, Task } from "@octodo/contract";
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
-import { countersWeb } from "./counters/web.tsx";
-import { recurringWeb } from "./recurring/web.tsx";
+import { countersWeb } from "./counters/web.ts";
+import { recurringWeb } from "./recurring/web.ts";
 
 /** A task of a plugin's kind, with `kind.fields` as the plugin's `fields` schema encodes them. */
 export type TaskOf<Fields> = Task & {

@@ -480,3 +480,9 @@ export const subtaskProgress = (snapshot: WorkspaceSnapshot): ReadonlyMap<string
   }
   return progress;
 };
+
+export const categoryOf = (snapshot: WorkspaceSnapshot, task: Task) =>
+  snapshot.statuses.find((status) => status.id === task.status)?.category;
+
+export const isDone = (status: StatusDefinition | undefined) =>
+  status?.category === "completed" || status?.category === "canceled";

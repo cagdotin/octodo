@@ -1,9 +1,7 @@
 import type { ServedApi } from "@octodo/contract/api";
 import { createClient } from "@octodo/contract/client";
-import { Calendar } from "@octodo/ui/components/calendar";
-import { useToday } from "@octodo/ui/hooks/use-today";
 import { addDays, format, parseISO } from "date-fns";
-import { CalendarHeartIcon, type LucideIcon, TimerIcon, TimerResetIcon } from "lucide-react";
+import { CakeIcon, CalendarHeartIcon, type LucideIcon, TimerResetIcon } from "lucide-react";
 import { useState } from "react";
 import type { EntryOf } from "../web.ts";
 import { nextOccurrence, type CounterFields, type CounterType } from "./count.ts";
@@ -17,18 +15,6 @@ export const KIND: Record<CounterType, { readonly label: string; readonly Icon: 
   since: { label: "Days since", Icon: TimerResetIcon },
   yearly: { label: "Every year", Icon: CalendarHeartIcon },
 };
-
-/** A counter's kind's icon; the section's own for a counter whose type is unreadable. */
-export function KindIcon({
-  type,
-  className,
-}: {
-  type: CounterType | null;
-  className?: string | undefined;
-}) {
-  const Icon = type === null ? TimerIcon : KIND[type].Icon;
-  return <Icon aria-label={type === null ? "Counter" : KIND[type].label} className={className} />;
-}
 
 export const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
@@ -65,7 +51,7 @@ const message = (cause: unknown) => (cause instanceof Error ? cause.message : St
 export const useCall = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const run = async <T,>(call: () => Promise<T>): Promise<T | undefined> => {
+  const run = async <T>(call: () => Promise<T>): Promise<T | undefined> => {
     setBusy(true);
     try {
       const result = await call();
@@ -103,30 +89,44 @@ export const remove = (workspace: string, id: string) =>
   api.request("DELETE /api/workspaces/:workspace/counters/:id", { params: { workspace, id } });
 
 /**
- * A day picker with month and year menus, to reach a birthday in 1961. `past` keeps it to today and
- * before, for when something last happened.
+ * What the dialog starts a counter from. A birthday and an anniversary are both yearly counters;
+ * the template only words the dialog.
  */
-export function DayCalendar({
-  value,
-  onPick,
-  past = false,
-}: {
-  value: string | null;
-  onPick: (day: string) => void;
-  past?: boolean;
-}) {
-  const today = parseISO(useToday());
-  const selected = value === null ? today : parseISO(value);
-  return (
-    <Calendar
-      mode="single"
-      captionLayout="dropdown"
-      startMonth={new Date(1900, 0)}
-      endMonth={past ? today : new Date(today.getFullYear() + 10, 11)}
-      defaultMonth={selected}
-      {...(past ? { disabled: { after: today } } : {})}
-      {...(value === null ? {} : { selected })}
-      onSelect={(date) => date && onPick(format(date, "yyyy-MM-dd"))}
-    />
-  );
-}
+export const TEMPLATES = {
+  since: {
+    type: "since",
+    label: "Days since",
+    hint: "Counts up from the last time it happened.",
+    Icon: TimerResetIcon,
+    placeholder: "Since I last smoked",
+    day: "Last happened",
+  },
+  birthday: {
+    type: "yearly",
+    label: "Birthday",
+    hint: "Comes back every year on the day someone was born.",
+    Icon: CakeIcon,
+    placeholder: "Mum's birthday",
+    day: "Born on",
+  },
+  anniversary: {
+    type: "yearly",
+    label: "Anniversary",
+    hint: "Comes back every year on the day it first happened.",
+    Icon: CalendarHeartIcon,
+    placeholder: "Our wedding",
+    day: "First happened on",
+  },
+} as const satisfies Record<
+  string,
+  {
+    type: CounterType;
+    label: string;
+    hint: string;
+    Icon: LucideIcon;
+    placeholder: string;
+    day: string;
+  }
+>;
+
+export type Template = keyof typeof TEMPLATES;

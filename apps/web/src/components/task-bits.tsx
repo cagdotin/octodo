@@ -1,11 +1,4 @@
-import type {
-  List,
-  Priority,
-  StatusCategory,
-  StatusDefinition,
-  Task,
-  WorkspaceSnapshot,
-} from "@octodo/contract";
+import type { List, Priority, StatusCategory, Task, WorkspaceSnapshot } from "@octodo/contract";
 import {
   CalendarDaysIcon,
   CalendarRangeIcon,
@@ -16,7 +9,8 @@ import {
   LockOpenIcon,
 } from "lucide-react";
 import type { ReactNode, ReactElement } from "react";
-import { KindRow, kindWeb } from "@/components/task-kind";
+import { KindRow } from "@/components/task-kind";
+import { kindWeb } from "@/lib/task-kind";
 import { Badge } from "@octodo/ui/components/badge";
 import {
   DropdownMenu,
@@ -290,12 +284,6 @@ export function TaskDate({ task, className }: { task: Task; className?: string }
 /* ---------------------------------------------------------------------------------------------- */
 /* Menus                                                                                          */
 /* ---------------------------------------------------------------------------------------------- */
-
-export const categoryOf = (snapshot: WorkspaceSnapshot, task: Task) =>
-  snapshot.statuses.find((status) => status.id === task.status)?.category;
-
-export const isDone = (status: StatusDefinition | undefined) =>
-  status?.category === "completed" || status?.category === "canceled";
 
 const iconButton =
   "relative z-10 flex size-6 shrink-0 items-center justify-center rounded-md outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 aria-expanded:bg-accent";

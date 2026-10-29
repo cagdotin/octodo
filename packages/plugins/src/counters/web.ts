@@ -1,6 +1,7 @@
 import { CalendarClockIcon, TimerIcon } from "lucide-react";
 import type { SectionWeb } from "../web.ts";
-import { api, KIND, KindIcon, remove } from "./common.tsx";
+import { api, KIND, remove } from "./common.ts";
+import { CounterIcon } from "./parts.tsx";
 import { countOf, counterDay, type CounterFields } from "./count.ts";
 import { Panel } from "./panel.tsx";
 import { View } from "./view.tsx";
@@ -13,7 +14,7 @@ export const countersWeb: SectionWeb<CounterFields> = {
   label: "Counters",
   noun: "counter",
   Icon: TimerIcon,
-  EntryIcon: ({ fields, className }) => <KindIcon type={fields.type} className={className} />,
+  EntryIcon: CounterIcon,
   views: [
     {
       id: "soon",

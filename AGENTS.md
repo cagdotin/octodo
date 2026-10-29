@@ -176,7 +176,8 @@ OCT-69.
   writes into `packages/ui`.
 - Agent config lives in `.agents/`: `skills/` and `mcp.json` (the octodo and devl MCP servers).
   `.claude/skills` and `.mcp.json` are symlinks to them, so the servers are enabled for this project only.
-- `pnpm doctor` runs React Doctor over the React packages and fails on any error-level finding.
+- `pnpm run react-doctor` runs React Doctor over the React packages and fails on any finding, warnings
+  included (`pnpm doctor` is pnpm's own command).
   It runs offline: no score API, share link, crash reports or supply-chain lookups. Suppress a
   finding only where the rule is wrong for the code, with the reason above
   `// react-doctor-disable-next-line <rule>`; a package-wide exception goes in its `doctor.config.json`.

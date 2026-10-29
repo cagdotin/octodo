@@ -23,7 +23,9 @@ under `~/Documents` stayed readable after the restart.
   A newer push cancels a nightly still building. A stable release `v0.4.0` is published from
   Actions > Stable > Run workflow, which releases the newest nightly's commit as the version it
   previews, or from a pushed `v0.4.0` tag. `scripts/release.ts` holds the steps the workflows
-  share: the version, the feed file and pruning old nightlies (ten are kept).
+  share: the version, the feed file and pruning old nightlies (ten are kept). electron-builder's own
+  publishing is off (`"publish": null`): left on, it sees `GH_TOKEN` in CI and fails building an
+  update manifest nothing reads.
 - **Feeds.** A feed is a JSON file naming a release: `{ version, url, sha256 }`. `stable.json`
   rides in each stable release and is read through GitHub's `releases/latest/download/`, which
   skips prereleases. `nightly.json` is replaced on a release named `nightly` after each nightly is

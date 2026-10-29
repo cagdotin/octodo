@@ -24,6 +24,7 @@
   "build": {
     "appId": "app.octodo.desktop",
     "npmRebuild": false,
+    "publish": null,
     "files": [
       "dist/**",
       "package.json"

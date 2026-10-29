@@ -6,10 +6,11 @@ import { defaultHome } from "@octodo/engine";
 import { DEFAULT_PORT } from "@octodo/server";
 import { BrowserWindow, app, dialog, ipcMain, shell } from "electron";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { startBackend, type Problem } from "./backend.ts";
 import { ANSWERS, problemPage } from "./problem.ts";
+import { isInstalled, linkOcto } from "./octo-link.ts";
 import { startUpdates } from "./updates.ts";
 
 const devUrl = process.env["OCTODO_DEV_URL"];
@@ -164,6 +165,12 @@ if (!app.requestSingleInstanceLock()) {
   });
   ipcMain.handle("octodo:update-ready", async () => (await updates).ready());
   ipcMain.handle("octodo:install-update", async () => (await updates).install());
+
+  const bundle = resolve(process.execPath, "../../..");
+  if (app.isPackaged && isInstalled(bundle, homedir()))
+    void linkOcto(bundle, homedir()).catch((error: unknown) =>
+      console.error(`Linking octo failed: ${String(error)}`),
+    );
 
   // `octo upgrade` asks a running app to quit this way before it swaps the app's folder.
   process.on("SIGTERM", () => app.quit());

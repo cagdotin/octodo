@@ -44,7 +44,9 @@ under `~/Documents` stayed readable after the restart.
 - **The CLI ships in the app.** `Contents/Resources/bin/octo` runs the app's binary as Node on its
   bundled `cli.mjs`, so one update moves the app, the CLI and `octo mcp` together and they always
   answer as one version. `octo upgrade` updates the app it belongs to: it downloads the release,
-  quits a running app with SIGTERM, swaps the folders and opens the app again.
+  quits a running app with SIGTERM, swaps the folders and opens the app again. An app installed in
+  `/Applications` or `~/Applications` links `~/.local/bin/octo` to its `octo` on launch
+  (`octo-link.ts`), unless an octo that works is already there, such as a checkout's `bin/octo`.
 - **macOS on arm64 only.** The builds run on `macos-15`, an Apple Silicon runner.
 
 ## Why

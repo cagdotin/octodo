@@ -51,10 +51,11 @@ appears at the bottom of the sidebar.
 Releases marked "Pre-release" are nightlies, built from every change to `master`. A nightly
 updates to newer nightlies and to stable releases; a stable release updates only to stable ones.
 
-The app ships the `octo` CLI. Put it on your PATH, and it updates along with the app:
+The app ships the `octo` CLI and links it as `~/.local/bin/octo` the first time it opens (an
+`octo` that already works there is left alone). Add `~/.local/bin` to your PATH if it is not on
+it. `octo` updates along with the app:
 
 ```sh
-ln -s /Applications/octodo.app/Contents/Resources/bin/octo ~/.local/bin/octo
 octo upgrade                    # update the app (and this octo) now
 octo upgrade --channel nightly  # move to the nightly channel
 ```

@@ -1,5 +1,5 @@
 import { ChevronRightIcon } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -36,33 +36,38 @@ export function SidebarBottom({ children }: { children: ReactNode }) {
 }
 
 /**
- * A titled group of sidebar rows that folds away. `action` is a button at the header's end; using
- * it unfolds the group first.
+ * A titled group of sidebar rows that folds away from the chevron before its title. `action` is a
+ * button at the header's end; using it unfolds the group first.
  */
 export function Section({
   label,
+  open,
+  onOpenChange,
   action,
   children,
 }: {
   label: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   action?: { readonly label: string; readonly icon: ReactNode; readonly onClick: () => void };
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(true);
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="group/section">
+    <Collapsible open={open} onOpenChange={onOpenChange}>
       <SidebarGroup className="relative py-1">
         <SidebarGroupLabel
-          className="h-7 w-full cursor-pointer gap-2 rounded-lg px-2 text-[13px] font-normal text-sidebar-foreground/60 outline-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          className="h-7 w-full cursor-pointer gap-1 rounded-lg ps-1 pe-8 text-[13px] font-normal text-sidebar-foreground/60 outline-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
           render={
             <CollapsibleTrigger>
+              <span className="flex size-4 items-center justify-center">
+                <ChevronRightIcon
+                  className={cn(
+                    "size-3.5 text-sidebar-foreground/50 transition-transform",
+                    open && "rotate-90",
+                  )}
+                />
+              </span>
               {label}
-              <ChevronRightIcon
-                className={cn(
-                  "ms-auto size-3.5 rotate-90 text-sidebar-foreground/50 transition-transform group-data-closed/section:rotate-0",
-                  action && "me-6",
-                )}
-              />
             </CollapsibleTrigger>
           }
         />
@@ -71,9 +76,9 @@ export function Section({
             type="button"
             aria-label={action.label}
             title={action.label}
-            className="absolute top-2 right-1 flex size-5 items-center justify-center rounded-md text-sidebar-foreground/60 outline-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring [&>svg]:size-3.5"
+            className="absolute top-2 right-3 flex size-5 items-center justify-center rounded-md text-sidebar-foreground/60 outline-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring [&>svg]:size-4"
             onClick={() => {
-              setOpen(true);
+              onOpenChange(true);
               action.onClick();
             }}
           >

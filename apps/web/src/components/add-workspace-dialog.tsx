@@ -138,7 +138,7 @@ export function AddWorkspaceDialog({ trigger, open, onOpenChange }: Props) {
             </DialogDescription>
           </DialogHeader>
           <DialogPanel className="flex flex-col gap-5">
-            <Field data-invalid={error !== null || undefined}>
+            <Field invalid={error !== null}>
               <FieldLabel htmlFor="ws-root">Folder</FieldLabel>
               <InputGroup>
                 <InputGroupInput
@@ -171,7 +171,7 @@ export function AddWorkspaceDialog({ trigger, open, onOpenChange }: Props) {
                 <FolderBrowser start={absolute ? trimmed : undefined} onChoose={choose} />
               )}
               {error !== null ? (
-                <FieldError>{error}</FieldError>
+                <FieldError match>{error}</FieldError>
               ) : existing ? (
                 <FieldDescription className="flex items-center gap-1.5">
                   <FolderCheckIcon className="size-3.5" />

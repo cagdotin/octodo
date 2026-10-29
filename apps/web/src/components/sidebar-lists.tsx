@@ -20,6 +20,7 @@ import { dragData, dropData, type DragData, type DropData } from "@/components/d
 import {
   DeleteListDialog,
   ListNameInput,
+  NewListDialog,
   useFollowList,
   type ListEdit,
 } from "@/components/list-editing";
@@ -32,17 +33,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@octodo/ui/components/menu";
-import { FolderPlusIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
+import {
+  ChevronRightIcon,
+  FolderPlusIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  PlusIcon,
+  TrashIcon,
+} from "lucide-react";
 import {
   SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
 } from "@octodo/ui/components/sidebar";
 import { useCreateList, useMoveList, useMoveTask, useRenameList } from "@/lib/api";
+import { foldedLists, type FoldedLists } from "@/lib/prefs";
 import { cn } from "@octodo/ui/lib/utils";
 import { applyListMove, listTree, type ListNode } from "@/lib/tasks";
 
@@ -80,6 +86,7 @@ const pointerY = (activatorEvent: Event, deltaY: number): number | undefined => 
  */
 const placementFor = (
   lists: ReadonlyArray<List>,
+  folded: (id: string) => boolean,
   dragged: string,
   over: string,
   rect: ClientRect,
@@ -90,7 +97,7 @@ const placementFor = (
   const target = lists.find((list) => list.id === over);
   if (!target) return null;
   const ratio = y === undefined ? 0.5 : (y - rect.top) / rect.height;
-  const firstChild = lists.find((list) => list.parent === over);
+  const firstChild = folded(over) ? undefined : lists.find((list) => list.parent === over);
   if (ratio < 1 / 3) {
     return fits(target.parent)
       ? { over, zone: "before", move: { parent: target.parent, before: over } }
@@ -112,9 +119,52 @@ const placementFor = (
 const sameOrder = (a: ReadonlyArray<List>, b: ReadonlyArray<List>) =>
   a.length === b.length && a.every((list, index) => list.id === b[index]?.id);
 
+/** Where a row's icon starts at `depth`, in pixels; the gutter before it holds the fold chevron. */
+const inset = (depth: number) => 24 + depth * 16;
+
 /**
- * The lists in the sidebar, as a tree in folder order. Lists drag onto each other to reorder or
- * nest; tasks dragged from the list or board drop onto a list to move there.
+ * The workspace's folded lists, kept per browser. A list that moves or is renamed keeps its state
+ * through `rename`; a deleted one is forgotten, and each save drops lists that are gone.
+ */
+const useFolded = (workspace: string, lists: ReadonlyArray<List>) => {
+  const stored = foldedLists(workspace);
+  const [folded, setFolded] = useState<FoldedLists>(stored.get);
+  const save = (next: FoldedLists) => {
+    stored.set(next);
+    setFolded(next);
+  };
+  const exists = (id: string) => lists.some((list) => list.id === id);
+  const prune = (ids: ReadonlyArray<string>) => ids.filter(exists);
+  return {
+    section: folded.section,
+    setSection: (section: boolean) => save({ section, lists: prune(folded.lists) }),
+    isFolded: (id: string) => folded.lists.includes(id),
+    toggle: (id: string) =>
+      save({
+        ...folded,
+        lists: prune(
+          folded.lists.includes(id)
+            ? folded.lists.filter((known) => known !== id)
+            : [...folded.lists, id],
+        ),
+      }),
+    unfold: (id: string) =>
+      save({ ...folded, lists: prune(folded.lists.filter((known) => known !== id)) }),
+    forget: (id: string) =>
+      save({ ...folded, lists: folded.lists.filter((known) => !inSubtree(known, id)) }),
+    // The renamed ids are not in the snapshot yet, so this save keeps every id.
+    rename: (from: string, to: string) =>
+      save({
+        ...folded,
+        lists: folded.lists.map((id) => (inSubtree(id, from) ? to + id.slice(from.length) : id)),
+      }),
+  };
+};
+
+/**
+ * The lists in the sidebar, as a tree in folder order. A list with sublists folds them away. Lists
+ * drag onto each other to reorder or nest; tasks dragged from the list or board drop onto a list to
+ * move there.
  */
 export function SidebarLists({
   snapshot,
@@ -133,24 +183,28 @@ export function SidebarLists({
   const createList = useCreateList(ws);
   const renameList = useRenameList(ws);
   const navigate = useNavigate();
-  const follow = useFollowList(ws, activeList);
+  const followActive = useFollowList(ws, activeList);
+  const folding = useFolded(ws, snapshot.lists);
   const [placement, setPlacement] = useState<Placement | null>(null);
   const [edit, setEdit] = useState<ListEdit>(null);
   const done = () => setEdit(null);
 
-  const create = (parent: string | null) => (name: string) => {
+  const follow = (from: string, to: string) => {
+    folding.rename(from, to);
+    followActive(from, to);
+  };
+
+  const create = (input: { readonly name: string; readonly parent: string | null }) => {
     done();
-    createList.mutate(
-      { name, parent },
-      {
-        onSuccess: (list) =>
-          void navigate({
-            to: "/w/$workspace",
-            params: { workspace: ws },
-            search: (prev) => ({ ...prev, list: list.id, task: undefined }),
-          }),
-      },
-    );
+    if (input.parent !== null) folding.unfold(input.parent);
+    createList.mutate(input, {
+      onSuccess: (list) =>
+        void navigate({
+          to: "/w/$workspace",
+          params: { workspace: ws },
+          search: (prev) => ({ ...prev, list: list.id, task: undefined }),
+        }),
+    });
   };
 
   const rename = (list: List) => (name: string) => {
@@ -160,18 +214,6 @@ export function SidebarLists({
       { onSuccess: (renamed) => follow(list.id, renamed.id) },
     );
   };
-
-  /** The name field for a new list under `parent`, when one is being created there. */
-  const newListInput = (parent: string | null, sub: boolean) =>
-    edit?.kind === "create" && edit.parent === parent ? (
-      <ListNameInput
-        lists={snapshot.lists}
-        parent={parent}
-        sub={sub}
-        onSubmit={create(parent)}
-        onCancel={done}
-      />
-    ) : null;
 
   const listOver = (over: Over | null) => {
     const list = dropData(over)?.list;
@@ -188,6 +230,7 @@ export function SidebarLists({
     setPlacement(
       placementFor(
         snapshot.lists,
+        folding.isFolded,
         data.list.id,
         target,
         over.rect,
@@ -222,71 +265,73 @@ export function SidebarLists({
     onDragCancel: () => setPlacement(null),
   });
 
-  const render = (node: ListNode, depth: number): ReactNode => {
-    const creating = newListInput(node.list.id, true);
-    return (
+  const rows = (node: ListNode, depth: number): Array<ReactNode> => {
+    const { list, children } = node;
+    const folded = children.length === 0 ? null : folding.isFolded(list.id);
+    return [
       <ListRow
-        key={node.list.id}
+        key={list.id}
         workspace={ws}
-        list={node.list}
+        list={list}
         depth={depth}
-        count={counts.get(node.list.id) ?? 0}
-        active={activeList === node.list.id}
-        placement={placement?.over === node.list.id ? placement.zone : null}
+        count={counts.get(list.id) ?? 0}
+        active={activeList === list.id}
+        placement={placement?.over === list.id ? placement.zone : null}
+        folded={folded}
+        onToggle={() => folding.toggle(list.id)}
         onNavigate={onNavigate}
         onEdit={setEdit}
         renaming={
-          edit?.kind === "rename" && edit.list.id === node.list.id ? (
+          edit?.kind === "rename" && edit.list.id === list.id ? (
             <ListNameInput
               lists={snapshot.lists}
-              parent={node.list.parent}
-              list={node.list}
-              sub={depth > 0}
-              onSubmit={rename(node.list)}
+              list={list}
+              inset={inset(depth)}
+              onSubmit={rename(list)}
               onCancel={done}
             />
           ) : null
         }
-      >
-        {node.children.length > 0 || creating !== null ? (
-          <SidebarMenuSub>
-            {node.children.map((child) => render(child, depth + 1))}
-            {creating && <SidebarMenuSubItem>{creating}</SidebarMenuSubItem>}
-          </SidebarMenuSub>
-        ) : null}
-      </ListRow>
-    );
+      />,
+      ...(folded === true ? [] : children.flatMap((child) => rows(child, depth + 1))),
+    ];
   };
 
-  const creatingTop = edit?.kind === "create" && edit.parent === null;
+  const newList = (parent: string | null) => () => setEdit({ kind: "create", parent });
   return (
     <Section
       label="Lists"
-      action={{
-        label: "New list",
-        icon: <PlusIcon />,
-        onClick: () => setEdit({ kind: "create", parent: null }),
-      }}
+      open={!folding.section}
+      onOpenChange={(open) => folding.setSection(!open)}
+      action={{ label: "New list", icon: <PlusIcon />, onClick: newList(null) }}
     >
-      {listTree(snapshot.lists).map((node) => render(node, 0))}
+      {listTree(snapshot.lists).flatMap((node) => rows(node, 0))}
       <SidebarMenuItem>
-        {creatingTop ? (
-          newListInput(null, false)
-        ) : (
-          <SidebarMenuButton
-            className={cn(ITEM, "text-sidebar-foreground/60")}
-            onClick={() => setEdit({ kind: "create", parent: null })}
-          >
-            <PlusIcon />
-            <span>New list</span>
-          </SidebarMenuButton>
-        )}
+        <SidebarMenuButton
+          className={cn(ITEM, "text-sidebar-foreground/60")}
+          style={{ paddingInlineStart: inset(0) }}
+          onClick={newList(null)}
+        >
+          <PlusIcon />
+          <span>New list</span>
+        </SidebarMenuButton>
       </SidebarMenuItem>
+      <NewListDialog
+        key={edit?.kind === "create" ? `create:${edit.parent}` : "create"}
+        lists={snapshot.lists}
+        parent={edit?.kind === "create" ? edit.parent : null}
+        open={edit?.kind === "create"}
+        onCreate={create}
+        onClose={done}
+      />
       <DeleteListDialog
         key={edit?.kind === "delete" ? edit.list.id : "delete"}
         snapshot={snapshot}
         list={edit?.kind === "delete" ? edit.list : null}
-        onDeleted={(id) => follow(id, undefined)}
+        onDeleted={(id) => {
+          folding.forget(id);
+          followActive(id, undefined);
+        }}
         onClose={done}
       />
     </Section>
@@ -300,10 +345,11 @@ function ListRow({
   count,
   active,
   placement,
+  folded,
+  onToggle,
   onNavigate,
   onEdit,
   renaming,
-  children,
 }: {
   workspace: string;
   list: List;
@@ -311,11 +357,13 @@ function ListRow({
   count: number;
   active: boolean;
   placement: Placement["zone"] | null;
+  /** Whether its sublists are folded away; null for a list without sublists. */
+  folded: boolean | null;
+  onToggle: () => void;
   onNavigate: () => void;
   onEdit: (edit: ListEdit) => void;
   /** The name field that takes the row's place while the list is renamed. */
   renaming: ReactNode;
-  children: ReactNode;
 }) {
   const drag = useDraggable({
     id: `drag-${LIST_PREFIX}${list.id}`,
@@ -348,6 +396,7 @@ function ListRow({
       search={(prev) => ({ ...prev, list: list.id, task: undefined })}
       onClick={onNavigate}
       draggable={false}
+      style={{ paddingInlineStart: inset(depth) }}
       className={cn(
         drag.isDragging && "opacity-40",
         (placement === "inside" || taskOver) && "bg-sidebar-accent ring-1 ring-sidebar-ring",
@@ -406,51 +455,41 @@ function ListRow({
       </DropdownMenuContent>
     </DropdownMenu>
   );
-  // Sublists sit inside their parent's item, so the row gets its own hover group. Its count gives
-  // way to the actions button, which phones without hover always show.
-  const yields =
-    "max-md:hidden group-focus-within/list-row:opacity-0 group-hover/list-row:opacity-0 group-has-data-popup-open/list-row:opacity-0";
-  const row = (button: ReactNode, count: ReactNode) =>
-    renaming ?? (
-      <div className="group/list-row relative">
-        {button}
-        {count}
-        {actions}
-        {line}
-      </div>
-    );
 
-  if (depth === 0) {
-    return (
-      <SidebarMenuItem>
-        {row(
-          <SidebarMenuButton isActive={active} className={ITEM} render={link as ReactElement} />,
-          count > 0 && <SidebarMenuBadge className={cn(COUNT, yields)}>{count}</SidebarMenuBadge>,
-        )}
-        {children}
-      </SidebarMenuItem>
-    );
-  }
+  // The row's count gives way to the actions button, which phones without hover always show.
   return (
-    <SidebarMenuSubItem>
-      {row(
-        <SidebarMenuSubButton
-          isActive={active}
-          className="h-7 pe-9 text-[13px] text-sidebar-foreground/90 [&>span:last-child]:truncate [&>svg]:text-sidebar-foreground/70"
-          render={link as ReactElement}
-        />,
-        count > 0 && (
-          <span
-            className={cn(
-              "pointer-events-none absolute top-1.5 right-2 text-xs text-sidebar-foreground/50 tabular-nums",
-              yields,
-            )}
-          >
-            {count}
-          </span>
-        ),
+    <SidebarMenuItem>
+      {renaming ?? (
+        <div className="group/list-row relative">
+          <SidebarMenuButton isActive={active} className={ITEM} render={link as ReactElement} />
+          {folded !== null && (
+            <button
+              type="button"
+              aria-label={`${folded ? "Show" : "Hide"} the sublists of ${list.name}`}
+              aria-expanded={!folded}
+              onClick={onToggle}
+              style={{ left: inset(depth) - 20 }}
+              className="absolute top-1.5 flex size-4 items-center justify-center rounded-sm text-sidebar-foreground/50 outline-hidden hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            >
+              <ChevronRightIcon
+                className={cn("size-3.5 transition-transform", !folded && "rotate-90")}
+              />
+            </button>
+          )}
+          {count > 0 && (
+            <SidebarMenuBadge
+              className={cn(
+                COUNT,
+                "max-md:hidden group-focus-within/list-row:opacity-0 group-hover/list-row:opacity-0 group-has-data-popup-open/list-row:opacity-0",
+              )}
+            >
+              {count}
+            </SidebarMenuBadge>
+          )}
+          {actions}
+          {line}
+        </div>
       )}
-      {children}
-    </SidebarMenuSubItem>
+    </SidebarMenuItem>
   );
 }

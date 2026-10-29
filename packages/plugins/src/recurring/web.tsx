@@ -98,7 +98,7 @@ function RepeatEditor({ workspace, task }: KindProps<RecurringFields>) {
       />
       <PopoverContent align="start" className="w-72 p-1.5">
         <form onSubmit={(event) => void save(event)}>
-          <Field data-invalid={error !== null || undefined} className="gap-1.5">
+          <Field invalid={error !== null} className="gap-1.5">
             <InputGroup>
               <InputGroupInput
                 autoFocus
@@ -110,7 +110,11 @@ function RepeatEditor({ workspace, task }: KindProps<RecurringFields>) {
                 onChange={(event) => setDraft(event.target.value)}
               />
             </InputGroup>
-            <FieldError className="px-1 text-xs">{error}</FieldError>
+            {error !== null && (
+              <FieldError match className="px-1 text-xs">
+                {error}
+              </FieldError>
+            )}
           </Field>
         </form>
       </PopoverContent>
@@ -152,7 +156,7 @@ function CreateFields({ draft, onChange, finalFocus }: CreateFieldsProps<Draft>)
             if (valid) setOpen(false);
           }}
         >
-          <Field data-invalid={error !== null || undefined} className="gap-1.5">
+          <Field invalid={error !== null} className="gap-1.5">
             <InputGroup>
               <InputGroupInput
                 autoFocus
@@ -168,7 +172,9 @@ function CreateFields({ draft, onChange, finalFocus }: CreateFieldsProps<Draft>)
                 {first === null ? RULE_EXAMPLES : `First due: ${first}`}
               </p>
             ) : (
-              <FieldError className="px-1 text-xs">{error}</FieldError>
+              <FieldError match className="px-1 text-xs">
+                {error}
+              </FieldError>
             )}
           </Field>
         </form>

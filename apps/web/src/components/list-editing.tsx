@@ -1,7 +1,7 @@
 import type { List, WorkspaceSnapshot } from "@octodo/contract";
-import { inSubtree } from "@octodo/contract/rules";
+import { inSubtree, listDepth, MAX_LIST_DEPTH } from "@octodo/contract/rules";
 import { useNavigate } from "@tanstack/react-router";
-import { useId, useRef, useState, type KeyboardEvent } from "react";
+import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -13,13 +13,31 @@ import {
 } from "@octodo/ui/components/alert-dialog";
 import { Button } from "@octodo/ui/components/button";
 import { Checkbox } from "@octodo/ui/components/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogTitle,
+} from "@octodo/ui/components/dialog";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@octodo/ui/components/field";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@octodo/ui/components/input-group";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@octodo/ui/components/select";
 import { Label } from "@octodo/ui/components/label";
 import { cn } from "@octodo/ui/lib/utils";
 import { ListGlyph } from "@/components/task-bits";
 import { useDeleteList } from "@/lib/api";
-import { listNameError, tasksInList } from "@/lib/tasks";
+import { listLabel, listNameError, tasksInList } from "@/lib/tasks";
 
-/** What the sidebar is doing to its lists: a name typed in place, or a delete to confirm. */
+/** What the sidebar is doing to its lists: a new one to name, a rename in place, or a delete to confirm. */
 export type ListEdit =
   | { readonly kind: "create"; readonly parent: string | null }
   | { readonly kind: "rename"; readonly list: List }
@@ -42,35 +60,30 @@ export const useFollowList = (workspace: string, activeList: string | undefined)
   };
 };
 
-/**
- * A list's name typed in place of its sidebar row. Enter saves, Escape cancels, and leaving the
- * field saves what was typed or cancels when it is empty or unchanged.
- */
+/** A list's new name typed in place of its row. Enter or leaving the field saves; Escape cancels. */
 export function ListNameInput({
   lists,
-  parent,
   list,
-  sub,
+  inset,
   onSubmit,
   onCancel,
 }: {
   lists: ReadonlyArray<List>;
-  parent: string | null;
-  /** The list being renamed; none when creating one. */
-  list?: List;
-  sub: boolean;
+  list: List;
+  /** Where the row's icon starts, in pixels, so the field lines up with the row it replaces. */
+  inset: number;
   onSubmit: (name: string) => void;
   onCancel: () => void;
 }) {
-  const [name, setName] = useState(list?.name ?? "");
+  const [name, setName] = useState(list.name);
   const finished = useRef(false);
   const trimmed = name.trim();
-  const error = trimmed === "" ? null : listNameError(lists, parent, trimmed, list?.id);
+  const error = trimmed === "" ? null : listNameError(lists, list.parent, trimmed, list.id);
 
   const finish = (save: boolean) => {
     if (finished.current) return;
     finished.current = true;
-    if (save && trimmed !== "" && trimmed !== list?.name && error === null) onSubmit(trimmed);
+    if (save && trimmed !== "" && trimmed !== list.name && error === null) onSubmit(trimmed);
     else onCancel();
   };
 
@@ -87,8 +100,9 @@ export function ListNameInput({
   return (
     <div className="relative">
       <div
+        style={{ paddingInlineStart: inset }}
         className={cn(
-          "flex h-7 items-center gap-2.5 rounded-md bg-sidebar-accent px-2 ring-1 ring-sidebar-ring [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-foreground/70",
+          "flex h-7 items-center gap-2.5 rounded-md bg-sidebar-accent pe-2 ring-1 ring-sidebar-ring [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-foreground/70",
           error !== null && "ring-destructive",
         )}
       >
@@ -96,20 +110,120 @@ export function ListNameInput({
         <input
           autoFocus
           onFocus={(event) => event.currentTarget.select()}
-          aria-label={
-            list === undefined ? (sub ? "New sublist name" : "New list name") : "List name"
-          }
+          aria-label="List name"
           aria-invalid={error !== null || undefined}
-          placeholder={sub ? "Sublist name" : "List name"}
-          className="min-w-0 flex-1 bg-transparent text-[13px] text-sidebar-accent-foreground outline-none placeholder:text-sidebar-foreground/40"
+          className="min-w-0 flex-1 bg-transparent text-[13px] text-sidebar-accent-foreground outline-none"
           value={name}
           onChange={(event) => setName(event.target.value)}
           onKeyDown={onKeyDown}
           onBlur={() => finish(error === null)}
         />
       </div>
-      {error !== null && <p className="px-2 pt-1 text-xs text-destructive-foreground">{error}</p>}
+      {error !== null && (
+        <p
+          className="pt-1 pe-2 text-xs text-destructive-foreground"
+          style={{ paddingInlineStart: inset }}
+        >
+          {error}
+        </p>
+      )}
     </div>
+  );
+}
+
+const TOP_LEVEL = "__top__";
+
+/** Names a new list and picks the list it goes in, the one it was opened from preselected. */
+export function NewListDialog({
+  lists,
+  parent: initialParent,
+  open,
+  onCreate,
+  onClose,
+}: {
+  lists: ReadonlyArray<List>;
+  parent: string | null;
+  open: boolean;
+  onCreate: (list: { readonly name: string; readonly parent: string | null }) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [parent, setParent] = useState(initialParent ?? TOP_LEVEL);
+  const parentId = parent === TOP_LEVEL ? null : parent;
+  const trimmed = name.trim();
+  const error = trimmed === "" ? null : listNameError(lists, parentId, trimmed);
+  const parents = [
+    { value: TOP_LEVEL, label: "None" },
+    ...lists
+      .filter((list) => listDepth(list.id) < MAX_LIST_DEPTH)
+      .map((list) => ({ value: list.id, label: listLabel(lists, list.id) })),
+  ];
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (trimmed === "" || error !== null) return;
+    onCreate({ name: trimmed, parent: parentId });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <form onSubmit={submit} className="contents">
+          <DialogHeader>
+            <DialogTitle>{parentId === null ? "New list" : "New sublist"}</DialogTitle>
+          </DialogHeader>
+          <DialogPanel className="flex flex-col gap-5">
+            <Field invalid={error !== null}>
+              <FieldLabel htmlFor="new-list-name">Name</FieldLabel>
+              <InputGroup>
+                <InputGroupAddon>
+                  <ListGlyph />
+                </InputGroupAddon>
+                <InputGroupInput
+                  id="new-list-name"
+                  autoFocus
+                  placeholder="Groceries"
+                  value={name}
+                  aria-invalid={error !== null || undefined}
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </InputGroup>
+              {error !== null && <FieldError match>{error}</FieldError>}
+            </Field>
+            <Field>
+              <FieldLabel>Inside</FieldLabel>
+              <Select
+                items={parents}
+                value={parent}
+                onValueChange={(value) => value !== null && setParent(value)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {parents.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <FieldDescription>Lists nest up to {MAX_LIST_DEPTH} levels deep.</FieldDescription>
+            </Field>
+          </DialogPanel>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={trimmed === "" || error !== null}>
+              Create list
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

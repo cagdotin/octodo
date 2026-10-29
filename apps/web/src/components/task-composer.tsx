@@ -5,6 +5,7 @@ import { suggestionsFor, useQuickAdd } from "@/components/quick-add/use-quick-ad
 import { PriorityIcon, StatusIcon, TagChip } from "@/components/task-bits";
 import { Kbd } from "@octodo/ui/components/kbd";
 import { useCreateTask } from "@/lib/api";
+import { PANE_ROW } from "@octodo/ui/components/pane";
 import { cn } from "@octodo/ui/lib/utils";
 import { useToday } from "@octodo/ui/hooks/use-today";
 import { dueInfo } from "@octodo/ui/lib/dates";
@@ -68,22 +69,24 @@ export function TaskComposer({
       className={cn(
         "flex items-center gap-2",
         variant === "row"
-          ? "h-9 gap-1.5 rounded-md bg-row-hover pr-3 pl-1.5 md:pl-[18px]"
+          ? cn(PANE_ROW, "bg-accent/60")
           : "rounded-lg border bg-card px-3 py-2.5 shadow-xs",
       )}
     >
+      {variant === "row" && (
+        <>
+          <span aria-hidden className="size-4 shrink-0" />
+          <span aria-hidden className="hidden shrink-0 @md:block" style={{ width: idWidth }} />
+        </>
+      )}
       <span
-        className={cn("flex shrink-0 items-center justify-center", variant === "row" && "size-6")}
+        className={cn(
+          "flex shrink-0 items-center justify-center",
+          variant === "row" && "-mx-1 size-6",
+        )}
       >
         <StatusIcon category={category} />
       </span>
-      {variant === "row" && (
-        <span
-          aria-hidden
-          className="box-content hidden shrink-0 pr-2 pl-1 font-mono text-xs sm:inline"
-          style={{ width: idWidth }}
-        />
-      )}
       <QuickAddInput
         // oxlint-disable-next-line jsx-a11y/no-autofocus -- opened on purpose by a click or `n`.
         autoFocus
@@ -91,7 +94,7 @@ export function TaskComposer({
         suggestions={suggestions}
         label="New task title"
         placeholder="Task title, then Enter  (/list  #tag  !high  tomorrow)"
-        className="min-w-0 flex-1 pl-1 text-base md:text-sm"
+        className="min-w-0 flex-1 text-base md:text-[13px]"
         onSubmit={submit}
         onEscape={onClose}
         onBlur={() => draft.text.trim() === "" && onClose()}

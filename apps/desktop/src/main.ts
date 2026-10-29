@@ -52,11 +52,11 @@ const waitFor = async (url: string) => {
 };
 
 /**
- * On macOS the web app draws its own title bar: a 52px strip at the top of the sidebar (and the
+ * On macOS the web app draws its own title bar: a 40px strip at the top of the sidebar (and the
  * main card's header beside it) is a drag region, and the traffic lights sit centred in it. Keep
  * these numbers in step with the `desktop-mac` styles in apps/web.
  */
-const trafficLightPosition = { x: 16, y: 18 };
+const trafficLightPosition = { x: 16, y: 13 };
 
 ipcMain.handle("octodo:is-full-screen", (event) =>
   Boolean(BrowserWindow.fromWebContents(event.sender)?.isFullScreen()),

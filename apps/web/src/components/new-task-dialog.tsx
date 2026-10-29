@@ -35,7 +35,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from "@octodo/ui/components/dropdown-menu";
+} from "@octodo/ui/components/menu";
 import { Kbd } from "@octodo/ui/components/kbd";
 import { PropertyChip as Chip } from "@octodo/ui/components/property-chip";
 import { ScrollArea } from "@octodo/ui/components/scroll-area";
@@ -96,13 +96,16 @@ interface Props {
  */
 export function NewTaskDialog({ open, onOpenChange, ...props }: Props) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next, details) => {
+        if (details.reason === "escape-key" && completing(details.event.target)) details.cancel();
+        else onOpenChange(next);
+      }}
+    >
       <DialogContent
         showCloseButton={false}
         className="top-[18%] translate-y-0 gap-0 rounded-xl! p-0 shadow-2xl sm:max-w-xl"
-        onEscapeKeyDown={(event) => {
-          if (completing(event.target)) event.preventDefault();
-        }}
       >
         <DialogHeader className="sr-only">
           <DialogTitle>New task</DialogTitle>
@@ -201,9 +204,9 @@ function NewTaskForm({
     submit(mod);
   };
   // Closing a picker returns focus to the title, where Enter creates.
-  const refocus = (event: Event) => {
-    event.preventDefault();
+  const refocus = () => {
     titleInput.current?.focus();
+    return false as const;
   };
 
   return (
@@ -237,29 +240,31 @@ function NewTaskForm({
       <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
         {kinds.length > 0 && (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Chip set={kind !== undefined}>
-                {kind === undefined ? (
-                  <>
-                    <SquareCheckIcon />
-                    Task
-                  </>
-                ) : (
-                  <>
-                    <kind.kind.create.Icon />
-                    {kind.kind.create.noun}
-                  </>
-                )}
-              </Chip>
-            </DropdownMenuTrigger>
+            <DropdownMenuTrigger
+              render={
+                <Chip set={kind !== undefined}>
+                  {kind === undefined ? (
+                    <>
+                      <SquareCheckIcon />
+                      Task
+                    </>
+                  ) : (
+                    <>
+                      <kind.kind.create.Icon />
+                      {kind.kind.create.noun}
+                    </>
+                  )}
+                </Chip>
+              }
+            />
             <DropdownMenuContent
               align="start"
               className="w-52"
-              onCloseAutoFocus={(event) => {
+              finalFocus={() => {
                 // A kind's fields open their own picker, which takes focus; only this once.
-                if (pickedFields.current) event.preventDefault();
-                else refocus(event);
+                if (!pickedFields.current) refocus();
                 pickedFields.current = false;
+                return false;
               }}
             >
               <DropdownMenuGroup>
@@ -292,18 +297,20 @@ function NewTaskForm({
             key={kind.kind.id}
             draft={kind.draft}
             onChange={(draft) => setKind({ ...kind, draft })}
-            onCloseAutoFocus={refocus}
+            finalFocus={refocus}
           />
         )}
 
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Chip>
-              <StatusIcon category={status?.category} />
-              {status?.name ?? "Status"}
-            </Chip>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-48" onCloseAutoFocus={refocus}>
+          <DropdownMenuTrigger
+            render={
+              <Chip>
+                <StatusIcon category={status?.category} />
+                {status?.name ?? "Status"}
+              </Chip>
+            }
+          />
+          <DropdownMenuContent align="start" className="w-48" finalFocus={refocus}>
             <DropdownMenuGroup>
               <DropdownMenuLabel>Status</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={status?.id ?? ""} onValueChange={setPickedStatus}>
@@ -319,15 +326,17 @@ function NewTaskForm({
         </DropdownMenu>
 
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Chip set={priority !== "none"}>
-              <PriorityIcon priority={priority} />
-              {priority === "none"
-                ? "Priority"
-                : PRIORITIES.find((entry) => entry.value === priority)?.label}
-            </Chip>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-44" onCloseAutoFocus={refocus}>
+          <DropdownMenuTrigger
+            render={
+              <Chip set={priority !== "none"}>
+                <PriorityIcon priority={priority} />
+                {priority === "none"
+                  ? "Priority"
+                  : PRIORITIES.find((entry) => entry.value === priority)?.label}
+              </Chip>
+            }
+          />
+          <DropdownMenuContent align="start" className="w-44" finalFocus={refocus}>
             <DropdownMenuGroup>
               <DropdownMenuLabel>Priority</DropdownMenuLabel>
               <DropdownMenuRadioGroup
@@ -359,7 +368,7 @@ function NewTaskForm({
               if (parsed.fields.due) dropTokens((token) => token.kind === "due");
               setPickedDue(next);
             }}
-            onCloseAutoFocus={refocus}
+            finalFocus={refocus}
           >
             <Chip set={dueLabel !== null} className={cn(dueLabel?.overdue && "text-destructive")}>
               <CalendarIcon />
@@ -369,13 +378,15 @@ function NewTaskForm({
         )}
 
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Chip set={targetList !== null}>
-              <ListGlyph />
-              <span className="max-w-40 truncate">{listLabel(snapshot.lists, targetList)}</span>
-            </Chip>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="max-h-72 w-52" onCloseAutoFocus={refocus}>
+          <DropdownMenuTrigger
+            render={
+              <Chip set={targetList !== null}>
+                <ListGlyph />
+                <span className="max-w-40 truncate">{listLabel(snapshot.lists, targetList)}</span>
+              </Chip>
+            }
+          />
+          <DropdownMenuContent align="start" className="max-h-72 w-52" finalFocus={refocus}>
             <DropdownMenuGroup>
               <DropdownMenuLabel>List</DropdownMenuLabel>
               <DropdownMenuRadioGroup
@@ -401,17 +412,19 @@ function NewTaskForm({
         </DropdownMenu>
 
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Chip set={tags.length > 0}>
-              <HashIcon />
-              {tags.length === 0 ? (
-                "Tags"
-              ) : (
-                <span className="max-w-48 truncate font-mono">{tags.join(" ")}</span>
-              )}
-            </Chip>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="max-h-72 w-48" onCloseAutoFocus={refocus}>
+          <DropdownMenuTrigger
+            render={
+              <Chip set={tags.length > 0}>
+                <HashIcon />
+                {tags.length === 0 ? (
+                  "Tags"
+                ) : (
+                  <span className="max-w-48 truncate font-mono">{tags.join(" ")}</span>
+                )}
+              </Chip>
+            }
+          />
+          <DropdownMenuContent align="start" className="max-h-72 w-48" finalFocus={refocus}>
             <DropdownMenuGroup>
               <DropdownMenuLabel>Tags</DropdownMenuLabel>
               {knownTags.map((tag) => (
@@ -419,11 +432,8 @@ function NewTaskForm({
                   key={tag}
                   checked={tags.includes(tag)}
                   className="font-mono text-xs"
-                  onSelect={(event) => {
-                    // Stay open so several tags can be picked in a row.
-                    event.preventDefault();
-                    toggleTag(tag);
-                  }}
+                  closeOnClick={false}
+                  onClick={() => toggleTag(tag)}
                 >
                   #{tag}
                 </DropdownMenuCheckboxItem>
@@ -436,12 +446,14 @@ function NewTaskForm({
         </DropdownMenu>
 
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-xs" aria-label="More options">
-              <MoreHorizontalIcon />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-48" onCloseAutoFocus={refocus}>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="ghost" size="icon-xs" aria-label="More options">
+                <MoreHorizontalIcon />
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="start" className="w-48" finalFocus={refocus}>
             <DropdownMenuGroup>
               {LATER.map(({ label, icon: Icon }) => (
                 <DropdownMenuItem key={label} disabled>

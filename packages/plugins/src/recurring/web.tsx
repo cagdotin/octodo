@@ -83,18 +83,20 @@ function RepeatEditor({ workspace, task }: KindProps<RecurringFields>) {
         }
       }}
     >
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="-ml-2 font-normal"
-          aria-label="Change the rule"
-        >
-          <RepeatIcon data-icon="inline-start" />
-          {ruleText(task.kind.fields.repeat)}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" collisionPadding={8} className="w-72 p-1.5">
+      <PopoverTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-2 font-normal"
+            aria-label="Change the rule"
+          >
+            <RepeatIcon data-icon="inline-start" />
+            {ruleText(task.kind.fields.repeat)}
+          </Button>
+        }
+      />
+      <PopoverContent align="start" className="w-72 p-1.5">
         <form onSubmit={(event) => void save(event)}>
           <Field data-invalid={error !== null || undefined} className="gap-1.5">
             <InputGroup>
@@ -130,23 +132,20 @@ const preview = (repeat: string, today: string) => {
 };
 
 /** The rule chip; it opens when Recurring is picked, since a recurring task needs a rule. */
-function CreateFields({ draft, onChange, onCloseAutoFocus }: CreateFieldsProps<Draft>) {
+function CreateFields({ draft, onChange, finalFocus }: CreateFieldsProps<Draft>) {
   const [open, setOpen] = useState(true);
   const { error, first } = preview(draft.repeat, useToday());
   const valid = draft.repeat.trim() !== "" && error === null;
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <PropertyChip set={valid} className={cn(error !== null && "text-destructive")}>
-          {draft.repeat.trim() === "" ? "Repeat" : draft.repeat}
-        </PropertyChip>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        collisionPadding={8}
-        className="w-72 p-1.5"
-        onCloseAutoFocus={onCloseAutoFocus}
-      >
+      <PopoverTrigger
+        render={
+          <PropertyChip set={valid} className={cn(error !== null && "text-destructive")}>
+            {draft.repeat.trim() === "" ? "Repeat" : draft.repeat}
+          </PropertyChip>
+        }
+      />
+      <PopoverContent align="start" className="w-72 p-1.5" finalFocus={finalFocus}>
         <form
           onSubmit={(event) => {
             event.preventDefault();

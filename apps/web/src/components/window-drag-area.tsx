@@ -8,7 +8,7 @@ export function WindowDragArea({ className }: { className?: string }) {
   return (
     <div
       aria-hidden
-      className={cn("fixed inset-x-0 top-0 hidden h-13 app-drag desktop-mac:block", className)}
+      className={cn("fixed inset-x-0 top-0 hidden h-10 app-drag desktop-mac:block", className)}
     />
   );
 }

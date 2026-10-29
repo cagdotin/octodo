@@ -9,7 +9,7 @@ import {
 import type { List, MoveListInput, WorkspaceSnapshot } from "@octodo/contract";
 import { inSubtree, listMoveError, movedListId } from "@octodo/contract/rules";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, type ReactElement } from "react";
 import { dragData, dropData, type DragData, type DropData } from "@/components/drag-and-drop";
 import { ListGlyph } from "@/components/task-bits";
 import {
@@ -26,7 +26,10 @@ import { applyListMove, listTree, type ListNode } from "@/lib/tasks";
 
 /** Linear-sized nav rows: 28px tall, 13px text. */
 export const ITEM =
-  "h-7 gap-2.5 px-2 font-mono text-[12.5px] text-sidebar-foreground/90 data-active:text-sidebar-accent-foreground";
+  "h-7 gap-2.5 px-2 pe-9 text-[13px] text-sidebar-foreground/90 data-active:text-sidebar-accent-foreground";
+
+/** A row's task count, at its end; `ITEM` leaves room for it so a long name truncates first. */
+export const COUNT = "top-1! font-normal text-xs text-sidebar-foreground/50 tabular-nums";
 
 const LIST_PREFIX = "list:";
 
@@ -261,14 +264,8 @@ function ListRow({
   if (depth === 0) {
     return (
       <SidebarMenuItem>
-        <SidebarMenuButton asChild isActive={active} className={ITEM}>
-          {link}
-        </SidebarMenuButton>
-        {count > 0 && (
-          <SidebarMenuBadge className="top-1! font-normal text-sidebar-foreground/50">
-            {count}
-          </SidebarMenuBadge>
-        )}
+        <SidebarMenuButton isActive={active} className={ITEM} render={link as ReactElement} />
+        {count > 0 && <SidebarMenuBadge className={COUNT}>{count}</SidebarMenuBadge>}
         {line}
         {children}
       </SidebarMenuItem>
@@ -277,14 +274,12 @@ function ListRow({
   return (
     <SidebarMenuSubItem>
       <SidebarMenuSubButton
-        asChild
         isActive={active}
-        className="h-7 text-sidebar-foreground/90 [&>svg]:text-sidebar-foreground/70"
-      >
-        {link}
-      </SidebarMenuSubButton>
+        className="h-7 pe-9 text-[13px] text-sidebar-foreground/90 [&>span:last-child]:truncate [&>svg]:text-sidebar-foreground/70"
+        render={link as ReactElement}
+      />
       {count > 0 && (
-        <span className="pointer-events-none absolute top-1.5 right-2 font-mono text-xs text-sidebar-foreground/50">
+        <span className="pointer-events-none absolute top-1.5 right-2 text-xs text-sidebar-foreground/50 tabular-nums">
           {count}
         </span>
       )}

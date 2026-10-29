@@ -1,7 +1,7 @@
 import { EditorState, type TransactionSpec } from "@codemirror/state";
 import { EditorView, keymap, placeholder as placeholderText } from "@codemirror/view";
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { toast } from "sonner";
+import { toastManager } from "@octodo/ui/components/toast";
 import { ScrollArea } from "@octodo/ui/components/scroll-area";
 import { imageMarkdown, type Attachments } from "@/lib/attachments";
 import { bodyExtensions, fromFile, syncToFile } from "./body-state.ts";
@@ -89,7 +89,10 @@ export function MarkdownEditor({
           anchor.pos = from + insert.length;
         }
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not save the image");
+        toastManager.add({
+          type: "error",
+          title: error instanceof Error ? error.message : "Could not save the image",
+        });
       } finally {
         anchors.current.delete(anchor);
       }

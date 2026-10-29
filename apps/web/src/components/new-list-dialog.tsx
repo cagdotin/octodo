@@ -11,13 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@octodo/ui/components/dialog";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@octodo/ui/components/field";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@octodo/ui/components/field";
 import { Input } from "@octodo/ui/components/input";
 import {
   Select,
@@ -78,7 +72,7 @@ export function NewListDialog({
               Lists are folders under .octodo/tasks/ and nest up to {MAX_LIST_DEPTH} levels deep.
             </DialogDescription>
           </DialogHeader>
-          <FieldGroup>
+          <div className="flex flex-col gap-5">
             <Field data-invalid={create.isError || undefined}>
               <FieldLabel htmlFor="list-name">Name</FieldLabel>
               <Input
@@ -96,7 +90,7 @@ export function NewListDialog({
             </Field>
             <Field>
               <FieldLabel>Inside</FieldLabel>
-              <Select value={parent} onValueChange={setParent}>
+              <Select value={parent} onValueChange={(value) => value !== null && setParent(value)}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -114,7 +108,7 @@ export function NewListDialog({
                 </SelectContent>
               </Select>
             </Field>
-          </FieldGroup>
+          </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel

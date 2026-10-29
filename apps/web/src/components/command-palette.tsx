@@ -15,15 +15,19 @@ import {
 } from "lucide-react";
 import { ListGlyph, StatusIcon } from "@/components/task-bits";
 import { useTheme } from "@/components/theme-provider";
-import { useState } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { AddWorkspaceDialog } from "@/components/add-workspace-dialog";
 import {
   Command,
+  CommandCollection,
   CommandDialog,
+  CommandDialogPopup,
   CommandGroup,
+  CommandGroupLabel,
   CommandInput,
   CommandItem,
   CommandList,
+  CommandPanel,
   CommandSeparator,
   CommandShortcut,
 } from "@octodo/ui/components/command";
@@ -57,20 +61,123 @@ export function CommandPalette({
   const [query, setQuery] = useState("");
   const categories = new Map(snapshot.statuses.map((status) => [status.id, status.category]));
 
-  const run = (action: () => void) => () => {
+  const close = (action: () => void) => {
     onOpenChange(false);
     setQuery("");
     action();
   };
-  const goList = (list: string | undefined) =>
-    run(
-      () =>
-        void navigate({
-          to: "/w/$workspace",
-          params: { workspace },
-          search: (prev) => ({ ...prev, list, task: undefined }),
-        }),
-    );
+  const goList = (list: string | undefined) => () =>
+    void navigate({
+      to: "/w/$workspace",
+      params: { workspace },
+      search: (prev) => ({ ...prev, list, task: undefined }),
+    });
+
+  const groups: PaletteGroup[] = [
+    {
+      label: "Actions",
+      items: [
+        {
+          text: "new task",
+          label: "New task",
+          icon: <PlusIcon />,
+          shortcut: "⌘N",
+          run: () => requestAnimationFrame(() => onNewTask()),
+        },
+        {
+          text: "switch view board list",
+          label: view === "list" ? "Switch to board" : "Switch to list",
+          icon: view === "list" ? <KanbanIcon /> : <ListIcon />,
+          run: onToggleView,
+        },
+        {
+          text: "toggle dark mode",
+          label: "Toggle dark mode",
+          icon: <MoonIcon />,
+          run: () => setTheme(resolvedTheme === "dark" ? "light" : "dark"),
+        },
+      ],
+    },
+    {
+      label: "Go to",
+      items: [
+        { text: "all tasks", label: "All tasks", icon: <InboxIcon />, run: goList(SMART.all) },
+        { text: "today", label: "Today", icon: <CalendarDaysIcon />, run: goList(SMART.today) },
+        {
+          text: "next 7 days",
+          label: "Next 7 days",
+          icon: <CalendarRangeIcon />,
+          run: goList(SMART.upcoming),
+        },
+        { text: "ready", label: "Ready", icon: <LockOpenIcon />, run: goList(SMART.ready) },
+        {
+          text: "workspace settings",
+          label: "Workspace settings",
+          icon: <SettingsIcon />,
+          run: () => void navigate({ to: "/w/$workspace/settings", params: { workspace } }),
+        },
+        ...snapshot.lists.map((list) => ({
+          text: `list ${listLabel(snapshot.lists, list.id)}`,
+          label: listLabel(snapshot.lists, list.id),
+          icon: <ListGlyph />,
+          run: goList(list.id),
+        })),
+      ],
+    },
+    {
+      label: "Workspaces",
+      items: [
+        ...workspaces.map((ws) => ({
+          text: `workspace ${ws.name} ${ws.key}`,
+          label: ws.name,
+          icon: <CircleIcon className={ws.id === workspace ? "fill-current" : ""} />,
+          shortcut: ws.key,
+          run: () =>
+            void navigate({ to: "/w/$workspace", params: { workspace: ws.id }, search: {} }),
+        })),
+        {
+          text: "add workspace",
+          label: "Add workspace…",
+          icon: <PlusIcon />,
+          run: () => setAddOpen(true),
+        },
+      ],
+    },
+    {
+      label: "Tasks",
+      items: snapshot.tasks.map((task) => ({
+        text: `task ${task.id} ${task.title}`,
+        label: task.title,
+        icon: <StatusIcon category={categories.get(task.status)} />,
+        shortcut: task.id,
+        run: () =>
+          void navigate({
+            to: "/w/$workspace",
+            params: { workspace },
+            search: (prev) => ({ ...prev, task: task.id }),
+          }),
+      })),
+    },
+    ...(query.trim() === ""
+      ? []
+      : [
+          {
+            label: "New task",
+            items: [
+              {
+                text: "",
+                always: true,
+                label: `Create task "${query.trim()}"`,
+                icon: <PlusIcon />,
+                run: () => {
+                  const title = query.trim();
+                  requestAnimationFrame(() => onNewTask(title));
+                },
+              },
+            ],
+          },
+        ]),
+  ];
 
   return (
     <>
@@ -81,145 +188,74 @@ export function CommandPalette({
           onOpenChange(next);
         }}
       >
-        <Command
+        <CommandDialogPopup
           onKeyDown={(event) => {
-            // ⌘N jumps straight to the new-task dialog, taking whatever was typed as the title.
             if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "n") {
               event.preventDefault();
               const title = query.trim();
-              run(() => requestAnimationFrame(() => onNewTask(title)))();
+              close(() => requestAnimationFrame(() => onNewTask(title)));
             }
           }}
         >
-          <CommandInput
-            placeholder="Type a command or search tasks…"
+          <Command
+            items={groups}
             value={query}
             onValueChange={setQuery}
-          />
-          <CommandList>
-            <CommandGroup heading="Actions">
-              <CommandItem onSelect={run(() => requestAnimationFrame(() => onNewTask()))}>
-                <PlusIcon />
-                New task
-                <CommandShortcut>⌘N</CommandShortcut>
-              </CommandItem>
-              <CommandItem onSelect={run(onToggleView)}>
-                {view === "list" ? <KanbanIcon /> : <ListIcon />}
-                {view === "list" ? "Switch to board" : "Switch to list"}
-              </CommandItem>
-              <CommandItem
-                onSelect={run(() => setTheme(resolvedTheme === "dark" ? "light" : "dark"))}
-              >
-                <MoonIcon />
-                Toggle dark mode
-              </CommandItem>
-            </CommandGroup>
-            <CommandSeparator />
-            <CommandGroup heading="Go to">
-              <CommandItem onSelect={goList(SMART.all)}>
-                <InboxIcon />
-                All tasks
-              </CommandItem>
-              <CommandItem onSelect={goList(SMART.today)}>
-                <CalendarDaysIcon />
-                Today
-              </CommandItem>
-              <CommandItem onSelect={goList(SMART.upcoming)}>
-                <CalendarRangeIcon />
-                Next 7 days
-              </CommandItem>
-              <CommandItem onSelect={goList(SMART.ready)}>
-                <LockOpenIcon />
-                Ready
-              </CommandItem>
-              <CommandItem
-                onSelect={run(
-                  () => void navigate({ to: "/w/$workspace/settings", params: { workspace } }),
+            itemToStringValue={(item) => (item as PaletteItem).text}
+            filter={(value, search) => {
+              const item = value as PaletteItem;
+              return item.always === true || item.text.toLowerCase().includes(search.toLowerCase());
+            }}
+          >
+            <CommandInput placeholder="Type a command or search tasks…" />
+            <CommandPanel>
+              <CommandList>
+                {(group: PaletteGroup) => (
+                  <Fragment key={group.label}>
+                    <CommandGroup items={group.items}>
+                      <CommandGroupLabel>{group.label}</CommandGroupLabel>
+                      <CommandCollection>
+                        {(item: PaletteItem) => (
+                          <CommandItem
+                            key={item.text + item.label}
+                            value={item}
+                            className="gap-2"
+                            onClick={() => close(item.run)}
+                          >
+                            {item.icon}
+                            <span className="flex-1 truncate">{item.label}</span>
+                            {item.shortcut !== undefined && (
+                              <CommandShortcut className="font-mono">
+                                {item.shortcut}
+                              </CommandShortcut>
+                            )}
+                          </CommandItem>
+                        )}
+                      </CommandCollection>
+                    </CommandGroup>
+                    <CommandSeparator />
+                  </Fragment>
                 )}
-              >
-                <SettingsIcon />
-                Workspace settings
-              </CommandItem>
-              {snapshot.lists.map((list) => {
-                return (
-                  <CommandItem
-                    key={list.id}
-                    value={`list ${listLabel(snapshot.lists, list.id)}`}
-                    onSelect={goList(list.id)}
-                  >
-                    <ListGlyph />
-                    {listLabel(snapshot.lists, list.id)}
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
-            <CommandSeparator />
-            <CommandGroup heading="Workspaces">
-              {workspaces.map((ws) => (
-                <CommandItem
-                  key={ws.id}
-                  value={`workspace ${ws.name} ${ws.key}`}
-                  onSelect={run(
-                    () =>
-                      void navigate({
-                        to: "/w/$workspace",
-                        params: { workspace: ws.id },
-                        search: {},
-                      }),
-                  )}
-                >
-                  <CircleIcon className={ws.id === workspace ? "fill-current" : ""} />
-                  {ws.name}
-                  <CommandShortcut>{ws.key}</CommandShortcut>
-                </CommandItem>
-              ))}
-              <CommandItem onSelect={run(() => setAddOpen(true))}>
-                <PlusIcon />
-                Add workspace…
-              </CommandItem>
-            </CommandGroup>
-            <CommandSeparator />
-            <CommandGroup heading="Tasks">
-              {snapshot.tasks.map((task) => (
-                <CommandItem
-                  key={task.id}
-                  value={`task ${task.id} ${task.title}`}
-                  onSelect={run(
-                    () =>
-                      void navigate({
-                        to: "/w/$workspace",
-                        params: { workspace },
-                        search: (prev) => ({ ...prev, task: task.id }),
-                      }),
-                  )}
-                >
-                  <StatusIcon category={categories.get(task.status)} />
-                  <span className="truncate">{task.title}</span>
-                  <CommandShortcut className="font-mono">{task.id}</CommandShortcut>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-            {query.trim() !== "" && (
-              // Always matches, so a query that finds nothing still has somewhere to go (and no
-              // "No results" is needed: an empty query lists everything).
-              <CommandGroup heading="New task" forceMount>
-                <CommandItem
-                  forceMount
-                  value={`create task ${query}`}
-                  onSelect={run(() => {
-                    const title = query.trim();
-                    requestAnimationFrame(() => onNewTask(title));
-                  })}
-                >
-                  <PlusIcon />
-                  <span className="truncate">Create task "{query.trim()}"</span>
-                </CommandItem>
-              </CommandGroup>
-            )}
-          </CommandList>
-        </Command>
+              </CommandList>
+            </CommandPanel>
+          </Command>
+        </CommandDialogPopup>
       </CommandDialog>
       <AddWorkspaceDialog open={addOpen} onOpenChange={setAddOpen} />
     </>
   );
+}
+
+interface PaletteItem {
+  text: string;
+  label: string;
+  icon: ReactNode;
+  shortcut?: string;
+  always?: boolean;
+  run: () => void;
+}
+
+interface PaletteGroup {
+  label: string;
+  items: PaletteItem[];
 }

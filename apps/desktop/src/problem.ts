@@ -17,7 +17,7 @@ export const problemPage = (problem: Problem): string => {
   :root { color-scheme: light dark; --bg: #fafafa; --fg: #18181b; --muted: #71717a; --card: #fff; --line: #e4e4e7; --accent: #18181b; --on-accent: #fff; }
   @media (prefers-color-scheme: dark) { :root { --bg: #09090b; --fg: #fafafa; --muted: #a1a1aa; --card: #18181b; --line: #27272a; --accent: #fafafa; --on-accent: #18181b; } }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, -apple-system, sans-serif; }
-  .drag { position: fixed; inset: 0 0 auto 0; height: 52px; -webkit-app-region: drag; }
+  .drag { position: fixed; inset: 0 0 auto 0; height: 40px; -webkit-app-region: drag; }
   main { max-width: 560px; margin: 0 auto; padding: 18vh 24px 24px; }
   h1 { font-size: 18px; font-weight: 600; margin: 0 0 8px; }
   p { margin: 0 0 16px; color: var(--muted); }

@@ -11,9 +11,10 @@ import {
   MoreHorizontalIcon,
   PanelRightCloseIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import { toast } from "sonner";
+import { toastManager } from "@octodo/ui/components/toast";
 import { fromPromise } from "xstate";
 import { DuePicker } from "@/components/due-picker";
 import { MarkdownEditor } from "@/components/markdown-editor/markdown-editor";
@@ -23,16 +24,16 @@ import {
   PriorityMenu,
   StatusIcon,
   StatusMenu,
-  TagChips,
+  TagPill,
 } from "@/components/task-bits";
+import { PaneFooter, PaneHeader } from "@octodo/ui/components/pane";
 import { TagsEditor } from "@/components/tags-editor";
 import { KindPanel, offersDue } from "@/components/task-kind";
 import { TaskRelations, useMentions } from "@/components/task-relations";
 import { ParentLink, SubtasksGoing, TaskSubtasks } from "@/components/task-subtasks";
 import {
   AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
+  AlertDialogClose,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -50,7 +51,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
-} from "@octodo/ui/components/dropdown-menu";
+} from "@octodo/ui/components/menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@octodo/ui/components/popover";
 import { Textarea } from "@octodo/ui/components/textarea";
 import { taskAttachments, useDeleteTask, useMoveTask, useUpdateTask } from "@/lib/api";
@@ -97,37 +98,45 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <ParentLink workspace={workspace} snapshot={snapshot} task={task} />
-      <div className="flex shrink-0 items-start gap-1 border-b px-3.5 py-3">
+      <PaneHeader className="pe-2">
         <StatusMenu workspace={workspace} snapshot={snapshot} task={task}>
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="icon-xs"
+            className="-ms-1"
             aria-label={`Status: ${currentStatus?.name ?? task.status}`}
             title={currentStatus?.name ?? task.status}
           >
-            <StatusIcon category={currentStatus?.category} className="size-4" />
+            <StatusIcon category={currentStatus?.category} />
           </Button>
         </StatusMenu>
-        <TitleField
-          value={draft.title}
-          onChange={(value) => editor.send({ type: "EDIT", field: "title", value })}
-          onCommit={() => editor.send({ type: "FLUSH" })}
+        <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1">
+          <ParentLink workspace={workspace} snapshot={snapshot} task={task} />
+          <span aria-current="page" className="shrink-0 font-mono text-xs text-muted-foreground">
+            {task.id}
+          </span>
+        </nav>
+        <SaveState
+          phase={String(phase)}
+          error={error}
+          onRetry={() => editor.send({ type: "RETRY" })}
         />
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground"
-              aria-label="More actions"
-            >
-              <MoreHorizontalIcon />
-            </Button>
-          </DropdownMenuTrigger>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+                aria-label="More actions"
+              >
+                <MoreHorizontalIcon />
+              </Button>
+            }
+          />
           <DropdownMenuContent align="end" className="w-64">
             <DropdownMenuGroup>
-              <DropdownMenuItem onSelect={onClose}>
+              <DropdownMenuItem onClick={onClose}>
                 <PanelRightCloseIcon />
                 Close panel
                 <DropdownMenuShortcut>Esc</DropdownMenuShortcut>
@@ -146,10 +155,10 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
                 <dd className="font-mono">{formatTimestamp(task.updated)}</dd>
               </dl>
               <DropdownMenuItem
-                onSelect={() =>
+                onClick={() =>
                   void navigator.clipboard
                     .writeText(task.path)
-                    .then(() => toast.success("File path copied"))
+                    .then(() => toastManager.add({ type: "success", title: "File path copied" }))
                 }
               >
                 <CopyIcon />
@@ -158,15 +167,31 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(true)}>
+              <DropdownMenuItem variant="destructive" onClick={() => setConfirmDelete(true)}>
                 <Trash2Icon />
                 Delete task
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground"
+          aria-label="Close panel"
+          onClick={onClose}
+        >
+          <XIcon />
+        </Button>
+      </PaneHeader>
 
+      <div className="shrink-0 px-4 pt-4">
+        <TitleField
+          value={draft.title}
+          onChange={(value) => editor.send({ type: "EDIT", field: "title", value })}
+          onCommit={() => editor.send({ type: "FLUSH" })}
+        />
+      </div>
       <MarkdownEditor
         aria-label="Notes"
         placeholder="Add notes in markdown…"
@@ -181,19 +206,21 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
       <TaskRelations workspace={workspace} snapshot={snapshot} task={task} />
       <TaskSubtasks workspace={workspace} snapshot={snapshot} task={task} />
 
-      <div className="flex h-11 shrink-0 items-center gap-0.5 border-t pr-3.5 pl-2">
+      <PaneFooter className="gap-0.5 px-2.5">
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="min-w-0 font-normal text-muted-foreground"
-              aria-label={`List: ${listLabel(snapshot.lists, task.list)}`}
-            >
-              <ListGlyph />
-              <span className="truncate">{listLabel(snapshot.lists, task.list)}</span>
-            </Button>
-          </DropdownMenuTrigger>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="xs"
+                className="min-w-0 font-normal text-muted-foreground"
+                aria-label={`List: ${listLabel(snapshot.lists, task.list)}`}
+              >
+                <ListGlyph />
+                <span className="truncate">{listLabel(snapshot.lists, task.list)}</span>
+              </Button>
+            }
+          />
           <DropdownMenuContent align="start" side="top" className="w-56">
             <DropdownMenuRadioGroup
               value={task.list ?? NO_LIST}
@@ -222,10 +249,10 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
           <DuePicker value={task.due} onChange={setDue}>
             <Button
               variant="ghost"
-              size="sm"
+              size="xs"
               title={task.due ? `Due ${format(parseISO(task.due), "EEE, MMM d, yyyy")}` : undefined}
               className={cn(
-                "font-mono text-xs font-normal text-muted-foreground",
+                "font-normal text-muted-foreground tabular-nums",
                 due && "text-foreground",
                 due?.overdue && "text-destructive hover:text-destructive",
               )}
@@ -239,7 +266,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
         <PriorityMenu workspace={workspace} task={task}>
           <Button
             variant="ghost"
-            size="sm"
+            size="xs"
             className={cn("font-normal text-muted-foreground", priority && "text-foreground")}
             aria-label={`Priority: ${priority?.label ?? "none"}`}
           >
@@ -253,25 +280,31 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
         </PriorityMenu>
 
         <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="min-w-0 font-normal text-muted-foreground"
-              aria-label={task.tags.length === 0 ? "Add tags" : `Tags: ${task.tags.join(", ")}`}
-              title={task.tags.map((tag) => `#${tag}`).join(" ") || undefined}
-            >
-              {task.tags.length === 0 ? (
-                <>
-                  <HashIcon data-icon="inline-start" />
-                  Tags
-                </>
-              ) : (
-                <TagChips tags={task.tags} />
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="start" side="top" collisionPadding={8} className="w-72 p-1.5">
+          <PopoverTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="xs"
+                className="min-w-0 font-normal text-muted-foreground"
+                aria-label={task.tags.length === 0 ? "Add tags" : `Tags: ${task.tags.join(", ")}`}
+                title={task.tags.map((tag) => `#${tag}`).join(" ") || undefined}
+              >
+                {task.tags.length === 0 ? (
+                  <>
+                    <HashIcon data-icon="inline-start" />
+                    Tags
+                  </>
+                ) : (
+                  <span className="flex min-w-0 items-center gap-1">
+                    {task.tags.map((tag) => (
+                      <TagPill key={tag} tag={tag} />
+                    ))}
+                  </span>
+                )}
+              </Button>
+            }
+          />
+          <PopoverContent align="start" side="top" className="w-72 p-1.5">
             <TagsEditor
               autoFocus
               tags={task.tags}
@@ -279,15 +312,7 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
             />
           </PopoverContent>
         </Popover>
-
-        <div className="ml-auto flex shrink-0 items-center">
-          <SaveState
-            phase={String(phase)}
-            error={error}
-            onRetry={() => editor.send({ type: "RETRY" })}
-          />
-        </div>
-      </div>
+      </PaneFooter>
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
@@ -303,16 +328,16 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
+            <AlertDialogClose render={<Button variant="ghost" />}>Cancel</AlertDialogClose>
+            <AlertDialogClose
+              render={<Button variant="destructive" />}
               onClick={() => {
                 remove.mutate(task.id);
                 onClose();
               }}
             >
               Delete
-            </AlertDialogAction>
+            </AlertDialogClose>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -400,7 +425,7 @@ export function SaveState({
 }
 
 const TITLE_TEXT =
-  "min-h-7 min-w-0 flex-1 px-0.5 text-lg leading-7 font-semibold tracking-[-0.015em] md:text-lg";
+  "min-h-7 w-full min-w-0 text-lg leading-7 font-semibold tracking-[-0.015em] md:text-lg";
 
 /** Character offset of the point in `element`'s text, if the point is on it. */
 const offsetAt = (element: HTMLElement, x: number, y: number) => {

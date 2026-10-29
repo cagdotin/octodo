@@ -1,15 +1,15 @@
 import type { Entry, WorkspaceSnapshot } from "@octodo/contract";
-import { CopyIcon, MoreHorizontalIcon, PanelRightCloseIcon, Trash2Icon } from "lucide-react";
+import { CopyIcon, MoreHorizontalIcon, PanelRightCloseIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
+import { toastManager } from "@octodo/ui/components/toast";
+import { PaneHeader } from "@octodo/ui/components/pane";
 import { MarkdownEditor } from "@/components/markdown-editor/markdown-editor";
 import type { EnabledSection } from "@/components/section";
 import { SaveState, TitleField, useTitleBody } from "@/components/task-detail";
 import { useMentions } from "@/components/task-relations";
 import {
   AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
+  AlertDialogClose,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -25,7 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
-} from "@octodo/ui/components/dropdown-menu";
+} from "@octodo/ui/components/menu";
 import { formatTimestamp } from "@octodo/ui/lib/dates";
 import { useDeleteEntry, useEditEntry } from "@/lib/api";
 
@@ -55,36 +55,34 @@ export function EntryDetail({ workspace, snapshot, section, entry, onClose }: Pr
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-start gap-1 border-b px-3.5 py-3">
-        <span className="flex size-7 shrink-0 items-center justify-center text-muted-foreground">
-          <web.EntryIcon fields={entry.fields} className="size-4" />
-        </span>
-        <TitleField
-          value={draft.title}
-          onChange={(value) => editor.send({ type: "EDIT", field: "title", value })}
-          onCommit={() => editor.send({ type: "FLUSH" })}
+      <PaneHeader className="pe-2">
+        <web.EntryIcon fields={entry.fields} className="size-3.5 shrink-0 text-muted-foreground" />
+        <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1">
+          <span aria-current="page" className="shrink-0 font-mono text-xs text-muted-foreground">
+            {entry.id}
+          </span>
+        </nav>
+        <SaveState
+          phase={String(phase)}
+          error={error}
+          onRetry={() => editor.send({ type: "RETRY" })}
         />
-        <div className="flex h-7 shrink-0 items-center">
-          <SaveState
-            phase={String(phase)}
-            error={error}
-            onRetry={() => editor.send({ type: "RETRY" })}
-          />
-        </div>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground"
-              aria-label="More actions"
-            >
-              <MoreHorizontalIcon />
-            </Button>
-          </DropdownMenuTrigger>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+                aria-label="More actions"
+              >
+                <MoreHorizontalIcon />
+              </Button>
+            }
+          />
           <DropdownMenuContent align="end" className="w-64">
             <DropdownMenuGroup>
-              <DropdownMenuItem onSelect={onClose}>
+              <DropdownMenuItem onClick={onClose}>
                 <PanelRightCloseIcon />
                 Close panel
                 <DropdownMenuShortcut>Esc</DropdownMenuShortcut>
@@ -103,10 +101,10 @@ export function EntryDetail({ workspace, snapshot, section, entry, onClose }: Pr
                 <dd className="font-mono">{formatTimestamp(entry.updated)}</dd>
               </dl>
               <DropdownMenuItem
-                onSelect={() =>
+                onClick={() =>
                   void navigator.clipboard
                     .writeText(entry.path)
-                    .then(() => toast.success("File path copied"))
+                    .then(() => toastManager.add({ type: "success", title: "File path copied" }))
                 }
               >
                 <CopyIcon />
@@ -115,13 +113,30 @@ export function EntryDetail({ workspace, snapshot, section, entry, onClose }: Pr
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(true)}>
+              <DropdownMenuItem variant="destructive" onClick={() => setConfirmDelete(true)}>
                 <Trash2Icon />
                 Delete {web.noun}
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground"
+          aria-label="Close panel"
+          onClick={onClose}
+        >
+          <XIcon />
+        </Button>
+      </PaneHeader>
+
+      <div className="shrink-0 px-4 pt-4">
+        <TitleField
+          value={draft.title}
+          onChange={(value) => editor.send({ type: "EDIT", field: "title", value })}
+          onCommit={() => editor.send({ type: "FLUSH" })}
+        />
       </div>
 
       <MarkdownEditor
@@ -144,16 +159,16 @@ export function EntryDetail({ workspace, snapshot, section, entry, onClose }: Pr
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
+            <AlertDialogClose render={<Button variant="ghost" />}>Cancel</AlertDialogClose>
+            <AlertDialogClose
+              render={<Button variant="destructive" />}
               onClick={() => {
                 remove.mutate(entry.id);
                 onClose();
               }}
             >
               Delete
-            </AlertDialogAction>
+            </AlertDialogClose>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

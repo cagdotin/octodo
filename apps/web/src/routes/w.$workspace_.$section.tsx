@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { ChevronRightIcon, PlusIcon } from "lucide-react";
 import { AppFrame, PageToolbar } from "@/components/app-frame";
+import { Button } from "@octodo/ui/components/button";
 import { EntryDetail } from "@/components/entry-detail";
 import { enabledSection, type EnabledSection } from "@/components/section";
 import { SectionSidebar } from "@/components/section-sidebar";
@@ -15,13 +17,18 @@ import {
 } from "@octodo/ui/components/sheet";
 import { SidebarInset } from "@octodo/ui/components/sidebar";
 import { useIsMobile } from "@octodo/ui/hooks/use-mobile";
+import { useToday } from "@octodo/ui/hooks/use-today";
 import { snapshotQuery } from "@/lib/api";
 import { useHotkeys } from "@/lib/hotkeys";
 
 export interface SectionSearch {
   /** The open entry's id. */
   entry?: string | undefined;
+  /** The id of one of the section's `views`; all its entries when absent. */
+  show?: string | undefined;
 }
+
+const text = (value: unknown) => (typeof value === "string" && value !== "" ? value : undefined);
 
 /**
  * A plugin's section (decision 0027): its view, and the panel of the open entry. It is there only
@@ -29,8 +36,11 @@ export interface SectionSearch {
  * the URL lands on the workspace's Tasks.
  */
 export const Route = createFileRoute("/w/$workspace_/$section")({
-  validateSearch: (search: Record<string, unknown>): SectionSearch =>
-    typeof search["entry"] === "string" && search["entry"] !== "" ? { entry: search["entry"] } : {},
+  validateSearch: (search: Record<string, unknown>): SectionSearch => {
+    const entry = text(search["entry"]);
+    const show = text(search["show"]);
+    return { ...(entry && { entry }), ...(show && { show }) };
+  },
   loader: ({ context, params }) =>
     context.queryClient.ensureQueryData(snapshotQuery(params.workspace)),
   component: SectionPage,
@@ -56,13 +66,18 @@ function SectionLayout({
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const isMobile = useIsMobile();
+  const today = useToday();
   const [composing, setComposing] = useState(false);
   const { web } = section;
-  const entries = (snapshot.entries ?? []).filter((entry) => entry.section === section.id);
+  const all = (snapshot.entries ?? []).filter((entry) => entry.section === section.id);
+  const view = web.views.find((candidate) => candidate.id === search.show);
+  const entries =
+    view === undefined ? all : all.filter((entry) => view.matches(entry.fields, today));
   const selected =
-    search.entry === undefined ? undefined : entries.find((entry) => entry.id === search.entry);
+    search.entry === undefined ? undefined : all.find((entry) => entry.id === search.entry);
 
-  const open = (entry: string | undefined) => void navigate({ search: { entry } });
+  const open = (entry: string | undefined) =>
+    void navigate({ search: (prev) => ({ ...prev, entry }) });
   const compose = () => setComposing(true);
 
   useHotkeys({
@@ -88,31 +103,42 @@ function SectionLayout({
   ) : null;
 
   return (
-    <AppFrame workspace={workspace}>
-      <SectionSidebar
-        snapshot={snapshot}
-        section={section}
-        count={entries.length}
-        onNew={compose}
-      />
+    <AppFrame workspace={workspace} panel={isMobile ? null : detail}>
+      <SectionSidebar snapshot={snapshot} section={section} entries={all} active={view?.id} />
       <SidebarInset className="min-w-0 overflow-hidden">
-        <PageToolbar icon={<web.Icon />} title={<h1 className="truncate">{web.label}</h1>} />
+        <PageToolbar
+          icon={<web.Icon />}
+          title={
+            <h1 className="flex min-w-0 items-center gap-1.5 truncate">
+              {view === undefined ? (
+                web.label
+              ) : (
+                <>
+                  <span className="text-muted-foreground">{web.label}</span>
+                  <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{view.label}</span>
+                </>
+              )}
+            </h1>
+          }
+        >
+          <Button size="sm" onClick={compose}>
+            <PlusIcon data-icon="inline-start" />
+            New {web.noun}
+          </Button>
+        </PageToolbar>
         <div className="flex min-h-0 flex-1">
           <div className="flex min-w-0 flex-1 flex-col">
             <web.View
               workspace={workspace}
               entries={entries}
+              view={view}
               selected={search.entry}
               onOpen={open}
               composing={composing}
               onCompose={setComposing}
             />
           </div>
-          {!isMobile && detail && (
-            <aside className="flex w-[400px] shrink-0 flex-col border-l bg-background lg:w-[440px]">
-              {detail}
-            </aside>
-          )}
         </div>
       </SidebarInset>
       {isMobile && (

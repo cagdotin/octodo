@@ -1,28 +1,22 @@
-import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
+import { MoonIcon, SunIcon } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { Button } from "@octodo/ui/components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@octodo/ui/components/tooltip";
 
-const NEXT = { system: "light", light: "dark", dark: "system" } as const;
-const LABEL = { system: "Theme: system", light: "Theme: light", dark: "Theme: dark" } as const;
-
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
-  const current = theme === "light" || theme === "dark" ? theme : "system";
-  const Icon = current === "light" ? SunIcon : current === "dark" ? MoonIcon : MonitorIcon;
+  const { resolvedTheme, setTheme } = useTheme();
+  const next = resolvedTheme === "dark" ? "light" : "dark";
+  const label = `Switch to ${next} mode`;
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => setTheme(NEXT[current])}
-          aria-label={LABEL[current]}
-        >
-          <Icon />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{LABEL[current]}</TooltipContent>
+      <TooltipTrigger
+        render={
+          <Button variant="ghost" size="icon-sm" onClick={() => setTheme(next)} aria-label={label}>
+            {resolvedTheme === "dark" ? <MoonIcon /> : <SunIcon />}
+          </Button>
+        }
+      />
+      <TooltipContent>{label}</TooltipContent>
     </Tooltip>
   );
 }

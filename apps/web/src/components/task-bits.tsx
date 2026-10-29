@@ -15,7 +15,7 @@ import {
   ListChecksIcon,
   LockOpenIcon,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ReactNode, ReactElement } from "react";
 import { KindRow, kindWeb } from "@/components/task-kind";
 import { Badge } from "@octodo/ui/components/badge";
 import {
@@ -26,7 +26,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from "@octodo/ui/components/dropdown-menu";
+} from "@octodo/ui/components/menu";
 import { useMoveTask, useUpdateTask } from "@/lib/api";
 import { checklistProgress } from "@/lib/checklist";
 import { cn } from "@octodo/ui/lib/utils";
@@ -201,6 +201,15 @@ export function TagChip({ tag }: { tag: string }) {
   );
 }
 
+/** A tag as a hairline pill, `#seeds`. */
+export function TagPill({ tag }: { tag: string }) {
+  return (
+    <span className="inline-flex h-5 max-w-36 shrink-0 items-center rounded-full border px-2 text-[11px] text-muted-foreground">
+      <span className="truncate">#{tag}</span>
+    </span>
+  );
+}
+
 export function TagChips({ tags, max = 2 }: { tags: ReadonlyArray<string>; max?: number }) {
   if (tags.length === 0) return null;
   return (
@@ -322,7 +331,7 @@ export function StatusMenu({
   return (
     <DropdownMenu>
       {children ? (
-        <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
+        <DropdownMenuTrigger render={children as ReactElement} />
       ) : (
         <DropdownMenuTrigger
           className={cn(iconButton, className)}
@@ -370,7 +379,7 @@ export function PriorityMenu({
   return (
     <DropdownMenu>
       {children ? (
-        <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
+        <DropdownMenuTrigger render={children as ReactElement} />
       ) : (
         <DropdownMenuTrigger
           className={cn(iconButton, className)}

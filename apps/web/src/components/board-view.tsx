@@ -3,6 +3,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 import type { StatusDefinition, Task, WorkspaceSnapshot } from "@octodo/contract";
 import { useNavigate } from "@tanstack/react-router";
+import { motion } from "motion/react";
 import { PlusIcon } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
 import {
@@ -17,7 +18,7 @@ import {
   PriorityMenu,
   StatusIcon,
   StatusMenu,
-  TagChips,
+  TagPill,
   TaskDate,
 } from "@/components/task-bits";
 import { TaskComposer } from "@/components/task-composer";
@@ -58,8 +59,8 @@ export function BoardView({
   const progress = useMemo(() => subtaskProgress(snapshot), [snapshot]);
 
   return (
-    <ScrollArea orientation="horizontal" className="min-h-0 flex-1">
-      <div className="flex min-h-0 flex-1 gap-2 px-2 pt-1 pb-3 md:px-3">
+    <ScrollArea fill className="min-h-0 flex-1">
+      <div className="flex h-full w-max min-w-full divide-x">
         {statuses.map((status) => (
           <BoardColumn
             key={status.id}
@@ -116,11 +117,11 @@ function BoardColumn({
     data: { accepts: ["task"], column: status.id } satisfies DropData,
   });
   return (
-    <section className="flex w-[300px] shrink-0 flex-col rounded-lg bg-band/60">
-      <header className="flex h-10 shrink-0 items-center gap-2 pr-1.5 pl-3">
+    <section className="flex w-[280px] shrink-0 flex-col">
+      <header className="flex h-10 shrink-0 items-center gap-2 pr-2 pl-4">
         <StatusIcon category={status.category} />
-        <span className="truncate font-medium">{status.name}</span>
-        <span className="font-mono text-xs text-muted-foreground">{ids.length}</span>
+        <span className="truncate text-[13px] font-medium">{status.name}</span>
+        <span className="text-xs text-muted-foreground tabular-nums">{ids.length}</span>
         <Button
           variant="ghost"
           size="icon-xs"
@@ -134,14 +135,15 @@ function BoardColumn({
       <SortableContext id={status.id} items={ids} strategy={verticalListSortingStrategy}>
         <ScrollArea
           ref={setNodeRef}
-          className={cn("min-h-24 flex-1 rounded-b-lg transition-colors", isOver && "bg-band")}
+          className={cn("min-h-24 flex-1 transition-colors", isOver && "bg-accent/40")}
         >
-          <div className="flex flex-col gap-1.5 px-1.5 pb-1.5">
+          <div className="flex flex-col gap-1.5 px-2 pb-2">
             {composer}
-            {ids.map((id) => {
+            {ids.map((id, index) => {
               const task = byId.get(id);
               return task ? (
                 <SortableCard
+                  index={index}
                   key={id}
                   workspace={workspace}
                   snapshot={snapshot}
@@ -158,7 +160,11 @@ function BoardColumn({
   );
 }
 
-function SortableCard(props: {
+function SortableCard({
+  index,
+  ...props
+}: {
+  index: number;
   workspace: string;
   snapshot: WorkspaceSnapshot;
   task: Task;
@@ -182,7 +188,18 @@ function SortableCard(props: {
       {...attributes}
       {...listeners}
     >
-      <TaskCard {...props} />
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{
+          type: "spring",
+          stiffness: 500,
+          damping: 40,
+          delay: Math.min(index, 12) * 0.025,
+        }}
+      >
+        <TaskCard {...props} />
+      </motion.div>
     </div>
   );
 }
@@ -207,41 +224,41 @@ function TaskCard({
     <div
       data-active={active || undefined}
       className={cn(
-        "relative flex flex-col gap-2 rounded-lg border bg-card px-3 py-2.5 text-card-foreground shadow-xs transition-colors hover:border-foreground/15 data-active:border-primary/50 data-active:ring-1 data-active:ring-primary/30",
+        "relative flex flex-col gap-2 rounded-lg border bg-card p-2.5 text-card-foreground transition-[background-color,scale] duration-150 ease-out hover:bg-accent/40 active:scale-[0.98] data-active:border-foreground/30 data-active:bg-accent",
         overlay && "rotate-1 shadow-lg",
       )}
     >
-      <div className="flex items-center gap-2">
-        <span className="font-mono text-xs text-muted-foreground">{task.id}</span>
-        <TaskDate task={task} className="ml-auto" />
-      </div>
-      <div className="flex items-start gap-1.5">
-        <StatusMenu workspace={workspace} snapshot={snapshot} task={task} className="-my-1 -ml-1" />
-        <button
-          type="button"
-          tabIndex={-1}
-          onClick={() =>
-            void navigate({
-              to: "/w/$workspace",
-              params: { workspace },
-              search: (prev) => ({ ...prev, task: task.id }),
-            })
-          }
-          className="line-clamp-2 min-w-0 flex-1 text-left leading-snug font-medium break-words outline-none after:absolute after:inset-0 after:rounded-lg"
-        >
-          {task.title}
-        </button>
-      </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-1">
-        <PriorityMenu workspace={workspace} task={task} className="-ml-1" />
-        <TagChips tags={task.tags} />
-        <ListChip lists={snapshot.lists} list={task.list} />
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <StatusMenu workspace={workspace} snapshot={snapshot} task={task} className="-m-1" />
+        <span className="font-mono">{task.id}</span>
         <span className="ml-auto flex items-center gap-2">
           <BlockedChip snapshot={snapshot} task={task} />
           <ParentChip snapshot={snapshot} task={task} />
           <SubtaskCount progress={subtasks} />
           <ChecklistCount body={task.body} />
         </span>
+      </div>
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={() =>
+          void navigate({
+            to: "/w/$workspace",
+            params: { workspace },
+            search: (prev) => ({ ...prev, task: task.id }),
+          })
+        }
+        className="line-clamp-2 min-w-0 text-left text-[13px] leading-snug break-words outline-none after:absolute after:inset-0 after:rounded-lg"
+      >
+        {task.title}
+      </button>
+      <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+        <PriorityMenu workspace={workspace} task={task} className="-m-1" />
+        {task.tags.slice(0, 2).map((tag) => (
+          <TagPill key={tag} tag={tag} />
+        ))}
+        <ListChip lists={snapshot.lists} list={task.list} />
+        <TaskDate task={task} className="ml-auto font-sans tabular-nums" />
       </div>
     </div>
   );

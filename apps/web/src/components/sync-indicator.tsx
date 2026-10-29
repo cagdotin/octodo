@@ -29,18 +29,20 @@ export function SyncIndicator() {
   const { status, retry } = useSync();
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="gap-2 px-2 font-mono text-xs font-normal text-sidebar-foreground/60"
-          onClick={retry}
-          aria-label={LABELS[status]}
-        >
-          <span className={cn("size-1.5 rounded-full", DOT[status])} />
-          {SHORT[status]}
-        </Button>
-      </TooltipTrigger>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="xs"
+            className="gap-1.5 font-normal text-sidebar-foreground/60"
+            onClick={retry}
+            aria-label={LABELS[status]}
+          >
+            <span className={cn("size-1.5 rounded-full", DOT[status])} />
+            {SHORT[status]}
+          </Button>
+        }
+      />
       <TooltipContent>{LABELS[status]}</TooltipContent>
     </Tooltip>
   );

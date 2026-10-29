@@ -21,24 +21,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@octodo/ui/components/dialog";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldContent,
-  FieldGroup,
-  FieldLabel,
-  FieldSet,
-  FieldLegend,
-  FieldTitle,
-} from "@octodo/ui/components/field";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@octodo/ui/components/field";
+import { Label } from "@octodo/ui/components/label";
+import { Fieldset, FieldsetLegend } from "@octodo/ui/components/fieldset";
 import { Input } from "@octodo/ui/components/input";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from "@octodo/ui/components/input-group";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@octodo/ui/components/input-group";
 import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from "@octodo/ui/components/item";
 import { RadioGroup, RadioGroupItem } from "@octodo/ui/components/radio-group";
 import { ScrollArea } from "@octodo/ui/components/scroll-area";
@@ -139,7 +126,7 @@ export function AddWorkspaceDialog({ trigger, open, onOpenChange }: Props) {
         if (!next) reset();
       }}
     >
-      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
+      {trigger && <DialogTrigger render={trigger as ReactElement} />}
       <DialogContent className="sm:max-w-md">
         <form onSubmit={submit} className="contents">
           <DialogHeader>
@@ -149,7 +136,7 @@ export function AddWorkspaceDialog({ trigger, open, onOpenChange }: Props) {
               there, and opens the one that is already there.
             </DialogDescription>
           </DialogHeader>
-          <FieldGroup>
+          <div className="flex flex-col gap-5">
             <Field data-invalid={error !== null || undefined}>
               <FieldLabel htmlFor="ws-root">Folder</FieldLabel>
               <InputGroup>
@@ -167,14 +154,16 @@ export function AddWorkspaceDialog({ trigger, open, onOpenChange }: Props) {
                   }}
                 />
                 <InputGroupAddon align="inline-end">
-                  <InputGroupButton
+                  <Button
+                    type="button"
+                    size="xs"
                     variant="secondary"
                     aria-expanded={desktop ? undefined : browsing}
                     onClick={() => void pick()}
                   >
                     <FolderOpenIcon data-icon="inline-start" />
                     Choose…
-                  </InputGroupButton>
+                  </Button>
                 </InputGroupAddon>
               </InputGroup>
               {browsing && (
@@ -216,28 +205,31 @@ export function AddWorkspaceDialog({ trigger, open, onOpenChange }: Props) {
               </div>
             )}
             {!existing && (
-              <FieldSet>
-                <FieldLegend variant="label">Start with</FieldLegend>
+              <Fieldset className="gap-2">
+                <FieldsetLegend className="text-sm font-medium">Start with</FieldsetLegend>
                 <RadioGroup
                   value={preset}
                   onValueChange={(value) => setPreset(value as PresetId)}
                   className="gap-2"
                 >
                   {PRESET_IDS.map((id) => (
-                    <FieldLabel key={id} htmlFor={`ws-preset-${id}`}>
-                      <Field orientation="horizontal" className="py-2.5!">
-                        <FieldContent>
-                          <FieldTitle>{PRESETS[id].name}</FieldTitle>
-                          <FieldDescription>{PRESETS[id].description}</FieldDescription>
-                        </FieldContent>
-                        <RadioGroupItem value={id} id={`ws-preset-${id}`} />
-                      </Field>
-                    </FieldLabel>
+                    <Label
+                      key={id}
+                      className="flex items-start gap-3 rounded-lg border p-3 hover:bg-accent/50 has-data-checked:border-primary/48 has-data-checked:bg-accent/50"
+                    >
+                      <div className="flex flex-1 flex-col gap-1">
+                        <span className="font-medium">{PRESETS[id].name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {PRESETS[id].description}
+                        </span>
+                      </div>
+                      <RadioGroupItem value={id} />
+                    </Label>
                   ))}
                 </RadioGroup>
-              </FieldSet>
+              </Fieldset>
             )}
-          </FieldGroup>
+          </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
@@ -297,20 +289,24 @@ function FolderBrowser({
             <p className="p-2 text-sm text-muted-foreground">No folders inside.</p>
           )}
           {current?.folders.map((folder) => (
-            <Item key={folder.path} size="xs" asChild>
-              <button type="button" className="text-left" onClick={() => setPath(folder.path)}>
-                <ItemMedia variant="icon">
-                  {folder.workspace ? <FolderCheckIcon /> : <FolderIcon />}
-                </ItemMedia>
-                <ItemContent>
-                  <ItemTitle className="truncate font-normal">{folder.name}</ItemTitle>
-                </ItemContent>
-                <ItemActions>
-                  {folder.workspace && <Badge variant="secondary">Workspace</Badge>}
-                  <ChevronRightIcon className="size-3.5 text-muted-foreground" />
-                </ItemActions>
-              </button>
-            </Item>
+            <Item
+              key={folder.path}
+              size="xs"
+              render={
+                <button type="button" className="text-left" onClick={() => setPath(folder.path)}>
+                  <ItemMedia variant="icon">
+                    {folder.workspace ? <FolderCheckIcon /> : <FolderIcon />}
+                  </ItemMedia>
+                  <ItemContent>
+                    <ItemTitle className="truncate font-normal">{folder.name}</ItemTitle>
+                  </ItemContent>
+                  <ItemActions>
+                    {folder.workspace && <Badge variant="secondary">Workspace</Badge>}
+                    <ChevronRightIcon className="size-3.5 text-muted-foreground" />
+                  </ItemActions>
+                </button>
+              }
+            />
           ))}
         </div>
       </ScrollArea>

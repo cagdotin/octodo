@@ -12,7 +12,7 @@ import { NewTaskDialog } from "@/components/new-task-dialog";
 import { TaskDetail } from "@/components/task-detail";
 import { sectionDay } from "@/components/section";
 import { kindDay } from "@/components/task-kind";
-import { ViewHeader } from "@/components/workspace-header";
+import { ViewFooter, ViewHeader } from "@/components/workspace-header";
 import {
   Empty,
   EmptyDescription,
@@ -44,6 +44,7 @@ import {
   dueEntries,
   EMPTY_FILTER,
   filterTasks,
+  listViewOrder,
   matchesFilter,
   type DisplayOptions,
   type TaskFilter,
@@ -142,7 +143,12 @@ function WorkspacePage() {
     setNewTask({ title });
   };
 
+  // J and K walk the tasks in the order the view shows them; `walk` is set once they are known.
+  let walk = (_step: 1 | -1) => {};
+
   useHotkeys({
+    j: () => walk(1),
+    k: () => walk(-1),
     "mod+k": () => setPaletteOpen((open) => !open),
     "mod+,": () => void navigate({ to: "/w/$workspace/settings", params: { workspace } }),
     "mod+n": () => compose(),
@@ -161,6 +167,14 @@ function WorkspacePage() {
   const inList = filterTasks(snapshot, search.list, kindDay, today);
   const tasks = inList.filter((task) => shown.has(task.status) && matchesFilter(task, filter));
   const title = viewTitle(search.list, snapshot.lists);
+  const shownOrder = (view === "list" ? listViewOrder(statuses) : statuses).flatMap((status) =>
+    tasks.filter((task) => task.status === status.id),
+  );
+  walk = (step) => {
+    const at = shownOrder.findIndex((task) => task.id === search.task);
+    const next = shownOrder[at === -1 ? (step === 1 ? 0 : shownOrder.length - 1) : at + step];
+    if (next) void navigate({ search: (prev) => ({ ...prev, task: next.id }) });
+  };
   const selected =
     search.task === undefined ? undefined : snapshot.tasks.find((task) => task.id === search.task);
   const detail = selected ? (
@@ -184,14 +198,13 @@ function WorkspacePage() {
   };
 
   return (
-    <AppFrame workspace={workspace}>
+    <AppFrame
+      workspace={workspace}
+      panel={isMobile ? null : detail}
+      onSearch={() => setPaletteOpen(true)}
+    >
       <DragAndDrop>
-        <AppSidebar
-          snapshot={snapshot}
-          activeList={search.list}
-          onSearch={() => setPaletteOpen(true)}
-          onNewTask={() => compose()}
-        />
+        <AppSidebar snapshot={snapshot} activeList={search.list} />
         <SidebarInset className="min-w-0 overflow-hidden">
           <div className="flex min-h-0 flex-1">
             <div className="flex min-w-0 flex-1 flex-col">
@@ -206,6 +219,7 @@ function WorkspacePage() {
                 onFilterChange={setFilter}
                 display={display}
                 onDisplayChange={setDisplay}
+                onNewTask={() => compose()}
               />
               {view === "list" ? (
                 <ListView
@@ -215,12 +229,8 @@ function WorkspacePage() {
               ) : (
                 <BoardView {...viewProps} />
               )}
+              <ViewFooter snapshot={snapshot} tasks={tasks} />
             </div>
-            {!isMobile && detail && (
-              <aside className="flex w-[400px] shrink-0 flex-col border-l bg-background lg:w-[440px]">
-                {detail}
-              </aside>
-            )}
           </div>
         </SidebarInset>
       </DragAndDrop>

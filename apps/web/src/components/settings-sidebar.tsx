@@ -9,17 +9,16 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Avatar } from "@/components/app-sidebar";
+import { SidebarBottom, SidebarTop } from "@/components/sidebar-chrome";
 import { SyncIndicator } from "@/components/sync-indicator";
 import { StatusIcon } from "@/components/task-bits";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -27,7 +26,7 @@ import {
 } from "@octodo/ui/components/sidebar";
 
 /** Linear-sized nav rows, as in the app's sidebar. */
-const ITEM = "h-7 gap-2.5 px-2 text-sidebar-foreground/90 data-active:font-medium";
+const ITEM = "h-7 gap-2.5 px-2 text-[13px] text-sidebar-foreground/90 data-active:font-medium";
 
 /** The settings pages of one workspace, for the sidebar and the page titles. */
 export const SETTINGS_PAGES = [
@@ -57,18 +56,21 @@ export function SettingsSidebar({ snapshot }: { snapshot: WorkspaceSnapshot }) {
 
   return (
     <Sidebar className="select-none">
-      <SidebarHeader className="pb-1">
+      <SidebarTop className="px-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild className={ITEM}>
-              <Link to="/w/$workspace" params={{ workspace }} onClick={close}>
-                <ChevronLeftIcon />
-                <span>Back to app</span>
-              </Link>
-            </SidebarMenuButton>
+            <SidebarMenuButton
+              className={ITEM}
+              render={
+                <Link to="/w/$workspace" params={{ workspace }} onClick={close}>
+                  <ChevronLeftIcon />
+                  <span>Back to app</span>
+                </Link>
+              }
+            />
           </SidebarMenuItem>
         </SidebarMenu>
-      </SidebarHeader>
+      </SidebarTop>
       <SidebarContent>
         <SidebarGroup className="py-1">
           <SidebarGroupLabel className="h-7 gap-2 text-sidebar-foreground/60">
@@ -86,12 +88,12 @@ export function SettingsSidebar({ snapshot }: { snapshot: WorkspaceSnapshot }) {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="flex-row items-center gap-1">
+      <SidebarBottom>
         <SyncIndicator />
         <div className="ml-auto">
           <ThemeToggle />
         </div>
-      </SidebarFooter>
+      </SidebarBottom>
     </Sidebar>
   );
 }
@@ -111,15 +113,15 @@ function PageLinks({
       {pages.map((page) => (
         <SidebarMenuItem key={page.to}>
           <SidebarMenuButton
-            asChild
             className={ITEM}
             isActive={matchRoute({ to: page.to, params: { workspace } }) !== false}
-          >
-            <Link to={page.to} params={{ workspace }} onClick={onNavigate}>
-              {page.icon}
-              <span>{page.label}</span>
-            </Link>
-          </SidebarMenuButton>
+            render={
+              <Link to={page.to} params={{ workspace }} onClick={onNavigate}>
+                {page.icon}
+                <span>{page.label}</span>
+              </Link>
+            }
+          />
         </SidebarMenuItem>
       ))}
     </SidebarMenu>

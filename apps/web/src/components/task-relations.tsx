@@ -1,9 +1,10 @@
 import type { Task, WorkspaceSnapshot } from "@octodo/contract";
 import { LINK_KINDS, isClosedCategory, readiness } from "@octodo/contract/rules";
 import { useNavigate } from "@tanstack/react-router";
-import { LockIcon, PlusIcon, XIcon } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { AtSignIcon, LockIcon, LockOpenIcon, PlusIcon, XIcon } from "lucide-react";
+import { useMemo, useState } from "react";
 import type { MentionTarget } from "@/components/markdown-editor/mentions";
+import { PANE_ROW, PaneHeading } from "@octodo/ui/components/pane";
 import { StatusIcon } from "@/components/task-bits";
 import { TaskLink } from "@/components/task-subtasks";
 import { Button } from "@octodo/ui/components/button";
@@ -88,7 +89,7 @@ function RelatedTask({
   const category = task && statusMap(snapshot.statuses).get(task.status)?.category;
   const closed = isClosedCategory(category);
   return (
-    <li className="group/related flex h-8 items-center gap-2.5 rounded-md px-2 hover:bg-row-hover">
+    <li className={cn(PANE_ROW, "group/related last:border-b-0")}>
       {task === undefined ? (
         <span className="size-3.5 shrink-0 rounded-full border border-dashed border-muted-foreground/60" />
       ) : (
@@ -102,7 +103,7 @@ function RelatedTask({
           workspace={workspace}
           task={id}
           className={cn(
-            "min-w-0 flex-1 truncate rounded-sm",
+            "min-w-0 flex-1 truncate rounded-sm after:absolute after:inset-0",
             closed && "text-muted-foreground line-through",
           )}
         >
@@ -113,7 +114,7 @@ function RelatedTask({
         <Button
           variant="ghost"
           size="icon-xs"
-          className="text-muted-foreground opacity-0 group-hover/related:opacity-100 focus-visible:opacity-100"
+          className="relative z-10 -me-2 text-muted-foreground opacity-0 group-hover/related:opacity-100 focus-visible:opacity-100"
           aria-label={`Remove ${id}`}
           onClick={onRemove}
         >
@@ -139,26 +140,27 @@ function TaskPicker({
   const candidates = snapshot.tasks.filter((task) => !exclude.has(task.id));
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="ml-auto text-muted-foreground"
-          aria-label="Add a blocker"
+      <PopoverTrigger
+        render={
+          <Button variant="ghost" size="icon-sm" aria-label="Add a blocker">
+            <PlusIcon />
+          </Button>
+        }
+      />
+      <PopoverContent align="end" side="top" className="w-80 p-0">
+        <Command
+          items={candidates}
+          itemToStringValue={(task) => `${(task as Task).id} ${(task as Task).title}`}
         >
-          <PlusIcon />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" side="top" collisionPadding={8} className="w-80 p-0">
-        <Command>
           <CommandInput placeholder="Blocked by…" />
+          <CommandEmpty>No tasks found</CommandEmpty>
           <CommandList>
-            <CommandEmpty>No tasks found</CommandEmpty>
-            {candidates.map((task) => (
+            {(task: Task) => (
               <CommandItem
                 key={task.id}
-                value={`${task.id} ${task.title}`}
-                onSelect={() => {
+                value={task}
+                className="gap-2"
+                onClick={() => {
                   onPick(task.id);
                   setOpen(false);
                 }}
@@ -167,19 +169,11 @@ function TaskPicker({
                 <span className="shrink-0 font-mono text-xs text-muted-foreground">{task.id}</span>
                 <span className="truncate">{task.title}</span>
               </CommandItem>
-            ))}
+            )}
           </CommandList>
         </Command>
       </PopoverContent>
     </Popover>
-  );
-}
-
-function Heading({ children }: { children: ReactNode }) {
-  return (
-    <h3 className="flex h-7 items-center gap-2 px-2 font-mono text-xs text-muted-foreground lowercase">
-      {children}
-    </h3>
   );
 }
 
@@ -204,45 +198,51 @@ export function TaskRelations({
     ["Mentioned in", task.mentionedIn],
   ];
   return (
-    <section aria-label="Relations" className="flex max-h-[35%] shrink-0 flex-col border-t pt-1.5">
+    <section aria-label="Relations" className="flex max-h-[35%] shrink-0 flex-col border-t">
       <ScrollArea className="min-h-0">
-        <div className="flex flex-col px-2 pb-1.5">
-          <Heading>
-            {BLOCKED_BY.label}
-            {task.blocked && <LockIcon className="size-3" aria-label="Blocked" />}
+        <PaneHeading
+          icon={task.blocked ? <LockIcon aria-label="Blocked" /> : <LockOpenIcon />}
+          label={BLOCKED_BY.label}
+          count={task.blockedBy.length || undefined}
+          action={
             <TaskPicker
               snapshot={snapshot}
               exclude={new Set([task.id, ...task.blockedBy])}
               onPick={(id) => setBlockedBy([...task.blockedBy, id])}
             />
-          </Heading>
-          {task.blockedBy.length > 0 && (
-            <ul className="flex flex-col">
-              {task.blockedBy.map((id) => (
-                <RelatedTask
-                  key={id}
-                  workspace={workspace}
-                  snapshot={snapshot}
-                  id={id}
-                  onRemove={() => setBlockedBy(task.blockedBy.filter((other) => other !== id))}
+          }
+          className={cn(task.blockedBy.length === 0 && "border-b-0")}
+        />
+        {task.blockedBy.length > 0 && (
+          <ul className="flex flex-col">
+            {task.blockedBy.map((id) => (
+              <RelatedTask
+                key={id}
+                workspace={workspace}
+                snapshot={snapshot}
+                id={id}
+                onRemove={() => setBlockedBy(task.blockedBy.filter((other) => other !== id))}
+              />
+            ))}
+          </ul>
+        )}
+        {others.map(
+          ([label, ids]) =>
+            ids.length > 0 && (
+              <div key={label} className="border-t">
+                <PaneHeading
+                  icon={label === "Mentioned in" ? <AtSignIcon /> : <LockIcon />}
+                  label={label}
+                  count={ids.length}
                 />
-              ))}
-            </ul>
-          )}
-          {others.map(
-            ([label, ids]) =>
-              ids.length > 0 && (
-                <div key={label}>
-                  <Heading>{label}</Heading>
-                  <ul className="flex flex-col">
-                    {ids.map((id) => (
-                      <RelatedTask key={id} workspace={workspace} snapshot={snapshot} id={id} />
-                    ))}
-                  </ul>
-                </div>
-              ),
-          )}
-        </div>
+                <ul className="flex flex-col">
+                  {ids.map((id) => (
+                    <RelatedTask key={id} workspace={workspace} snapshot={snapshot} id={id} />
+                  ))}
+                </ul>
+              </div>
+            ),
+        )}
       </ScrollArea>
     </section>
   );

@@ -10,7 +10,7 @@ import {
   SunriseIcon,
   type LucideIcon,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, type ReactElement } from "react";
 import { Button } from "@octodo/ui/components/button";
 import { Calendar } from "@octodo/ui/components/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@octodo/ui/components/popover";
@@ -48,7 +48,7 @@ export function DuePicker({
   align = "start",
   defaultOpen = false,
   onOpenChange,
-  onCloseAutoFocus,
+  finalFocus,
 }: {
   value: string | null;
   onChange: (due: string | null) => void;
@@ -58,7 +58,7 @@ export function DuePicker({
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   /** Where focus goes on close; call `preventDefault` to keep it off the trigger. */
-  onCloseAutoFocus?: (event: Event) => void;
+  finalFocus?: () => false;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [draft, setDraft] = useState<string | null>(value);
@@ -75,20 +75,13 @@ export function DuePicker({
 
   return (
     <Popover open={open} onOpenChange={setOpenState}>
-      <PopoverTrigger asChild>{children}</PopoverTrigger>
+      <PopoverTrigger render={children as ReactElement} />
       <PopoverContent
         className="w-68 gap-2 p-2"
         align={align}
-        {...(onCloseAutoFocus ? { onCloseAutoFocus } : {})}
+        {...(finalFocus ? { finalFocus } : {})}
       >
-        <ToggleGroup
-          type="single"
-          value="date"
-          variant="outline"
-          size="sm"
-          spacing={0}
-          className="w-full"
-        >
+        <ToggleGroup value={["date"]} variant="outline" size="sm" className="w-full">
           <ToggleGroupItem value="date" className="flex-1">
             Date
           </ToggleGroupItem>
@@ -99,17 +92,19 @@ export function DuePicker({
         <div className="flex justify-around">
           {QUICK.map(({ label, icon: Icon, date }) => (
             <Tooltip key={label}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={label}
-                  className="text-muted-foreground"
-                  onClick={() => apply(dayKey(date()))}
-                >
-                  <Icon />
-                </Button>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={label}
+                    className="text-muted-foreground"
+                    onClick={() => apply(dayKey(date()))}
+                  >
+                    <Icon />
+                  </Button>
+                }
+              />
               <TooltipContent>{label}</TooltipContent>
             </Tooltip>
           ))}

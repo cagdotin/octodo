@@ -4,7 +4,7 @@ import { CSS } from "@dnd-kit/utilities";
 import type { EntryDay, StatusDefinition, Task, WorkspaceSnapshot } from "@octodo/contract";
 import { isClosedCategory } from "@octodo/contract/rules";
 import { Link } from "@tanstack/react-router";
-import { InboxIcon, PlusIcon } from "lucide-react";
+import { ChevronRightIcon, InboxIcon, PlusIcon } from "lucide-react";
 import { useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import {
   COLUMN_PREFIX,
@@ -16,10 +16,12 @@ import {
   ChecklistCount,
   ListChip,
   PriorityMenu,
+  StatusIcon,
   StatusMenu,
-  TagChips,
+  TagPill,
   TaskDate,
 } from "@/components/task-bits";
+import { PANE_ROW } from "@octodo/ui/components/pane";
 import { enabledSections } from "@/components/section";
 import { TaskComposer } from "@/components/task-composer";
 import { BlockedChip } from "@/components/task-relations";
@@ -38,6 +40,7 @@ import {
   EmptyTitle,
 } from "@octodo/ui/components/empty";
 import { ScrollArea } from "@octodo/ui/components/scroll-area";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@octodo/ui/components/tooltip";
 import { useToday } from "@octodo/ui/hooks/use-today";
 import { dueInfo } from "@octodo/ui/lib/dates";
 import { cn } from "@octodo/ui/lib/utils";
@@ -114,7 +117,7 @@ export function ListView({
 
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <div className="@container flex flex-col px-2 pt-1 pb-24 md:px-3">
+      <div className="@container flex flex-col pb-24">
         {groups.map((status) => {
           const ids = columns[status.id] ?? [];
           const isOpen =
@@ -126,23 +129,28 @@ export function ListView({
               open={isOpen}
               onOpenChange={(value) => setOpen((prev) => ({ ...prev, [status.id]: value }))}
             >
-              <div className="group/header relative flex h-9 items-center">
-                <CollapsibleTrigger className="group flex h-full flex-1 items-center gap-2.5 rounded-md pr-10 pl-1 text-left transition-colors outline-none hover:bg-row-hover focus-visible:ring-2 focus-visible:ring-ring/50 md:pl-[3px]">
-                  <Disclosure className="opacity-0 group-hover/header:opacity-100 group-focus-visible:opacity-100 group-data-[state=closed]:opacity-100 group-data-[state=open]:rotate-90" />
-                  <span className="font-mono text-xs text-muted-foreground lowercase">
-                    {status.name}
-                  </span>
-                  <span className="font-mono text-xs text-muted-foreground/70">{ids.length}</span>
+              <div className="sticky top-0 z-20 flex h-9 items-center border-b bg-background pe-2">
+                <CollapsibleTrigger className="group flex h-full min-w-0 flex-1 cursor-pointer items-center gap-2 ps-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+                  <ChevronRightIcon className="size-3.5 text-muted-foreground transition-transform duration-200 ease-out group-data-panel-open:rotate-90" />
+                  <StatusIcon category={status.category} />
+                  <span className="text-[13px] font-medium">{status.name}</span>
+                  <span className="text-xs text-muted-foreground tabular-nums">{ids.length}</span>
                 </CollapsibleTrigger>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="absolute right-1.5 text-muted-foreground opacity-0 group-hover/header:opacity-100 focus-visible:opacity-100"
-                  aria-label={`New task in ${status.name}`}
-                  onClick={() => onCompose(status.id)}
-                >
-                  <PlusIcon />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`New task in ${status.name}`}
+                        onClick={() => onCompose(status.id)}
+                      />
+                    }
+                  >
+                    <PlusIcon />
+                  </TooltipTrigger>
+                  <TooltipContent>New task in {status.name}</TooltipContent>
+                </Tooltip>
               </div>
               <CollapsibleContent className="flex flex-col">
                 {status.id === composing && (
@@ -181,11 +189,10 @@ export function ListView({
           const rows = entries.filter((entry) => entry.section === id);
           return rows.length === 0 ? null : (
             <section key={id} aria-label={web.label} className="flex flex-col">
-              <h2 className="flex h-9 items-center gap-2.5 pl-1 md:pl-[23px]">
-                <span className="font-mono text-xs text-muted-foreground lowercase">
-                  {web.label}
-                </span>
-                <span className="font-mono text-xs text-muted-foreground/70">{rows.length}</span>
+              <h2 className="sticky top-0 z-20 flex h-9 items-center gap-2 border-b bg-background ps-4">
+                <web.Icon className="size-3.5 text-muted-foreground" />
+                <span className="text-[13px] font-medium">{web.label}</span>
+                <span className="text-xs text-muted-foreground tabular-nums">{rows.length}</span>
               </h2>
               <ul className="flex flex-col">
                 {rows.map((entry) => {
@@ -229,12 +236,12 @@ function EntryDayRow({
 }) {
   const due = dueInfo(entry.day, useToday());
   return (
-    <li className="group/row relative flex h-9 items-center gap-1.5 rounded-md pr-3 pl-1.5 transition-colors hover:bg-row-hover md:pl-[18px]">
+    <li className={PANE_ROW}>
       <span className="flex size-6 shrink-0 items-center justify-center text-muted-foreground">
         {icon}
       </span>
       <span
-        className="box-content hidden shrink-0 pr-2 pl-1 font-mono text-xs text-muted-foreground sm:inline"
+        className="hidden shrink-0 font-mono text-xs text-muted-foreground @md:block"
         style={{ width: idWidth }}
       >
         {entry.id}
@@ -244,13 +251,13 @@ function EntryDayRow({
         params={{ workspace, section: entry.section }}
         search={{ entry: entry.id }}
         draggable={false}
-        className="min-w-0 flex-1 truncate pl-1 outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:ring-2 focus-visible:after:ring-ring/50"
+        className="min-w-0 flex-1 truncate text-[13px] outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
       >
         {entry.title}
       </Link>
       <span
         className={cn(
-          "w-14 shrink-0 text-right font-mono text-xs text-foreground/80",
+          "w-14 shrink-0 text-right text-xs text-muted-foreground tabular-nums",
           due?.today && "text-foreground",
         )}
       >
@@ -281,7 +288,7 @@ function StatusGroup({
       ref={setNodeRef}
       open={open}
       onOpenChange={onOpenChange}
-      className={cn("flex flex-col rounded-md", isOver && "bg-row-hover/60")}
+      className={cn("flex flex-col transition-colors", isOver && "bg-accent/40")}
     >
       {children}
     </Collapsible>
@@ -302,7 +309,7 @@ function SortableRow(props: {
       type: "task",
       task: props.task,
       overlay: () => (
-        <div className="flex h-7 w-fit max-w-80 items-center gap-2 rounded-md border bg-popover px-2.5 text-sm text-popover-foreground shadow-lg">
+        <div className="flex h-9 w-fit max-w-96 items-center gap-3 rounded-md border bg-popover px-4 text-[13px] text-popover-foreground shadow-lg">
           <span className="shrink-0 font-mono text-xs text-muted-foreground">{props.task.id}</span>
           <span className="truncate">{props.task.title}</span>
         </div>
@@ -343,36 +350,32 @@ function TaskRow({
   return (
     <li
       data-active={active || undefined}
-      className={cn(
-        "group/row relative flex h-9 items-center gap-1.5 rounded-md pr-3 pl-1.5 transition-colors hover:bg-row-hover data-active:rounded-l-none data-active:bg-accent data-active:shadow-[inset_2px_0_0_var(--ink)] md:pl-[18px]",
-        className,
-      )}
+      className={cn(PANE_ROW, "data-active:bg-accent", className)}
       {...props}
     >
-      <StatusMenu workspace={workspace} snapshot={snapshot} task={task} />
+      {active && <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 bg-foreground" />}
+      <PriorityMenu
+        workspace={workspace}
+        task={task}
+        className={cn(
+          "-mx-1",
+          task.priority === "none" && "opacity-40 group-hover/row:opacity-100",
+        )}
+      />
       <span
-        className="box-content hidden shrink-0 pr-2 pl-1 font-mono text-xs text-muted-foreground sm:inline"
+        className="hidden shrink-0 font-mono text-xs text-muted-foreground @md:block"
         style={{ width: idWidth }}
       >
         {task.id}
       </span>
+      <StatusMenu workspace={workspace} snapshot={snapshot} task={task} className="-mx-1" />
       <Link
         to="/w/$workspace"
         params={{ workspace }}
         search={(prev) => ({ ...prev, task: task.id })}
         draggable={false}
-        className="min-w-0 flex-1 truncate pl-1 outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:ring-2 focus-visible:after:ring-ring/50"
+        className="min-w-0 flex-1 truncate text-[13px] outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
       >
-        {(task.priority === "urgent" || task.priority === "high") && (
-          <span
-            className={cn(
-              "mr-1.5",
-              task.priority === "urgent" ? "text-ink" : "text-muted-foreground",
-            )}
-          >
-            !
-          </span>
-        )}
         {task.title}
       </Link>
       <BlockedChip snapshot={snapshot} task={task} />
@@ -380,19 +383,18 @@ function TaskRow({
       <SubtaskCount progress={subtasks} />
       <ChecklistCount body={task.body} />
       {/* Chips make way for the title as the list narrows (details panel open, small windows). */}
-      <span className="mr-1 hidden min-w-0 shrink-0 items-center gap-2 @lg:flex">
-        <TagChips tags={task.tags} />
-        <span className="hidden @3xl:contents">
-          <ListChip lists={snapshot.lists} list={task.list} />
-        </span>
+      <span className="hidden min-w-0 shrink-0 items-center gap-1.5 @2xl:flex">
+        {task.tags.slice(0, 2).map((tag) => (
+          <TagPill key={tag} tag={tag} />
+        ))}
+        {task.tags.length > 2 && (
+          <span className="text-[11px] text-muted-foreground">+{task.tags.length - 2}</span>
+        )}
       </span>
-      <PriorityMenu
-        workspace={workspace}
-        task={task}
-        // The title's "!" carries urgency; the picker only shows when the row is pointed at.
-        className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
-      />
-      <TaskDate task={task} className="w-14 text-right" />
+      <span className="hidden @4xl:contents">
+        <ListChip lists={snapshot.lists} list={task.list} />
+      </span>
+      <TaskDate task={task} className="w-14 text-right font-sans tabular-nums" />
     </li>
   );
 }

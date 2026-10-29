@@ -1,10 +1,10 @@
 import type { Task, WorkspaceSnapshot } from "@octodo/contract";
 import { defaultStatus } from "@octodo/contract/rules";
 import { Link } from "@tanstack/react-router";
-import { CornerLeftUpIcon, ListTreeIcon, PlusIcon } from "lucide-react";
+import { ChevronRightIcon, CornerLeftUpIcon, ListTreeIcon, PlusIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Checkbox } from "@octodo/ui/components/checkbox";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@octodo/ui/components/input-group";
+import { PANE_ROW, PaneHeading } from "@octodo/ui/components/pane";
 import { ScrollArea } from "@octodo/ui/components/scroll-area";
 import { useCreateTask, useMoveTask } from "@/lib/api";
 import { cn } from "@octodo/ui/lib/utils";
@@ -98,15 +98,16 @@ export function ParentLink({
   const parent = snapshot.tasks.find((entry) => entry.id === task.parent);
   if (parent === undefined) return null;
   return (
-    <TaskLink
-      workspace={workspace}
-      task={parent.id}
-      className="flex h-8 shrink-0 items-center gap-1.5 border-b px-4 text-xs text-muted-foreground hover:text-foreground"
-    >
-      <CornerLeftUpIcon className="size-3.5 shrink-0" />
-      <span className="shrink-0 font-mono">{parent.id}</span>
-      <span className="truncate">{parent.title}</span>
-    </TaskLink>
+    <>
+      <TaskLink
+        workspace={workspace}
+        task={parent.id}
+        className="min-w-0 truncate rounded-sm text-muted-foreground hover:text-foreground"
+      >
+        {parent.title}
+      </TaskLink>
+      <ChevronRightIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground/60" />
+    </>
   );
 }
 
@@ -150,23 +151,17 @@ export function TaskSubtasks({
   };
 
   return (
-    <section aria-label="Subtasks" className="flex max-h-[45%] shrink-0 flex-col border-t pt-1.5">
-      <h2 className="flex h-7 shrink-0 items-center gap-2 px-4 font-mono text-xs text-muted-foreground lowercase">
-        subtasks
-        {own && (
-          <span className="text-muted-foreground/70">
-            {own.done}/{own.total}
-          </span>
-        )}
-      </h2>
+    <section aria-label="Subtasks" className="flex max-h-[45%] shrink-0 flex-col border-t">
+      <PaneHeading
+        icon={<ListTreeIcon className="text-muted-foreground" />}
+        label="Subtasks"
+        count={own && `${own.done}/${own.total}`}
+      />
       {subtasks.length > 0 && (
         <ScrollArea className="min-h-0">
-          <ul className="flex flex-col px-2">
+          <ul className="flex flex-col">
             {subtasks.map((subtask) => (
-              <li
-                key={subtask.id}
-                className="flex h-8 items-center gap-2.5 rounded-md px-2 hover:bg-row-hover"
-              >
+              <li key={subtask.id} className={PANE_ROW}>
                 <Checkbox
                   checked={isDone(subtask)}
                   disabled={completed === undefined}
@@ -193,29 +188,26 @@ export function TaskSubtasks({
         </ScrollArea>
       )}
       <form
-        className="shrink-0 px-3 pt-1 pb-2.5"
+        className={cn(PANE_ROW, "border-b-0 focus-within:bg-accent/60")}
         onSubmit={(event) => {
           event.preventDefault();
           add();
         }}
       >
-        <InputGroup>
-          <InputGroupAddon>
-            <PlusIcon />
-          </InputGroupAddon>
-          <InputGroupInput
-            aria-label="New subtask title"
-            placeholder="Add a subtask"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                setTitle("");
-                event.currentTarget.blur();
-              }
-            }}
-          />
-        </InputGroup>
+        <PlusIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+        <input
+          aria-label="New subtask title"
+          placeholder="Add a subtask"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              setTitle("");
+              event.currentTarget.blur();
+            }
+          }}
+          className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground md:text-[13px]"
+        />
       </form>
     </section>
   );

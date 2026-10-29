@@ -23,3 +23,5 @@ export const theme = pref("octodo:theme");
 export const showBacklog = pref("octodo:show-backlog");
 export const showCompleted = pref("octodo:show-completed");
 export const showArchived = pref("octodo:show-archived");
+export const detailWidth = pref("octodo:detail-width");
+export const sidebarWidth = pref("octodo:sidebar-width");

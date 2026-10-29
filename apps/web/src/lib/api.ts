@@ -14,7 +14,7 @@ import type { PresetId } from "@octodo/contract/presets";
 import { sortStatuses } from "@octodo/contract/rules";
 import type { EntryPatch, KindCreate, NewTask, SectionWeb } from "@octodo/plugins/web";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toastManager } from "@octodo/ui/components/toast";
 import { attachmentName, attachmentPath, type Attachments } from "@/lib/attachments";
 import { completesInPlace } from "@/components/task-kind";
 import { applyListMove, applyMove, withBlockedBy, withoutSubtree } from "@/lib/tasks";
@@ -63,7 +63,7 @@ export const snapshotQuery = (ws: string) =>
     queryFn: () => api.request("GET /api/workspaces/:workspace", { params: { workspace: ws } }),
   });
 
-const onError = (error: Error) => toast.error(error.message);
+const onError = (error: Error) => toastManager.add({ type: "error", title: error.message });
 
 export const useAddWorkspace = () => {
   const queryClient = useQueryClient();
@@ -195,7 +195,11 @@ export const useMoveList = (ws: string) =>
 /** Toasts the fixes that failed; the snapshot refetch shows the rest. */
 const reportFixes = (result: FixResult) => {
   for (const { diagnostic, error } of result.failed)
-    toast.error(`Could not fix ${diagnostic.path}`, { description: error });
+    toastManager.add({
+      type: "error",
+      title: `Could not fix ${diagnostic.path}`,
+      description: error,
+    });
   return result;
 };
 

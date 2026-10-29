@@ -21,7 +21,7 @@ export interface CreateFieldsProps<Draft> {
   readonly draft: Draft;
   readonly onChange: (draft: Draft) => void;
   /** Hands focus back to the dialog's title, where Enter creates, when a picker closes. */
-  readonly onCloseAutoFocus: (event: Event) => void;
+  readonly finalFocus: () => false;
 }
 
 /** How the new-task dialog creates a task of this kind (decision 0023). */
@@ -79,14 +79,26 @@ export interface EntryProps<Fields> {
   readonly entry: EntryOf<Fields>;
 }
 
-/** What the app hands a section's view: its entries in order, and the open one. */
+/** A slice of a section that its sidebar lists under "All", as Tasks lists Today and Ready. */
+export interface SectionView<Fields> {
+  /** Its `?show=` in the URL. */
+  readonly id: string;
+  readonly label: string;
+  readonly Icon: LucideIcon;
+  /** Whether an entry is in the view on `today`, `YYYY-MM-DD`. */
+  readonly matches: (fields: Fields, today: string) => boolean;
+}
+
+/** What the app hands a section's view: the entries of the chosen view in order, and the open one. */
 export interface SectionViewProps<Fields> {
   readonly workspace: string;
   readonly entries: ReadonlyArray<EntryOf<Fields>>;
+  /** The view shown, one of the section's `views`; undefined for all its entries. */
+  readonly view: SectionView<Fields> | undefined;
   /** The id of the entry the panel shows, if any. */
   readonly selected: string | undefined;
   readonly onOpen: (id: string) => void;
-  /** Whether the new-entry row is open: N and the sidebar's new button open it. */
+  /** Whether the new-entry form is open: N and the toolbar's new button open it. */
   readonly composing: boolean;
   readonly onCompose: (open: boolean) => void;
 }
@@ -109,6 +121,8 @@ export interface SectionWeb<Fields> {
   readonly Icon: LucideIcon;
   /** The icon of one entry, its kind's, wherever the app shows it: Today, the entry panel. */
   readonly EntryIcon: ComponentType<{ readonly fields: Fields; readonly className?: string }>;
+  /** The slices the sidebar lists after "All", in this order. */
+  readonly views: ReadonlyArray<SectionView<Fields>>;
   readonly View: ComponentType<SectionViewProps<Fields>>;
   /** The entry panel's section between the body and the footer. */
   readonly Panel: ComponentType<EntryProps<Fields>>;

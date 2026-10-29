@@ -17,7 +17,7 @@ export const bodyTheme = EditorView.theme({
   },
   ".cm-content": {
     alignSelf: "stretch",
-    padding: "0.75rem 0.75rem 4rem",
+    padding: "0.5rem 0.5rem 4rem",
     caretColor: "var(--foreground)",
   },
   ".cm-line": { padding: "0 0.5rem" },

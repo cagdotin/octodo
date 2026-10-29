@@ -1,25 +1,23 @@
-import type { WorkspaceSnapshot } from "@octodo/contract";
+import type { Entry, WorkspaceSnapshot } from "@octodo/contract";
 import { Link } from "@tanstack/react-router";
-import { SquareCheckBigIcon, SquarePenIcon } from "lucide-react";
+import { type LucideIcon, SquareCheckBigIcon } from "lucide-react";
 import { Count, DiagnosticsButton, WorkspaceSwitcher } from "@/components/app-sidebar";
 import { enabledSections, type EnabledSection } from "@/components/section";
 import { ITEM } from "@/components/sidebar-lists";
+import { SidebarBottom, SidebarTop } from "@/components/sidebar-chrome";
 import { SyncIndicator } from "@/components/sync-indicator";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Button } from "@octodo/ui/components/button";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
 } from "@octodo/ui/components/sidebar";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@octodo/ui/components/tooltip";
+import { useToday } from "@octodo/ui/hooks/use-today";
 
 /**
  * Tasks and the sections the workspace enables, for a phone, where the rail is hidden. Renders
@@ -43,26 +41,34 @@ export function SectionLinks({
       <SidebarGroupContent>
         <SidebarMenu className="gap-px">
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={active === undefined} className={ITEM}>
-              <Link to="/w/$workspace" params={{ workspace }} onClick={onNavigate}>
-                <SquareCheckBigIcon />
-                <span>Tasks</span>
-              </Link>
-            </SidebarMenuButton>
+            <SidebarMenuButton
+              isActive={active === undefined}
+              className={ITEM}
+              render={
+                <Link to="/w/$workspace" params={{ workspace }} onClick={onNavigate}>
+                  <SquareCheckBigIcon />
+                  <span>Tasks</span>
+                </Link>
+              }
+            />
           </SidebarMenuItem>
           {sections.map(({ id, web }) => (
             <SidebarMenuItem key={id}>
-              <SidebarMenuButton asChild isActive={active === id} className={ITEM}>
-                <Link
-                  to="/w/$workspace/$section"
-                  params={{ workspace, section: id }}
-                  search={{}}
-                  onClick={onNavigate}
-                >
-                  <web.Icon />
-                  <span>{web.label}</span>
-                </Link>
-              </SidebarMenuButton>
+              <SidebarMenuButton
+                isActive={active === id}
+                className={ITEM}
+                render={
+                  <Link
+                    to="/w/$workspace/$section"
+                    params={{ workspace, section: id }}
+                    search={{}}
+                    onClick={onNavigate}
+                  >
+                    <web.Icon />
+                    <span>{web.label}</span>
+                  </Link>
+                }
+              />
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
@@ -72,79 +78,78 @@ export function SectionLinks({
 }
 
 /**
- * The sidebar while in a plugin's section: the workspace menu and a new-entry button as in Tasks,
- * then the section itself, which is one flat list for now (decision 0027).
+ * The sidebar while in a plugin's section: all its entries, then the views its plugin names, each
+ * with its count, as Tasks lists All tasks, Today and Ready.
  */
 export function SectionSidebar({
   snapshot,
   section,
-  count,
-  onNew,
+  entries,
+  active,
 }: {
   snapshot: WorkspaceSnapshot;
   section: EnabledSection;
-  count: number;
-  onNew: () => void;
+  entries: ReadonlyArray<Entry>;
+  /** The view shown; undefined for all entries. */
+  active: string | undefined;
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
   const close = () => isMobile && setOpenMobile(false);
   const { id, web } = section;
+  const today = useToday();
+  const link = (view: string | undefined, label: string, Icon: LucideIcon, count: number) => (
+    <SidebarMenuItem key={view ?? "all"}>
+      <SidebarMenuButton
+        isActive={active === view}
+        className={ITEM}
+        render={
+          <Link
+            to="/w/$workspace/$section"
+            params={{ workspace: snapshot.workspace.id, section: id }}
+            search={view === undefined ? {} : { show: view }}
+            onClick={close}
+            draggable={false}
+          >
+            <Icon />
+            <span>{label}</span>
+          </Link>
+        }
+      />
+      {count > 0 && <Count value={count} />}
+    </SidebarMenuItem>
+  );
 
   return (
     <Sidebar className="select-none">
-      <SidebarHeader className="flex-row items-center gap-1 pb-1">
-        <WorkspaceSwitcher current={snapshot.workspace} />
-        <div className="ml-auto flex items-center">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon-sm"
-                className="rounded-lg bg-background/60 shadow-xs dark:bg-input/30"
-                aria-label={`New ${web.noun}`}
-                onClick={() => {
-                  close();
-                  onNew();
-                }}
-              >
-                <SquarePenIcon />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>New {web.noun}</TooltipContent>
-          </Tooltip>
-        </div>
-      </SidebarHeader>
-      <SidebarContent className="gap-1">
+      {/* Phones have no rail, so the workspace menu sits here. */}
+      <SidebarTop className="px-2 md:hidden">
+        <WorkspaceSwitcher current={snapshot.workspace} trigger="name" />
+      </SidebarTop>
+      <SidebarContent className="gap-1 pt-1">
         <SectionLinks snapshot={snapshot} active={id} onNavigate={close} />
         <SidebarGroup className="py-1">
           <SidebarGroupContent>
             <SidebarMenu className="gap-px">
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive className={ITEM}>
-                  <Link
-                    to="/w/$workspace/$section"
-                    params={{ workspace: snapshot.workspace.id, section: id }}
-                    search={{}}
-                    onClick={close}
-                    draggable={false}
-                  >
-                    <web.Icon />
-                    <span>All {web.label.toLowerCase()}</span>
-                  </Link>
-                </SidebarMenuButton>
-                {count > 0 && <Count value={count} />}
-              </SidebarMenuItem>
+              {link(undefined, `All ${web.label.toLowerCase()}`, web.Icon, entries.length)}
+              {web.views.map((view) =>
+                link(
+                  view.id,
+                  view.label,
+                  view.Icon,
+                  entries.filter((entry) => view.matches(entry.fields, today)).length,
+                ),
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="flex-row items-center gap-1">
+      <SidebarBottom>
         <SyncIndicator />
         <DiagnosticsButton snapshot={snapshot} />
         <div className="ml-auto">
           <ThemeToggle />
         </div>
-      </SidebarFooter>
+      </SidebarBottom>
     </Sidebar>
   );
 }

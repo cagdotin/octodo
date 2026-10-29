@@ -5,21 +5,19 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import {
   CheckIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   CopyIcon,
   FolderOpenIcon,
   PlusIcon,
-  SearchIcon,
-  SettingsIcon,
-  SquarePenIcon,
   TriangleAlertIcon,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { toast } from "sonner";
+import { toastManager } from "@octodo/ui/components/toast";
 import { AddWorkspaceDialog } from "@/components/add-workspace-dialog";
 import { DiagnosticsDialog } from "@/components/diagnostics-dialog";
-import { Disclosure } from "@/components/list-view";
 import { NewListDialog } from "@/components/new-list-dialog";
-import { ITEM, SidebarLists } from "@/components/sidebar-lists";
+import { COUNT, ITEM, SidebarLists } from "@/components/sidebar-lists";
+import { SidebarBottom, SidebarTop } from "@/components/sidebar-chrome";
 import { SectionLinks } from "@/components/section-sidebar";
 import { SyncIndicator } from "@/components/sync-indicator";
 import { ViewIcon } from "@/components/task-bits";
@@ -39,17 +37,14 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuShortcut,
   DropdownMenuTrigger,
-} from "@octodo/ui/components/dropdown-menu";
+} from "@octodo/ui/components/menu";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuBadge,
   SidebarMenuButton,
@@ -66,13 +61,9 @@ import { dueEntries, filterTasks, listCounts, SMART, statusMap } from "@/lib/tas
 export function AppSidebar({
   snapshot,
   activeList,
-  onSearch,
-  onNewTask,
 }: {
   snapshot: WorkspaceSnapshot;
   activeList: string | undefined;
-  onSearch: () => void;
-  onNewTask: () => void;
 }) {
   const ws = snapshot.workspace.id;
   const { counts, none, open } = listCounts(snapshot);
@@ -90,18 +81,22 @@ export function AppSidebar({
   const entry = (list: string | undefined, label: string, count: number): ReactNode => {
     return (
       <SidebarMenuItem key={label}>
-        <SidebarMenuButton asChild isActive={activeList === list} className={ITEM}>
-          <Link
-            to="/w/$workspace"
-            params={{ workspace: ws }}
-            search={(prev) => ({ ...prev, list, task: undefined })}
-            onClick={close}
-            draggable={false}
-          >
-            <ViewIcon list={list} />
-            <span>{label}</span>
-          </Link>
-        </SidebarMenuButton>
+        <SidebarMenuButton
+          isActive={activeList === list}
+          className={ITEM}
+          render={
+            <Link
+              to="/w/$workspace"
+              params={{ workspace: ws }}
+              search={(prev) => ({ ...prev, list, task: undefined })}
+              onClick={close}
+              draggable={false}
+            >
+              <ViewIcon list={list} />
+              <span>{label}</span>
+            </Link>
+          }
+        />
         {count > 0 && <Count value={count} />}
       </SidebarMenuItem>
     );
@@ -109,43 +104,11 @@ export function AppSidebar({
 
   return (
     <Sidebar className="select-none">
-      <SidebarHeader className="flex-row items-center gap-1 pb-1">
-        <WorkspaceSwitcher current={snapshot.workspace} />
-        <div className="ml-auto flex items-center">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="text-sidebar-foreground/70"
-                aria-label="Search"
-                onClick={onSearch}
-              >
-                <SearchIcon />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Search and commands</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon-sm"
-                className="rounded-lg bg-background/60 shadow-xs dark:bg-input/30"
-                aria-label="New task"
-                onClick={() => {
-                  close();
-                  onNewTask();
-                }}
-              >
-                <SquarePenIcon />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>New task</TooltipContent>
-          </Tooltip>
-        </div>
-      </SidebarHeader>
-      <SidebarContent className="gap-1">
+      {/* Phones have no rail, so the workspace menu sits here. */}
+      <SidebarTop className="px-2 md:hidden">
+        <WorkspaceSwitcher current={snapshot.workspace} trigger="name" />
+      </SidebarTop>
+      <SidebarContent className="gap-1 pt-1">
         <SectionLinks snapshot={snapshot} active={undefined} onNavigate={close} />
         <SidebarGroup className="py-1">
           <SidebarGroupContent>
@@ -178,13 +141,13 @@ export function AppSidebar({
           </SidebarMenuItem>
         </Section>
       </SidebarContent>
-      <SidebarFooter className="flex-row items-center gap-1">
+      <SidebarBottom>
         <SyncIndicator />
         <DiagnosticsButton snapshot={snapshot} />
         <div className="ml-auto">
           <ThemeToggle />
         </div>
-      </SidebarFooter>
+      </SidebarBottom>
       <NewListDialog
         workspace={ws}
         lists={snapshot.lists}
@@ -196,11 +159,7 @@ export function AppSidebar({
 }
 
 export function Count({ value }: { value: number }) {
-  return (
-    <SidebarMenuBadge className="top-1! font-mono font-normal text-sidebar-foreground/50">
-      {value}
-    </SidebarMenuBadge>
-  );
+  return <SidebarMenuBadge className={COUNT}>{value}</SidebarMenuBadge>;
 }
 
 /** A sidebar section whose small mono header ("LISTS ▾") folds it. */
@@ -209,14 +168,14 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
     <Collapsible defaultOpen className="group/section">
       <SidebarGroup className="py-1">
         <SidebarGroupLabel
-          asChild
-          className="h-7 w-fit gap-1.5 font-mono text-[11px] tracking-[0.08em] text-sidebar-foreground/50 uppercase"
-        >
-          <CollapsibleTrigger>
-            {label}
-            <Disclosure className="size-2 rotate-90 text-sidebar-foreground/50 group-data-[state=closed]/section:rotate-0" />
-          </CollapsibleTrigger>
-        </SidebarGroupLabel>
+          className="h-7 w-full cursor-pointer gap-2 rounded-lg px-2 text-[13px] font-normal text-sidebar-foreground/60 outline-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          render={
+            <CollapsibleTrigger>
+              {label}
+              <ChevronRightIcon className="ms-auto size-3.5 rotate-90 text-sidebar-foreground/50 transition-transform group-data-closed/section:rotate-0" />
+            </CollapsibleTrigger>
+          }
+        />
         <CollapsibleContent>
           <SidebarGroupContent>
             <SidebarMenu className="gap-px">{children}</SidebarMenu>
@@ -228,10 +187,16 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /**
- * The workspace menu: settings and the folder for this workspace, then every workspace, one
- * click away.
+ * The workspace menu: the folder for this workspace, then every workspace, one click away. The rail
+ * shows it as the workspace's avatar; the sidebar shows its name, on phones where there is no rail.
  */
-export function WorkspaceSwitcher({ current }: { current: WorkspaceSnapshot["workspace"] }) {
+export function WorkspaceSwitcher({
+  current,
+  trigger,
+}: {
+  current: WorkspaceSnapshot["workspace"];
+  trigger: "avatar" | "name";
+}) {
   const { data: workspaces = [] } = useQuery(workspacesQuery);
   const navigate = useNavigate();
   const [addOpen, setAddOpen] = useState(false);
@@ -240,22 +205,36 @@ export function WorkspaceSwitcher({ current }: { current: WorkspaceSnapshot["wor
   return (
     <>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="min-w-0 gap-2 px-1.5 font-medium">
-            <Avatar label={current.key} />
-            <span className="truncate">{current.name}</span>
-            <ChevronDownIcon data-icon="inline-end" className="text-sidebar-foreground/60" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-60" align="start">
+        <DropdownMenuTrigger
+          render={
+            trigger === "avatar" ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 rounded-lg"
+                aria-label={`Workspace: ${current.name}`}
+                title={current.name}
+              >
+                <Avatar label={current.key} className="size-6.5 rounded-md text-[11px]" />
+              </Button>
+            ) : (
+              <Button variant="ghost" size="sm" className="min-w-0 gap-2 px-1.5 font-medium">
+                <Avatar label={current.key} />
+                <span className="truncate">{current.name}</span>
+                <ChevronDownIcon data-icon="inline-end" className="text-sidebar-foreground/60" />
+              </Button>
+            )
+          }
+        />
+        <DropdownMenuContent
+          className="w-60"
+          align="start"
+          {...(trigger === "avatar" ? { side: "right" as const } : {})}
+        >
           <DropdownMenuGroup>
-            <DropdownMenuItem asChild>
-              <Link to="/w/$workspace/settings" params={{ workspace: current.id }}>
-                <SettingsIcon />
-                Settings
-                <DropdownMenuShortcut>⌘,</DropdownMenuShortcut>
-              </Link>
-            </DropdownMenuItem>
+            <DropdownMenuLabel className="flex flex-col gap-0.5 py-1">
+              <span className="truncate text-sm font-medium text-foreground">{current.name}</span>
+            </DropdownMenuLabel>
             <RevealFolderItem root={current.root} />
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
@@ -280,13 +259,13 @@ export function WorkspaceSwitcher({ current }: { current: WorkspaceSnapshot["wor
               <DropdownMenuItem
                 key={ws.id}
                 title={ws.root}
-                onSelect={() =>
+                onClick={() =>
                   void navigate({ to: "/w/$workspace", params: { workspace: ws.id }, search: {} })
                 }
               >
                 <Avatar label={ws.key} />
-                <span className="truncate">{ws.name}</span>
-                {ws.id === current.id && <CheckIcon className="ml-auto" />}
+                <span className="flex-1 truncate">{ws.name}</span>
+                {ws.id === current.id && <CheckIcon />}
               </DropdownMenuItem>
             ))}
           </DropdownMenuGroup>
@@ -301,7 +280,7 @@ export function WorkspaceSwitcher({ current }: { current: WorkspaceSnapshot["wor
 export function RevealFolderItem({ root }: { root: string }) {
   if (desktop) {
     return (
-      <DropdownMenuItem onSelect={() => void desktop?.showFolder(root)}>
+      <DropdownMenuItem onClick={() => void desktop?.showFolder(root)}>
         <FolderOpenIcon />
         {desktop.platform === "darwin" ? "Show in Finder" : "Show in folder"}
       </DropdownMenuItem>
@@ -309,8 +288,10 @@ export function RevealFolderItem({ root }: { root: string }) {
   }
   return (
     <DropdownMenuItem
-      onSelect={() =>
-        void navigator.clipboard.writeText(root).then(() => toast.success("Folder path copied"))
+      onClick={() =>
+        void navigator.clipboard
+          .writeText(root)
+          .then(() => toastManager.add({ type: "success", title: "Folder path copied" }))
       }
     >
       <CopyIcon />
@@ -320,9 +301,14 @@ export function RevealFolderItem({ root }: { root: string }) {
 }
 
 /** A workspace's little square avatar: the first letters of its id key. */
-export function Avatar({ label }: { label: string }) {
+export function Avatar({ label, className }: { label: string; className?: string }) {
   return (
-    <span className="flex size-5 shrink-0 items-center justify-center rounded-[5px] bg-primary text-[10px] leading-none font-semibold text-primary-foreground">
+    <span
+      className={cn(
+        "flex size-5 shrink-0 items-center justify-center rounded-[5px] bg-primary text-[10px] leading-none font-semibold text-primary-foreground",
+        className,
+      )}
+    >
       {label.slice(0, 2)}
     </span>
   );
@@ -334,20 +320,22 @@ export function DiagnosticsButton({ snapshot }: { snapshot: WorkspaceSnapshot })
   return (
     <>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn(
-              "font-normal",
-              count > 0 ? "text-destructive" : "text-sidebar-foreground/60",
-            )}
-            onClick={() => setOpen(true)}
-          >
-            <TriangleAlertIcon data-icon="inline-start" />
-            {count}
-          </Button>
-        </TooltipTrigger>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="xs"
+              className={cn(
+                "font-normal",
+                count > 0 ? "text-destructive" : "text-sidebar-foreground/60",
+              )}
+              onClick={() => setOpen(true)}
+            >
+              <TriangleAlertIcon data-icon="inline-start" />
+              {count}
+            </Button>
+          }
+        />
         <TooltipContent>{count === 1 ? "1 file problem" : `${count} file problems`}</TooltipContent>
       </Tooltip>
       <DiagnosticsDialog

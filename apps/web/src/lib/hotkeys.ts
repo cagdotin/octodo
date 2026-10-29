@@ -7,7 +7,7 @@ const isTyping = (target: EventTarget | null) =>
 /** Is any modal layer (dialog, sheet, menu, popover) open? Those handle their own keys. */
 const overlayOpen = () =>
   document.querySelector(
-    "[role=dialog][data-state=open], [role=menu][data-state=open], [role=listbox]",
+    "[role=dialog][data-open], [role=alertdialog][data-open], [role=menu][data-open], [role=listbox]",
   ) !== null;
 
 /**

@@ -20,9 +20,9 @@ import { defaultStatus } from "@octodo/contract/rules";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { GripVerticalIcon } from "lucide-react";
-import { SettingsPage } from "@/components/settings-page";
+import { Rows, Section, SettingsPage } from "@/components/settings-page";
 import { StatusIcon } from "@/components/task-bits";
-import { Card } from "@octodo/ui/components/card";
+import { Badge } from "@octodo/ui/components/badge";
 import { snapshotQuery, useReorderStatuses } from "@/lib/api";
 import { cn } from "@octodo/ui/lib/utils";
 
@@ -31,13 +31,21 @@ export const Route = createFileRoute("/w/$workspace_/settings/statuses")({
 });
 
 /** Categories in workflow order, which is fixed; only the statuses inside one can be reordered. */
-const CATEGORIES: ReadonlyArray<{ value: StatusCategory; label: string }> = [
-  { value: "backlog", label: "Backlog" },
-  { value: "unstarted", label: "Unstarted" },
-  { value: "started", label: "Started" },
-  { value: "completed", label: "Completed" },
-  { value: "canceled", label: "Canceled" },
-  { value: "archived", label: "Archived" },
+const CATEGORIES: ReadonlyArray<{ value: StatusCategory; label: string; help: string }> = [
+  {
+    value: "backlog",
+    label: "Backlog",
+    help: "Ideas and later. The list shows them when you ask.",
+  },
+  {
+    value: "unstarted",
+    label: "Unstarted",
+    help: "Ready to pick up. New tasks start in the first one.",
+  },
+  { value: "started", label: "Started", help: "In progress." },
+  { value: "completed", label: "Completed", help: "Done. A closed task no longer blocks another." },
+  { value: "canceled", label: "Canceled", help: "Closed without being done." },
+  { value: "archived", label: "Archived", help: "Put away. The list shows them when you ask." },
 ];
 
 function StatusSettings() {
@@ -68,56 +76,64 @@ function StatusSettings() {
       title="Statuses"
       description={
         <>
-          The workflow tasks go through from start to completion. The category decides where a
-          status shows and how it behaves; drag to reorder statuses within one. A task keeps its
-          status id in the <code className="font-mono text-xs">status</code> field of its{" "}
-          <code className="font-mono text-xs">task.md</code>, and this order lives in{" "}
-          <code className="font-mono text-xs">config.json</code>.
+          The workflow tasks go through from start to completion. A task keeps its status id in the{" "}
+          <Code>status</Code> field of its <Code>task.md</Code>, and this order lives in{" "}
+          <Code>config.json</Code>.
         </>
       }
     >
-      <Card className="gap-1 p-2">
-        {CATEGORIES.map((category) => {
-          const items = statuses.filter((status) => status.category === category.value);
-          return (
-            <section key={category.value} className="flex flex-col gap-1">
-              <h2 className="flex h-9 items-center rounded-md bg-muted px-3 text-sm text-muted-foreground">
-                {category.label}
-              </h2>
-              {items.length === 0 ? (
-                <p className="px-3 py-2 text-sm text-muted-foreground/70">No statuses</p>
-              ) : (
-                // A drag context per category: a status cannot leave its category.
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={onDragEnd}
-                >
-                  <SortableContext
-                    items={items.map((status) => status.id)}
-                    strategy={verticalListSortingStrategy}
+      <Section
+        title="Workflow"
+        description="The category decides where a status shows and how it behaves. Drag to reorder statuses within one."
+      >
+        <Rows>
+          {CATEGORIES.map((category) => {
+            const items = statuses.filter((status) => status.category === category.value);
+            return (
+              <section key={category.value}>
+                <h3 className="flex items-baseline gap-2 border-b bg-muted/30 px-4 py-2 text-xs">
+                  <span className="font-medium">{category.label}</span>
+                  <span className="truncate text-muted-foreground">{category.help}</span>
+                </h3>
+                {items.length === 0 ? (
+                  <p className="px-4 py-3 text-xs text-muted-foreground/70">No statuses</p>
+                ) : (
+                  // A drag context per category: a status cannot leave its category.
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={onDragEnd}
                   >
-                    <ul className="flex flex-col">
-                      {items.map((status) => (
-                        <StatusRow
-                          key={status.id}
-                          status={status}
-                          count={counts.get(status.id) ?? 0}
-                          isDefault={status.id === fallback}
-                          sortable={items.length > 1}
-                        />
-                      ))}
-                    </ul>
-                  </SortableContext>
-                </DndContext>
-              )}
-            </section>
-          );
-        })}
-      </Card>
+                    <SortableContext
+                      items={items.map((status) => status.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <ul className="divide-y">
+                        {items.map((status) => (
+                          <StatusRow
+                            key={status.id}
+                            status={status}
+                            count={counts.get(status.id) ?? 0}
+                            isDefault={status.id === fallback}
+                            sortable={items.length > 1}
+                          />
+                        ))}
+                      </ul>
+                    </SortableContext>
+                  </DndContext>
+                )}
+              </section>
+            );
+          })}
+        </Rows>
+      </Section>
     </SettingsPage>
   );
 }
+
+const Code = ({ children }: { children: string }) => (
+  <code className="font-mono text-[11px]">{children}</code>
+);
 
 function StatusRow({
   status,
@@ -139,29 +155,32 @@ function StatusRow({
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
       className={cn(
-        "group/status relative flex items-center gap-3 rounded-md bg-card px-3 py-2.5",
+        "group/status relative flex items-center gap-3 bg-card px-4 py-2.5",
         sortable && "cursor-grab active:cursor-grabbing",
-        isDragging && "z-10 shadow-md ring-1 ring-border",
+        isDragging && "z-10 rounded-lg shadow-md ring-1 ring-border",
       )}
       {...attributes}
       {...listeners}
     >
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-        <StatusIcon category={status.category} className="size-4" />
+      <StatusIcon category={status.category} className="size-4 shrink-0" />
+      <span className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="truncate text-sm font-medium">{status.name}</span>
+        {isDefault && (
+          <Badge size="sm" variant="outline">
+            Default
+          </Badge>
+        )}
       </span>
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate font-medium">
-          {status.name}
-          {isDefault && <span className="font-normal text-muted-foreground"> · Default</span>}
-        </span>
-        <span className="text-sm text-muted-foreground">
-          {count === 1 ? "1 task" : `${count} tasks`}
-          <span className="font-mono text-xs"> · {status.id}</span>
-        </span>
+      <span className="hidden font-mono text-xs text-muted-foreground sm:inline">{status.id}</span>
+      <span className="w-16 text-right text-xs text-muted-foreground tabular-nums">
+        {count === 1 ? "1 task" : `${count} tasks`}
       </span>
-      {sortable && (
-        <GripVerticalIcon className="size-4 shrink-0 text-muted-foreground/50 opacity-0 transition-opacity group-hover/status:opacity-100" />
-      )}
+      <GripVerticalIcon
+        className={cn(
+          "size-4 shrink-0 text-muted-foreground/50 transition-opacity",
+          sortable ? "opacity-0 group-hover/status:opacity-100" : "invisible",
+        )}
+      />
     </li>
   );
 }

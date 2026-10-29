@@ -46,6 +46,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@octodo/ui/components/tooltip";
 import { workspacesQuery } from "@/lib/api";
 import { desktop } from "@/lib/desktop";
+import { UpdateButton } from "@/components/update-button";
 import { useToday } from "@octodo/ui/hooks/use-today";
 import { cn } from "@octodo/ui/lib/utils";
 import { dueEntries, filterTasks, listCounts, SMART, statusMap } from "@/lib/tasks";
@@ -124,7 +125,8 @@ export function AppSidebar({
       <SidebarBottom>
         <SyncIndicator />
         <DiagnosticsButton snapshot={snapshot} />
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-1">
+          <UpdateButton />
           <ThemeToggle />
         </div>
       </SidebarBottom>

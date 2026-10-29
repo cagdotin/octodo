@@ -21,6 +21,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { json, operationCommands } from "./commands.ts";
 import { SKILL } from "./skill.ts";
+import { upgradeCommand } from "./upgrade.ts";
 
 export const home = defaultHome(process.env, homedir());
 
@@ -246,7 +247,10 @@ const serveCommand = Command.make(
       return yield* new InvalidRequest({
         message: `octodo already runs at ${running.value.url} (pid ${running.value.pid}). Use it, or stop it first.`,
       });
-    const defaultWeb = fileURLToPath(new URL("../../../apps/web/dist", import.meta.url));
+    // The octo inside the desktop app names the web app the app ships.
+    const defaultWeb =
+      process.env["OCTODO_WEB_DIR"] ??
+      fileURLToPath(new URL("../../../apps/web/dist", import.meta.url));
     const start = Effect.tryPromise({
       try: () =>
         startServer({
@@ -336,5 +340,6 @@ export const octo = root.pipe(
     serveCommand,
     mcpCommand,
     skillsCommand,
+    upgradeCommand,
   ]),
 );

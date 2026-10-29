@@ -1,0 +1,72 @@
+# Publishes a stable release (decision 0029): from Actions > Stable > Run workflow, which releases
+# the newest nightly's commit as the version it previews, or from a pushed `v1.2.3` tag.
+name: Stable
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version, such as 0.4.0; defaults to the one the newest nightly previews"
+        required: false
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+concurrency:
+  group: stable
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  stable:
+    runs-on: macos-15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: jdx/mise-action@v2
+      - id: target
+        env:
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            version="${GITHUB_REF_NAME#v}"
+            sha="$GITHUB_SHA"
+          else
+            nightly="$(node scripts/release.ts latest-nightly)"
+            version="${REQUESTED:-$(node scripts/release.ts stable-version "$nightly")}"
+            sha="$(git rev-list -n 1 "$nightly")"
+          fi
+          if ! echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Not a stable version: $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - run: git checkout --detach "${{ steps.target.outputs.sha }}"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm build
+      - name: Package
+        env:
+          VERSION: ${{ steps.target.outputs.version }}
+        run: >
+          pnpm --filter @octodo/desktop exec electron-builder --mac zip dmg --publish never
+          -c.extraMetadata.version="$VERSION"
+      # stable.json rides in the release itself, so it goes public with the zip it names.
+      - name: Publish
+        env:
+          VERSION: ${{ steps.target.outputs.version }}
+          SHA: ${{ steps.target.outputs.sha }}
+        working-directory: apps/desktop/release
+        run: |
+          zip="octodo-$VERSION-arm64-mac.zip"
+          node ../../../scripts/release.ts feed "$zip" "$VERSION" \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/$zip" > stable.json
+          gh release create "v$VERSION" "$zip" "octodo-$VERSION-arm64.dmg" stable.json --draft \
+            --target "$SHA" --title "octodo $VERSION" --generate-notes
+          gh release edit "v$VERSION" --draft=false --latest

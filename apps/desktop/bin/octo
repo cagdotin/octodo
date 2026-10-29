@@ -1,0 +1,6 @@
+#!/bin/sh
+# The octo CLI the desktop app ships: the app's own binary, run as Node, runs its bundled CLI.
+# Link it onto your PATH: ln -s /Applications/octodo.app/Contents/Resources/bin/octo ~/.local/bin/
+app="$(cd "$(dirname "$(realpath "$0")")/../../.." && pwd)"
+ELECTRON_RUN_AS_NODE=1 OCTODO_APP="$app" OCTODO_WEB_DIR="$app/Contents/Resources/web" \
+  exec "$app/Contents/MacOS/octodo" "$app/Contents/Resources/app.asar/dist/cli.mjs" "$@"

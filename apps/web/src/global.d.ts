@@ -10,6 +10,12 @@ export interface OctodoDesktopBridge {
   pickFolder(defaultPath?: string): Promise<string | null>;
   /** Opens a folder in Finder or the platform's file manager. */
   showFolder(folder: string): Promise<void>;
+  /** The version the app downloaded and installs on restart, or null. */
+  updateReady(): Promise<string | null>;
+  /** Calls `listener` when the app has downloaded a new version; returns an unsubscribe. */
+  onUpdateReady(listener: (version: string) => void): () => void;
+  /** Swaps in the downloaded version and restarts the app. */
+  installUpdate(): Promise<void>;
 }
 
 declare global {

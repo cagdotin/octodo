@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 /**
  * Desktop window chrome. The Electron app's preload exposes `window.octodo`; on macOS the web app
  * then draws its own title bar and keeps room for the traffic lights. `<html>` carries
@@ -20,4 +22,15 @@ export function initDesktopChrome() {
   document.documentElement.dataset["desktop"] = "mac";
   bridge.onFullScreenChange(setFullScreen);
   void bridge.isFullScreen().then(setFullScreen);
+}
+
+/** The version the desktop app downloaded and installs on restart; null in a browser or until then. */
+export function useUpdateReady() {
+  const [version, setVersion] = useState<string | null>(null);
+  useEffect(() => {
+    if (!bridge) return;
+    void bridge.updateReady().then(setVersion);
+    return bridge.onUpdateReady(setVersion);
+  }, []);
+  return version;
 }

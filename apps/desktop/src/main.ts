@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { startBackend, type Problem } from "./backend.ts";
 import { ANSWERS, problemPage } from "./problem.ts";
+import { startUpdates } from "./updates.ts";
 
 const devUrl = process.env["OCTODO_DEV_URL"];
 const home = defaultHome(process.env, homedir());
@@ -156,6 +157,16 @@ if (!app.requestSingleInstanceLock()) {
     if (window.isMinimized()) window.restore();
     window.focus();
   });
+
+  const updates = startUpdates((version) => {
+    for (const window of BrowserWindow.getAllWindows())
+      window.webContents.send("octodo:update-ready", version);
+  });
+  ipcMain.handle("octodo:update-ready", async () => (await updates).ready());
+  ipcMain.handle("octodo:install-update", async () => (await updates).install());
+
+  // `octo upgrade` asks a running app to quit this way before it swaps the app's folder.
+  process.on("SIGTERM", () => app.quit());
 
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit();

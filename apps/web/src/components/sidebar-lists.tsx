@@ -35,7 +35,7 @@ import {
 } from "@octodo/ui/components/menu";
 import {
   ChevronRightIcon,
-  FolderPlusIcon,
+  FolderOpenIcon,
   MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
@@ -119,8 +119,8 @@ const placementFor = (
 const sameOrder = (a: ReadonlyArray<List>, b: ReadonlyArray<List>) =>
   a.length === b.length && a.every((list, index) => list.id === b[index]?.id);
 
-/** Where a row's icon starts at `depth`, in pixels; the gutter before it holds the fold chevron. */
-const inset = (depth: number) => 24 + depth * 16;
+/** Where a row's icon starts at `depth`, in pixels: top-level icons line up with the views above. */
+const inset = (depth: number) => 8 + depth * 16;
 
 /**
  * The workspace's folded lists, kept per browser. A list that moves or is renamed keeps its state
@@ -306,16 +306,6 @@ export function SidebarLists({
       action={{ label: "New list", icon: <PlusIcon />, onClick: newList(null) }}
     >
       {listTree(snapshot.lists).flatMap((node) => rows(node, 0))}
-      <SidebarMenuItem>
-        <SidebarMenuButton
-          className={cn(ITEM, "text-sidebar-foreground/60")}
-          style={{ paddingInlineStart: inset(0) }}
-          onClick={newList(null)}
-        >
-          <PlusIcon />
-          <span>New list</span>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
       <NewListDialog
         key={edit?.kind === "create" ? `create:${edit.parent}` : "create"}
         lists={snapshot.lists}
@@ -337,6 +327,10 @@ export function SidebarLists({
     </Section>
   );
 }
+
+/** A folding list's icon hides under its chevron while the row is hovered. */
+const TOGGLE_HIDES =
+  "md:group-hover/list-row:opacity-0 md:group-has-focus-visible/list-row:opacity-0";
 
 function ListRow({
   workspace,
@@ -404,8 +398,18 @@ function ListRow({
       {...drag.attributes}
       {...drag.listeners}
     >
-      <ListGlyph />
+      {folded === false ? (
+        <FolderOpenIcon className={TOGGLE_HIDES} />
+      ) : (
+        <ListGlyph className={cn(folded === true && TOGGLE_HIDES)} />
+      )}
       <span>{list.name}</span>
+      {folded === true && (
+        <ChevronRightIcon
+          aria-hidden
+          className="-ms-1.5 size-3! shrink-0 text-sidebar-foreground/40"
+        />
+      )}
     </Link>
   );
   // The drop line sits in the gap between rows, so it does not shift anything.
@@ -426,23 +430,24 @@ function ListRow({
         render={
           <SidebarMenuAction
             aria-label={`Actions for ${list.name}`}
-            className="top-1! text-sidebar-foreground/70 group-focus-within/list-row:opacity-100 group-hover/list-row:opacity-100 data-popup-open:opacity-100 md:opacity-0"
+            className="top-1! text-sidebar-foreground/70 group-hover/list-row:opacity-100 group-has-focus-visible/list-row:opacity-100 data-popup-open:opacity-100 md:opacity-0"
           />
         }
       >
         <MoreHorizontalIcon />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="right">
-        <DropdownMenuItem onClick={() => onEdit({ kind: "create", parent: list.parent })}>
+        <DropdownMenuItem
+          onClick={() =>
+            onEdit({
+              kind: "create",
+              parent: listDepth(list.id) < MAX_LIST_DEPTH ? list.id : list.parent,
+            })
+          }
+        >
           <PlusIcon />
           New list
         </DropdownMenuItem>
-        {listDepth(list.id) < MAX_LIST_DEPTH && (
-          <DropdownMenuItem onClick={() => onEdit({ kind: "create", parent: list.id })}>
-            <FolderPlusIcon />
-            New sublist
-          </DropdownMenuItem>
-        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => onEdit({ kind: "rename", list })}>
           <PencilIcon />
@@ -462,14 +467,22 @@ function ListRow({
       {renaming ?? (
         <div className="group/list-row relative">
           <SidebarMenuButton isActive={active} className={ITEM} render={link as ReactElement} />
+          {Array.from({ length: depth }, (_, level) => (
+            <span
+              key={level}
+              aria-hidden
+              style={{ left: inset(level) + 7.5 }}
+              className="pointer-events-none absolute -top-px -bottom-px w-px bg-sidebar-border"
+            />
+          ))}
           {folded !== null && (
             <button
               type="button"
               aria-label={`${folded ? "Show" : "Hide"} the sublists of ${list.name}`}
               aria-expanded={!folded}
               onClick={onToggle}
-              style={{ left: inset(depth) - 20 }}
-              className="absolute top-1.5 flex size-4 items-center justify-center rounded-sm text-sidebar-foreground/50 outline-hidden hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+              style={{ left: inset(depth) }}
+              className="absolute top-1.5 flex size-4 items-center justify-center rounded-sm text-sidebar-foreground/70 opacity-0 outline-hidden group-hover/list-row:opacity-100 hover:text-sidebar-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring max-md:hidden"
             >
               <ChevronRightIcon
                 className={cn("size-3.5 transition-transform", !folded && "rotate-90")}
@@ -480,7 +493,7 @@ function ListRow({
             <SidebarMenuBadge
               className={cn(
                 COUNT,
-                "max-md:hidden group-focus-within/list-row:opacity-0 group-hover/list-row:opacity-0 group-has-data-popup-open/list-row:opacity-0",
+                "max-md:hidden group-hover/list-row:opacity-0 group-has-focus-visible/list-row:opacity-0 group-has-data-popup-open/list-row:opacity-0",
               )}
             >
               {count}

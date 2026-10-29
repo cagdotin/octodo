@@ -1,5 +1,5 @@
 import type { Priority, Task, WorkspaceSnapshot } from "@octodo/contract";
-import { AnimatePresence, LayoutGroup, motion } from "motion/react";
+import { AnimatePresence, LayoutGroup, m } from "motion/react";
 import {
   ChevronRightIcon,
   KanbanIcon,
@@ -98,7 +98,7 @@ export function ViewHeader({
         <span className="flex min-w-0 items-center gap-1.5 [&>svg]:size-3.5 [&>svg]:shrink-0 [&>svg]:text-muted-foreground">
           <ViewIcon list={list} />
           <AnimatePresence initial={false} mode="popLayout">
-            <motion.h1
+            <m.h1
               key={title}
               aria-current="page"
               className="truncate font-medium"
@@ -108,7 +108,7 @@ export function ViewHeader({
               transition={{ duration: 0.18, ease: "easeOut" }}
             >
               {title}
-            </motion.h1>
+            </m.h1>
           </AnimatePresence>
         </span>
       </nav>
@@ -128,7 +128,7 @@ export function ViewHeader({
               )}
             >
               {view === value && (
-                <motion.span
+                <m.span
                   layoutId="view-switch"
                   transition={spring}
                   className="absolute inset-0 rounded-[calc(var(--radius)*0.5)] bg-accent"

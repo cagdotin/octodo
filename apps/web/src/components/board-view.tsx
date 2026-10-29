@@ -3,7 +3,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 import type { StatusDefinition, Task, WorkspaceSnapshot } from "@octodo/contract";
 import { useNavigate } from "@tanstack/react-router";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { PlusIcon } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
 import {
@@ -188,7 +188,7 @@ function SortableCard({
       {...attributes}
       {...listeners}
     >
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{
@@ -199,7 +199,7 @@ function SortableCard({
         }}
       >
         <TaskCard {...props} />
-      </motion.div>
+      </m.div>
     </div>
   );
 }

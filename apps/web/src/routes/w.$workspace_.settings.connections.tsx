@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { CheckIcon, CopyIcon, TerminalIcon } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Row, Rows, Section, SettingsPage } from "@/components/settings-page";
 import { Button } from "@octodo/ui/components/button";
@@ -91,7 +91,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   return (
     <Button variant="ghost" size="icon-sm" aria-label={label} onClick={() => copy(text)}>
       <AnimatePresence initial={false} mode="popLayout">
-        <motion.span
+        <m.span
           key={copied ? "copied" : "copy"}
           className="flex"
           initial={{ opacity: 0, scale: 0.8 }}
@@ -100,7 +100,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
           transition={{ duration: 0.15 }}
         >
           {copied ? <CheckIcon className="text-(--sync-live)" /> : <CopyIcon />}
-        </motion.span>
+        </m.span>
       </AnimatePresence>
     </Button>
   );

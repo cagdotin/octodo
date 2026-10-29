@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { SearchIcon } from "lucide-react";
 import {
   createContext,
@@ -282,7 +282,7 @@ function ResizeHandle({
       onKeyDown={onKeyDown}
     >
       {grip ? (
-        <motion.span
+        <m.span
           animate={{ scaleY: dragging ? 56 / 32 : 1 }}
           transition={spring}
           className={cn(
@@ -315,7 +315,7 @@ function SplitPanel({
       {children && (
         // The main column reflows as the panel opens, which only a width animation does.
         // react-doctor-disable-next-line react-doctor/no-layout-property-animation
-        <motion.div
+        <m.div
           key="panel"
           className={cn("hidden shrink-0 overflow-hidden md:flex", dragging && "select-none")}
           initial={{ width: 0, opacity: 0 }}
@@ -342,18 +342,18 @@ function SplitPanel({
             {children}
             <AnimatePresence>
               {dragging && (
-                <motion.span
+                <m.span
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 4 }}
                   className="pointer-events-none absolute bottom-12 left-1/2 -translate-x-1/2 rounded-full bg-foreground px-2 py-0.5 font-mono text-[11px] text-background tabular-nums"
                 >
                   {width}px
-                </motion.span>
+                </m.span>
               )}
             </AnimatePresence>
           </section>
-        </motion.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

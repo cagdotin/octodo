@@ -41,7 +41,7 @@ import {
   Trash2Icon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { useState, type ReactNode } from "react";
 import { localDay } from "@octodo/contract/rules";
 import type { SectionViewProps } from "../web.ts";
@@ -258,7 +258,7 @@ function Figure({ value, unit }: { value: string; unit: string }) {
     <p className="flex items-baseline gap-1.5">
       <span className="relative overflow-hidden text-4xl leading-none font-semibold tracking-tight tabular-nums">
         <AnimatePresence initial={false} mode="popLayout">
-          <motion.span
+          <m.span
             key={value}
             className="inline-block"
             initial={{ y: "60%", opacity: 0 }}
@@ -267,7 +267,7 @@ function Figure({ value, unit }: { value: string; unit: string }) {
             transition={{ type: "spring", stiffness: 520, damping: 40 }}
           >
             {value}
-          </motion.span>
+          </m.span>
         </AnimatePresence>
       </span>
       <span className="text-sm text-muted-foreground">{unit}</span>
@@ -279,7 +279,7 @@ function Meter({ value, label }: { value: number; label: ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
       <div className="h-1 overflow-hidden rounded-full bg-muted">
-        <motion.div
+        <m.div
           className="h-full rounded-full bg-foreground/70"
           initial={false}
           animate={{ x: `${Math.max(2, Math.min(100, value * 100)) - 100}%` }}

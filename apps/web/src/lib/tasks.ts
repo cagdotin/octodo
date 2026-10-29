@@ -18,6 +18,7 @@ import {
   isDueBy,
   movedListId,
   readiness,
+  slugify,
   taskSubtree,
   type DayContext,
 } from "@octodo/contract/rules";
@@ -367,6 +368,38 @@ export const descendantCount = (tasks: ReadonlyArray<Task>, id: string) =>
   taskSubtree(tasks, id).size - 1;
 
 /** Removes a task and its subtasks at any depth, as deleting its folder does. */
+/** Why `name` cannot name a list under `parent` (other than `except`), or null when it can. */
+export const listNameError = (
+  lists: ReadonlyArray<List>,
+  parent: string | null,
+  name: string,
+  except?: string,
+): string | null => {
+  const slug = slugify(name);
+  if (slug === "") return "The name needs a letter or digit";
+  const id = parent === null ? slug : `${parent}/${slug}`;
+  return id !== except && lists.some((list) => list.id === id)
+    ? `There is already a list "${lists.find((list) => list.id === id)!.name}" here`
+    : null;
+};
+
+/** The snapshot with a list named `name` last under `parent`, as `create_list` makes it. */
+export const applyListCreate = (
+  snapshot: WorkspaceSnapshot,
+  { name, parent = null }: { name: string; parent?: string | null },
+): WorkspaceSnapshot => {
+  const id = parent === null ? slugify(name) : `${parent}/${slugify(name)}`;
+  const created: List = { id, name, parent, folder: id };
+  const index =
+    parent === null
+      ? snapshot.lists.length
+      : snapshot.lists.findLastIndex((list) => inSubtree(list.id, parent)) + 1;
+  return {
+    ...snapshot,
+    lists: [...snapshot.lists.slice(0, index), created, ...snapshot.lists.slice(index)],
+  };
+};
+
 /** The tasks in list `id` or its sublists, subtasks included. */
 export const tasksInList = (tasks: ReadonlyArray<Task>, id: string) =>
   tasks.filter((task) => task.list !== null && inSubtree(task.list, id));

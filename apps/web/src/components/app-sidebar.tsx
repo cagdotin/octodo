@@ -5,7 +5,6 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import {
   CheckIcon,
   ChevronDownIcon,
-  ChevronRightIcon,
   CopyIcon,
   FolderOpenIcon,
   PlusIcon,
@@ -15,7 +14,6 @@ import { useState, type ReactNode } from "react";
 import { toastManager } from "@octodo/ui/components/toast";
 import { AddWorkspaceDialog } from "@/components/add-workspace-dialog";
 import { DiagnosticsDialog } from "@/components/diagnostics-dialog";
-import { NewListDialog } from "@/components/new-list-dialog";
 import { COUNT, ITEM, SidebarLists } from "@/components/sidebar-lists";
 import { SidebarBottom, SidebarTop } from "@/components/sidebar-chrome";
 import { SectionLinks } from "@/components/section-sidebar";
@@ -25,11 +23,6 @@ import { sectionDay } from "@/components/section";
 import { kindDay } from "@/components/task-kind";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@octodo/ui/components/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@octodo/ui/components/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,7 +37,6 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuBadge,
   SidebarMenuButton,
@@ -73,7 +65,6 @@ export function AppSidebar({
     filterTasks(snapshot, list, kindDay, today).filter(
       (task) => !isClosedCategory(statuses.get(task.status)?.category),
     ).length + dueEntries(snapshot, list, sectionDay, today).length;
-  const [newListOpen, setNewListOpen] = useState(false);
   const { isMobile, setOpenMobile } = useSidebar();
   // Picking an entry on a phone should reveal the list behind the sheet.
   const close = () => isMobile && setOpenMobile(false);
@@ -123,23 +114,12 @@ export function AppSidebar({
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        <Section label="Lists">
-          <SidebarLists
-            snapshot={snapshot}
-            activeList={activeList}
-            counts={counts}
-            onNavigate={close}
-          />
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              className={cn(ITEM, "text-sidebar-foreground/60")}
-              onClick={() => setNewListOpen(true)}
-            >
-              <PlusIcon />
-              <span>New list</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </Section>
+        <SidebarLists
+          snapshot={snapshot}
+          activeList={activeList}
+          counts={counts}
+          onNavigate={close}
+        />
       </SidebarContent>
       <SidebarBottom>
         <SyncIndicator />
@@ -148,12 +128,6 @@ export function AppSidebar({
           <ThemeToggle />
         </div>
       </SidebarBottom>
-      <NewListDialog
-        workspace={ws}
-        lists={snapshot.lists}
-        open={newListOpen}
-        onOpenChange={setNewListOpen}
-      />
     </Sidebar>
   );
 }
@@ -163,29 +137,6 @@ export function Count({ value }: { value: number }) {
 }
 
 /** A sidebar section whose small mono header ("LISTS ▾") folds it. */
-function Section({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <Collapsible defaultOpen className="group/section">
-      <SidebarGroup className="py-1">
-        <SidebarGroupLabel
-          className="h-7 w-full cursor-pointer gap-2 rounded-lg px-2 text-[13px] font-normal text-sidebar-foreground/60 outline-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-          render={
-            <CollapsibleTrigger>
-              {label}
-              <ChevronRightIcon className="ms-auto size-3.5 rotate-90 text-sidebar-foreground/50 transition-transform group-data-closed/section:rotate-0" />
-            </CollapsibleTrigger>
-          }
-        />
-        <CollapsibleContent>
-          <SidebarGroupContent>
-            <SidebarMenu className="gap-px">{children}</SidebarMenu>
-          </SidebarGroupContent>
-        </CollapsibleContent>
-      </SidebarGroup>
-    </Collapsible>
-  );
-}
-
 /**
  * The workspace menu: the folder for this workspace, then every workspace, one click away. The rail
  * shows it as the workspace's avatar; the sidebar shows its name, on phones where there is no rail.

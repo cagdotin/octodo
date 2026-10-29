@@ -1,5 +1,18 @@
-import type { ReactNode } from "react";
-import { SidebarFooter, SidebarHeader } from "@octodo/ui/components/sidebar";
+import { ChevronRightIcon } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@octodo/ui/components/collapsible";
+import {
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+} from "@octodo/ui/components/sidebar";
 import { cn } from "@octodo/ui/lib/utils";
 
 /** The sidebar's header, the same 44px hairline as the page's, so the rule runs straight across. */
@@ -19,5 +32,60 @@ export function SidebarBottom({ children }: { children: ReactNode }) {
     <SidebarFooter className="h-9 shrink-0 flex-row items-center gap-0.5 border-t px-2 py-0">
       {children}
     </SidebarFooter>
+  );
+}
+
+/**
+ * A titled group of sidebar rows that folds away. `action` is a button at the header's end; using
+ * it unfolds the group first.
+ */
+export function Section({
+  label,
+  action,
+  children,
+}: {
+  label: string;
+  action?: { readonly label: string; readonly icon: ReactNode; readonly onClick: () => void };
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(true);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="group/section">
+      <SidebarGroup className="relative py-1">
+        <SidebarGroupLabel
+          className="h-7 w-full cursor-pointer gap-2 rounded-lg px-2 text-[13px] font-normal text-sidebar-foreground/60 outline-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          render={
+            <CollapsibleTrigger>
+              {label}
+              <ChevronRightIcon
+                className={cn(
+                  "ms-auto size-3.5 rotate-90 text-sidebar-foreground/50 transition-transform group-data-closed/section:rotate-0",
+                  action && "me-6",
+                )}
+              />
+            </CollapsibleTrigger>
+          }
+        />
+        {action && (
+          <button
+            type="button"
+            aria-label={action.label}
+            title={action.label}
+            className="absolute top-2 right-1 flex size-5 items-center justify-center rounded-md text-sidebar-foreground/60 outline-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring [&>svg]:size-3.5"
+            onClick={() => {
+              setOpen(true);
+              action.onClick();
+            }}
+          >
+            {action.icon}
+          </button>
+        )}
+        <CollapsibleContent>
+          <SidebarGroupContent>
+            <SidebarMenu className="gap-px">{children}</SidebarMenu>
+          </SidebarGroupContent>
+        </CollapsibleContent>
+      </SidebarGroup>
+    </Collapsible>
   );
 }

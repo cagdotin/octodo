@@ -7,19 +7,32 @@ import {
   type Over,
 } from "@dnd-kit/core";
 import type { List, MoveListInput, WorkspaceSnapshot } from "@octodo/contract";
-import { inSubtree, listMoveError, movedListId } from "@octodo/contract/rules";
+import {
+  inSubtree,
+  listDepth,
+  listMoveError,
+  MAX_LIST_DEPTH,
+  movedListId,
+} from "@octodo/contract/rules";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState, type ReactNode, type ReactElement } from "react";
 import { dragData, dropData, type DragData, type DropData } from "@/components/drag-and-drop";
-import { ListDialogs, type ListEdit } from "@/components/list-dialogs";
+import {
+  DeleteListDialog,
+  ListNameInput,
+  useFollowList,
+  type ListEdit,
+} from "@/components/list-editing";
+import { Section } from "@/components/sidebar-chrome";
 import { ListGlyph } from "@/components/task-bits";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@octodo/ui/components/menu";
-import { MoreHorizontalIcon, PencilIcon, TrashIcon } from "lucide-react";
+import { FolderPlusIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
 import {
   SidebarMenuAction,
   SidebarMenuBadge,
@@ -29,7 +42,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@octodo/ui/components/sidebar";
-import { useMoveList, useMoveTask } from "@/lib/api";
+import { useCreateList, useMoveList, useMoveTask, useRenameList } from "@/lib/api";
 import { cn } from "@octodo/ui/lib/utils";
 import { applyListMove, listTree, type ListNode } from "@/lib/tasks";
 
@@ -117,9 +130,48 @@ export function SidebarLists({
   const ws = snapshot.workspace.id;
   const moveList = useMoveList(ws);
   const moveTask = useMoveTask(ws);
+  const createList = useCreateList(ws);
+  const renameList = useRenameList(ws);
   const navigate = useNavigate();
+  const follow = useFollowList(ws, activeList);
   const [placement, setPlacement] = useState<Placement | null>(null);
   const [edit, setEdit] = useState<ListEdit>(null);
+  const done = () => setEdit(null);
+
+  const create = (parent: string | null) => (name: string) => {
+    done();
+    createList.mutate(
+      { name, parent },
+      {
+        onSuccess: (list) =>
+          void navigate({
+            to: "/w/$workspace",
+            params: { workspace: ws },
+            search: (prev) => ({ ...prev, list: list.id, task: undefined }),
+          }),
+      },
+    );
+  };
+
+  const rename = (list: List) => (name: string) => {
+    done();
+    renameList.mutate(
+      { id: list.id, name },
+      { onSuccess: (renamed) => follow(list.id, renamed.id) },
+    );
+  };
+
+  /** The name field for a new list under `parent`, when one is being created there. */
+  const newListInput = (parent: string | null, sub: boolean) =>
+    edit?.kind === "create" && edit.parent === parent ? (
+      <ListNameInput
+        lists={snapshot.lists}
+        parent={parent}
+        sub={sub}
+        onSubmit={create(parent)}
+        onCancel={done}
+      />
+    ) : null;
 
   const listOver = (over: Over | null) => {
     const list = dropData(over)?.list;
@@ -151,7 +203,7 @@ export function SidebarLists({
       track(active, over, activatorEvent, delta.y),
     onDragEnd: ({ active, over }) => {
       const data = dragData(active);
-      const done = placement;
+      const placed = placement;
       setPlacement(null);
       if (data?.type === "task") {
         const list = dropData(over)?.list;
@@ -160,52 +212,84 @@ export function SidebarLists({
         }
         return;
       }
-      if (data?.type !== "list" || done === null) return;
+      if (data?.type !== "list" || placed === null) return;
       const id = data.list.id;
-      if (sameOrder(applyListMove(snapshot, id, done.move).lists, snapshot.lists)) return;
-      moveList.mutate({ id, move: done.move });
-      // A list that changes parent changes id; keep showing it (or the sublist being shown).
-      const parent = done.move.parent === undefined ? data.list.parent : done.move.parent;
-      const renamed = movedListId(id, parent);
-      if (renamed !== id && activeList !== undefined && inSubtree(activeList, id)) {
-        void navigate({
-          to: "/w/$workspace",
-          params: { workspace: ws },
-          search: (prev) => ({ ...prev, list: renamed + activeList.slice(id.length) }),
-        });
-      }
+      if (sameOrder(applyListMove(snapshot, id, placed.move).lists, snapshot.lists)) return;
+      moveList.mutate({ id, move: placed.move });
+      const parent = placed.move.parent === undefined ? data.list.parent : placed.move.parent;
+      follow(id, movedListId(id, parent));
     },
     onDragCancel: () => setPlacement(null),
   });
 
-  const render = (node: ListNode, depth: number): ReactNode => (
-    <ListRow
-      key={node.list.id}
-      workspace={ws}
-      list={node.list}
-      depth={depth}
-      count={counts.get(node.list.id) ?? 0}
-      active={activeList === node.list.id}
-      placement={placement?.over === node.list.id ? placement.zone : null}
-      onNavigate={onNavigate}
-      onEdit={setEdit}
-    >
-      {node.children.length > 0 ? (
-        <SidebarMenuSub>{node.children.map((child) => render(child, depth + 1))}</SidebarMenuSub>
-      ) : null}
-    </ListRow>
-  );
+  const render = (node: ListNode, depth: number): ReactNode => {
+    const creating = newListInput(node.list.id, true);
+    return (
+      <ListRow
+        key={node.list.id}
+        workspace={ws}
+        list={node.list}
+        depth={depth}
+        count={counts.get(node.list.id) ?? 0}
+        active={activeList === node.list.id}
+        placement={placement?.over === node.list.id ? placement.zone : null}
+        onNavigate={onNavigate}
+        onEdit={setEdit}
+        renaming={
+          edit?.kind === "rename" && edit.list.id === node.list.id ? (
+            <ListNameInput
+              lists={snapshot.lists}
+              parent={node.list.parent}
+              list={node.list}
+              sub={depth > 0}
+              onSubmit={rename(node.list)}
+              onCancel={done}
+            />
+          ) : null
+        }
+      >
+        {node.children.length > 0 || creating !== null ? (
+          <SidebarMenuSub>
+            {node.children.map((child) => render(child, depth + 1))}
+            {creating && <SidebarMenuSubItem>{creating}</SidebarMenuSubItem>}
+          </SidebarMenuSub>
+        ) : null}
+      </ListRow>
+    );
+  };
 
+  const creatingTop = edit?.kind === "create" && edit.parent === null;
   return (
-    <>
+    <Section
+      label="Lists"
+      action={{
+        label: "New list",
+        icon: <PlusIcon />,
+        onClick: () => setEdit({ kind: "create", parent: null }),
+      }}
+    >
       {listTree(snapshot.lists).map((node) => render(node, 0))}
-      <ListDialogs
+      <SidebarMenuItem>
+        {creatingTop ? (
+          newListInput(null, false)
+        ) : (
+          <SidebarMenuButton
+            className={cn(ITEM, "text-sidebar-foreground/60")}
+            onClick={() => setEdit({ kind: "create", parent: null })}
+          >
+            <PlusIcon />
+            <span>New list</span>
+          </SidebarMenuButton>
+        )}
+      </SidebarMenuItem>
+      <DeleteListDialog
+        key={edit?.kind === "delete" ? edit.list.id : "delete"}
         snapshot={snapshot}
-        edit={edit}
-        activeList={activeList}
-        onClose={() => setEdit(null)}
+        list={edit?.kind === "delete" ? edit.list : null}
+        onDeleted={(id) => follow(id, undefined)}
+        onClose={done}
       />
-    </>
+    </Section>
   );
 }
 
@@ -218,6 +302,7 @@ function ListRow({
   placement,
   onNavigate,
   onEdit,
+  renaming,
   children,
 }: {
   workspace: string;
@@ -228,6 +313,8 @@ function ListRow({
   placement: Placement["zone"] | null;
   onNavigate: () => void;
   onEdit: (edit: ListEdit) => void;
+  /** The name field that takes the row's place while the list is renamed. */
+  renaming: ReactNode;
   children: ReactNode;
 }) {
   const drag = useDraggable({
@@ -297,6 +384,17 @@ function ListRow({
         <MoreHorizontalIcon />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="right">
+        <DropdownMenuItem onClick={() => onEdit({ kind: "create", parent: list.parent })}>
+          <PlusIcon />
+          New list
+        </DropdownMenuItem>
+        {listDepth(list.id) < MAX_LIST_DEPTH && (
+          <DropdownMenuItem onClick={() => onEdit({ kind: "create", parent: list.id })}>
+            <FolderPlusIcon />
+            New sublist
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => onEdit({ kind: "rename", list })}>
           <PencilIcon />
           Rename
@@ -312,14 +410,15 @@ function ListRow({
   // way to the actions button, which phones without hover always show.
   const yields =
     "max-md:hidden group-focus-within/list-row:opacity-0 group-hover/list-row:opacity-0 group-has-data-popup-open/list-row:opacity-0";
-  const row = (button: ReactNode, count: ReactNode) => (
-    <div className="group/list-row relative">
-      {button}
-      {count}
-      {actions}
-      {line}
-    </div>
-  );
+  const row = (button: ReactNode, count: ReactNode) =>
+    renaming ?? (
+      <div className="group/list-row relative">
+        {button}
+        {count}
+        {actions}
+        {line}
+      </div>
+    );
 
   if (depth === 0) {
     return (

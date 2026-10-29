@@ -18,6 +18,7 @@ import { toastManager } from "@octodo/ui/components/toast";
 import { attachmentName, attachmentPath, type Attachments } from "@/lib/attachments";
 import { completesInPlace } from "@/components/task-kind";
 import {
+  applyListCreate,
   applyListDelete,
   applyListMove,
   applyMove,
@@ -180,11 +181,14 @@ export const useDeleteTask = (ws: string) =>
   );
 
 export const useCreateList = (ws: string) =>
-  useSnapshotMutation(ws, (input: CreateListInput) =>
-    api.request("POST /api/workspaces/:workspace/lists", {
-      params: { workspace: ws },
-      payload: input,
-    }),
+  useSnapshotMutation(
+    ws,
+    (input: CreateListInput) =>
+      api.request("POST /api/workspaces/:workspace/lists", {
+        params: { workspace: ws },
+        payload: input,
+      }),
+    applyListCreate,
   );
 
 export const useMoveList = (ws: string) =>
@@ -199,10 +203,16 @@ export const useMoveList = (ws: string) =>
   );
 
 export const useRenameList = (ws: string) =>
-  useSnapshotMutation(ws, ({ id, name }: { id: string; name: string }) =>
-    api.request("POST /api/workspaces/:workspace/lists/rename", {
-      params: { workspace: ws },
-      payload: { id, name },
+  useSnapshotMutation(
+    ws,
+    ({ id, name }: { id: string; name: string }) =>
+      api.request("POST /api/workspaces/:workspace/lists/rename", {
+        params: { workspace: ws },
+        payload: { id, name },
+      }),
+    (snapshot, { id, name }) => ({
+      ...snapshot,
+      lists: snapshot.lists.map((list) => (list.id === id ? { ...list, name } : list)),
     }),
   );
 

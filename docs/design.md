@@ -36,6 +36,8 @@ that use them ([0017](decisions/0017-the-ui-kit-is-a-package-plugins-type-their-
 - Status marks are monochrome. The active row has an inset ink bar.
 - Surfaces that float over the page (menus, popovers, selects, tooltips) are translucent with a
   backdrop blur. Modals sit on a dimmed backdrop and are opaque cards.
+- Naming happens in place: a new or renamed list is typed in its sidebar row, and a modal is kept
+  for what needs confirming, such as a delete.
 - The landing page (`apps/site/index.html`) is the reference. Its octopus (`apps/site/octopus.js`)
   should look and move like a real octopus, and stay calm and secondary.
 - Every icon is generated from `brand/glyph.svg` by `pnpm brand`.

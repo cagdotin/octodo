@@ -1,0 +1,10 @@
+{
+  "ignore": {
+    "overrides": [
+      {
+        "files": ["src/components/markdown-editor/**", "src/components/quick-add/**"],
+        "rules": ["react-doctor/prefer-dynamic-import"]
+      }
+    ]
+  }
+}

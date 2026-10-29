@@ -18,7 +18,7 @@ export interface Release {
   readonly sha256: string;
 }
 
-const RELEASES = "https://github.com/cagdotin/tasksmd/releases";
+const RELEASES = "https://github.com/cagdotin/octodo/releases";
 
 /** GitHub's `latest` skips prereleases, so it always names the newest stable release. */
 const FEEDS: Record<Channel, string> = {

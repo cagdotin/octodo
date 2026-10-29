@@ -42,7 +42,7 @@ Three quotes so far. Notes in markdown.
 
 ## Install
 
-Download the `.dmg` of the [latest release](https://github.com/cagdotin/tasksmd/releases/latest)
+Download the `.dmg` of the [latest release](https://github.com/cagdotin/octodo/releases/latest)
 (Apple Silicon Macs) and drag octodo to Applications. The app is not notarized yet, so the first
 time macOS says it cannot verify it: open System Settings > Privacy & Security and click Open
 Anyway. After that octodo updates itself: when a new version is downloaded, an Update button

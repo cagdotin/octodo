@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "octodo": {
+      "command": "bin/octo",
+      "args": ["mcp"]
+    },
+    "devl": {
+      "type": "http",
+      "url": "https://devl.dev/mcp"
+    }
+  }
+}

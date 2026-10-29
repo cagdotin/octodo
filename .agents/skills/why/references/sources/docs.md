@@ -10,7 +10,7 @@
 ## How to search it
 
 ```bash
-rg -n -i '<term>' AGENTS.md README.md docs .agents/skills --glob '!.agents/skills/shadcn/**'
+rg -n -i '<term>' AGENTS.md README.md docs .agents/skills
 
 # When a rule appeared, and the commit that explains it
 git log -S '<exact rule text>' --oneline -- AGENTS.md docs

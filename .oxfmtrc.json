@@ -7,7 +7,6 @@
     "coverage/**",
     "apps/web/src/routeTree.gen.ts",
     "packages/ui/src/components/**",
-    ".agents/skills/shadcn/**",
     ".claude/**"
   ]
 }

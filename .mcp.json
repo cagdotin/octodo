@@ -1,8 +1,1 @@
-{
-  "mcpServers": {
-    "octodo": {
-      "command": "bin/octo",
-      "args": ["mcp"]
-    }
-  }
-}
+.agents/mcp.json

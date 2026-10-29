@@ -111,7 +111,7 @@ instead of keeping the code because it exists.
 | `packages/server`   | Serves `makeApi` over the catalog and the plugins' operations on Effect HttpApi at `/api` (OpenAPI at `/api/openapi.json`), MCP at `/mcp`, the SSE change feed, the built web app, on one router                                                                                   |
 | `packages/client`   | `connect()`: every CLI and stdio MCP call runs on the server `<home>/server.json` names, or on the engine in-process when none answers ([0018](docs/decisions/0018-connect-finds-the-server-through-server-json.md))                                                               |
 | `packages/cli`      | `octo` CLI on `effect/cli`, its commands and the bundled agent skill generated from the catalog; run it with `bin/octo`                                                                                                                                                            |
-| `packages/ui`       | The UI kit the app and the plugins' web halves share: shadcn components, `cn`, date labels, `styles.css` (design tokens, fonts); imports no octodo package                                                                                                                         |
+| `packages/ui`       | The UI kit the app and the plugins' web halves share: coss ui components, `cn`, date labels, `styles.css` (design tokens, fonts); imports no octodo package                                                                                                                        |
 | `apps/web`          | Vite + React, TanStack Router/Query, XState; its components come from `@octodo/ui`                                                                                                                                                                                                 |
 | `apps/desktop`      | Electron shell: attaches to the running server or spawns and restarts one as a child, and opens its web app                                                                                                                                                                        |
 | `apps/site`         | Static landing page (plain HTML, no build); icons come from `brand/`                                                                                                                                                                                                               |
@@ -163,8 +163,11 @@ OCT-69.
   commit and `pnpm check` before push.
 - Test against scratch folders (`OCTODO_HOME=<tmp> bin/octo ...`), never a real project's
   `.octodo/`.
-- UI work: follow the `shadcn` skill in `.agents/skills/` (also visible as `.claude/skills`).
-  `shadcn add` run in `apps/web` writes into `packages/ui`.
+- UI work: follow the `devl` skill in `.agents/skills/` (also visible as `.claude/skills`). The
+  components are coss ui; `npx shadcn@latest add @devl/<slug>` (or `@coss/<name>`) run in `apps/web`
+  writes into `packages/ui`.
+- Agent config lives in `.agents/`: `skills/` and `mcp.json` (the octodo and devl MCP servers).
+  `.claude/skills` and `.mcp.json` are symlinks to them, so the servers are enabled for this project only.
 - Everything that scrolls in the web app goes through `ScrollArea` (`@octodo/ui/components/scroll-area`),
   never `overflow-auto` or a hidden scrollbar; `apps/web/src/scrolling.test.ts` enforces it.
 - The code is the documentation. A comment signals code that is too complicated or an edge case,

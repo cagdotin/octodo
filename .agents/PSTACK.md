@@ -2,7 +2,7 @@
 
 A reference for people maintaining the skills. No skill or agent instruction points here.
 
-Most skills in `.agents/skills/` are a fork of [pstack](https://github.com/cursor/plugins/tree/main/pstack) by Lauren Tan, taken at `cursor/plugins@99b609a` (pstack 0.15.32). They were adapted for octodo and rewritten to work in any harness that reads `.agents/skills/`. `shadcn` and `octodo` are not part of the fork, and `improve-codebase-architecture` comes from elsewhere (see below).
+Most skills in `.agents/skills/` are a fork of [pstack](https://github.com/cursor/plugins/tree/main/pstack) by Lauren Tan, taken at `cursor/plugins@99b609a` (pstack 0.15.32). They were adapted for octodo and rewritten to work in any harness that reads `.agents/skills/`. `devl` (downloaded from https://devl.dev/skill/SKILL.md) and `octodo` are not part of the fork, and `improve-codebase-architecture` comes from elsewhere (see below).
 
 ## What changed
 

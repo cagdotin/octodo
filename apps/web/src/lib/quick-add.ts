@@ -152,13 +152,14 @@ const naturalDue = (
 
 const fieldsOf = (ranges: ReadonlyArray<QuickAddRange>): QuickAddFields => {
   const fields: QuickAddFields = { tags: [] };
+  const tags = new Set<string>();
   for (const { token } of ranges) {
     if (token.kind === "list") fields.list = token.list;
     if (token.kind === "priority") fields.priority = token.priority;
     if (token.kind === "due") fields.due = token.due;
-    if (token.kind === "tag" && !fields.tags.includes(token.tag)) fields.tags.push(token.tag);
+    if (token.kind === "tag") tags.add(token.tag);
   }
-  return fields;
+  return { ...fields, tags: [...tags] };
 };
 
 /** The text with the given ranges cut out and whitespace collapsed. */

@@ -13,7 +13,14 @@ import {
   Trash2Icon,
   XIcon,
 } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { toastManager } from "@octodo/ui/components/toast";
 import { fromPromise } from "xstate";
 import { DuePicker } from "@/components/due-picker";
@@ -121,68 +128,12 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
           error={error}
           onRetry={() => editor.send({ type: "RETRY" })}
         />
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground"
-                aria-label="More actions"
-              >
-                <MoreHorizontalIcon />
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="end" className="w-64">
-            <DropdownMenuGroup>
-              <DropdownMenuItem onClick={onClose}>
-                <PanelRightCloseIcon />
-                Close panel
-                <DropdownMenuShortcut>Esc</DropdownMenuShortcut>
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 px-1.5 py-1.5 text-xs text-muted-foreground">
-                <dt>ID</dt>
-                <dd className="font-mono text-foreground">{task.id}</dd>
-                <dt>File</dt>
-                <dd className="font-mono break-all">{task.path}</dd>
-                <dt>Created</dt>
-                <dd className="font-mono">{formatTimestamp(task.created)}</dd>
-                <dt>Updated</dt>
-                <dd className="font-mono">{formatTimestamp(task.updated)}</dd>
-              </dl>
-              <DropdownMenuItem
-                onClick={() =>
-                  void navigator.clipboard
-                    .writeText(task.path)
-                    .then(() => toastManager.add({ type: "success", title: "File path copied" }))
-                }
-              >
-                <CopyIcon />
-                Copy path
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem variant="destructive" onClick={() => setConfirmDelete(true)}>
-                <Trash2Icon />
-                Delete task
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="text-muted-foreground"
-          aria-label="Close panel"
-          onClick={onClose}
-        >
-          <XIcon />
-        </Button>
+        <PanelActions
+          item={task}
+          noun="task"
+          onClose={onClose}
+          onDelete={() => setConfirmDelete(true)}
+        />
       </PaneHeader>
 
       <div className="shrink-0 px-4 pt-4">
@@ -345,6 +296,86 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
   );
 }
 
+/** A panel's header actions: the menu with the file's details, copy path and delete, and close. */
+export function PanelActions({
+  item,
+  noun,
+  onClose,
+  onDelete,
+}: {
+  item: Pick<Task, "id" | "path" | "created" | "updated">;
+  noun: string;
+  onClose: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground"
+              aria-label="More actions"
+            >
+              <MoreHorizontalIcon />
+            </Button>
+          }
+        />
+        <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuGroup>
+            <DropdownMenuItem onClick={onClose}>
+              <PanelRightCloseIcon />
+              Close panel
+              <DropdownMenuShortcut>Esc</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 px-1.5 py-1.5 text-xs text-muted-foreground">
+              <dt>ID</dt>
+              <dd className="font-mono text-foreground">{item.id}</dd>
+              <dt>File</dt>
+              <dd className="font-mono break-all">{item.path}</dd>
+              <dt>Created</dt>
+              <dd className="font-mono">{formatTimestamp(item.created)}</dd>
+              <dt>Updated</dt>
+              <dd className="font-mono">{formatTimestamp(item.updated)}</dd>
+            </dl>
+            <DropdownMenuItem
+              onClick={() =>
+                void navigator.clipboard
+                  .writeText(item.path)
+                  .then(() => toastManager.add({ type: "success", title: "File path copied" }))
+              }
+            >
+              <CopyIcon />
+              Copy path
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuItem variant="destructive" onClick={onDelete}>
+              <Trash2Icon />
+              Delete {noun}
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="text-muted-foreground"
+        aria-label="Close panel"
+        onClick={onClose}
+      >
+        <XIcon />
+      </Button>
+    </>
+  );
+}
+
 /**
  * The title and body editor of a panel, a task's or an entry's: debounced saves through `save`,
  * edits made elsewhere adopted unless there are unsaved ones, and what was typed saved on close.
@@ -374,12 +405,15 @@ export function useTitleBody(saved: Draft, save: (patch: Partial<Draft>) => Prom
   // Closing the panel mid-debounce still saves what was typed, and an image upload that
   // finishes after it closed saves the body directly.
   const open = useRef(true);
+  const saveUnsaved = useEffectEvent(() => {
+    const patch = changes(editor.getSnapshot().context);
+    if (Object.keys(patch).length > 0) void save(patch).catch(() => {});
+  });
   useEffect(() => {
     open.current = true;
     return () => {
       open.current = false;
-      const patch = changes(editor.getSnapshot().context);
-      if (Object.keys(patch).length > 0) void save(patch).catch(() => {});
+      saveUnsaved();
     };
   }, [editor]);
 
@@ -454,7 +488,7 @@ export function TitleField({
     if (caret === null) return;
     input.current?.focus();
     input.current?.setSelectionRange(caret, caret);
-  }, [editing]);
+  }, [caret]);
 
   if (!editing) {
     return (

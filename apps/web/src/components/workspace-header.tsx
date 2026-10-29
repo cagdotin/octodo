@@ -225,6 +225,8 @@ function FilterMenu({
   children: ReactNode;
 }) {
   const tags = allTags(tasks);
+  const chosenTags = new Set(filter.tags);
+  const chosenLists = new Set(filter.lists);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={children as ReactElement} />
@@ -265,7 +267,7 @@ function FilterMenu({
               {tags.map((tag) => (
                 <DropdownMenuCheckboxItem
                   key={tag}
-                  checked={filter.tags.includes(tag)}
+                  checked={chosenTags.has(tag)}
                   onCheckedChange={(on) =>
                     onChange({ ...filter, tags: toggle(filter.tags, tag, on) })
                   }
@@ -286,7 +288,7 @@ function FilterMenu({
                 return (
                   <DropdownMenuCheckboxItem
                     key={list.id}
-                    checked={filter.lists.includes(list.id)}
+                    checked={chosenLists.has(list.id)}
                     onCheckedChange={(on) =>
                       onChange({ ...filter, lists: toggle(filter.lists, list.id, on) })
                     }

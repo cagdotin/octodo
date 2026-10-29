@@ -14,7 +14,7 @@ import {
   TimerResetIcon,
   Undo2Icon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import type { EntryProps } from "../web.ts";
 import { countOf, type CounterFields } from "./count.ts";
 import {
@@ -67,8 +67,9 @@ function SincePanel({ workspace, entry }: EntryProps<CounterFields>) {
       })
       .then(setResets);
 
+  const reload = useEffectEvent(() => void call.run(load));
   useEffect(() => {
-    void call.run(load);
+    reload();
   }, [workspace, entry.id, entry.fields.last]);
 
   const change = (request: () => Promise<unknown>) =>

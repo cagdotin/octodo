@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useMachine } from "@xstate/react";
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { api, keys } from "@/lib/api";
 import { syncMachine, type SyncStatus } from "@/machines/sync";
 
@@ -34,7 +34,6 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         ? "offline"
         : "connecting";
 
-  return (
-    <SyncContext value={{ status, retry: () => send({ type: "RETRY" }) }}>{children}</SyncContext>
-  );
+  const value = useMemo(() => ({ status, retry: () => send({ type: "RETRY" }) }), [status, send]);
+  return <SyncContext value={value}>{children}</SyncContext>;
 }

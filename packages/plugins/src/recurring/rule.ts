@@ -123,10 +123,8 @@ const after = (rule: Interval, day: Day): Day => {
 /** The first day on or after `from` that the calendar rule names. */
 const onOrAfter = (rule: Weekdays | MonthDay, from: Day): Day => {
   if (rule.kind === "weekdays") {
-    const offset = Array.from({ length: 7 }, (_, index) => index).find((index) =>
-      rule.days.includes((toUtc(from).getUTCDay() + index) % 7),
-    )!;
-    return addDays(from, offset);
+    const weekday = toUtc(from).getUTCDay();
+    return addDays(from, Math.min(...rule.days.map((day) => (day - weekday + 7) % 7)));
   }
   const thisMonth = addMonths(from, 0, rule.day);
   return thisMonth >= from ? thisMonth : addMonths(from, 1, rule.day);

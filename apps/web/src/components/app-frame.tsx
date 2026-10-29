@@ -10,6 +10,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
 import { AppRail } from "@/components/app-rail";
@@ -37,15 +38,12 @@ const saved = (pref: { get: () => string | null }, initial: number) => {
   return Number.isFinite(width) && width > 0 ? width : initial;
 };
 
-const useViewportWidth = () => {
-  const [width, setWidth] = useState(() => window.innerWidth);
-  useEffect(() => {
-    const onResize = () => setWidth(window.innerWidth);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-  return width;
+const subscribeToResize = (onResize: () => void) => {
+  window.addEventListener("resize", onResize);
+  return () => window.removeEventListener("resize", onResize);
 };
+
+const useViewportWidth = () => useSyncExternalStore(subscribeToResize, () => window.innerWidth);
 
 /**
  * The app window, laid out like Codex's: a toolbar across the top and the rail down the left share

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { theme as themePref } from "@/lib/prefs";
 
 export type Theme = "light" | "dark" | "system";
@@ -47,10 +47,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       ?.setAttribute("content", resolvedTheme === "dark" ? "#1B1B1A" : "#FFFFFF");
   }, [resolvedTheme]);
 
-  const setTheme = (next: Theme) => {
-    setThemeState(next);
-    themePref.set(next);
-  };
+  const value = useMemo(
+    () => ({
+      theme,
+      resolvedTheme,
+      setTheme: (next: Theme) => {
+        setThemeState(next);
+        themePref.set(next);
+      },
+    }),
+    [theme, resolvedTheme],
+  );
 
-  return <ThemeContext value={{ theme, resolvedTheme, setTheme }}>{children}</ThemeContext>;
+  return <ThemeContext value={value}>{children}</ThemeContext>;
 }

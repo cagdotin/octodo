@@ -376,7 +376,7 @@ function ListRow({
   });
   const drop = useDroppable({
     id: `${LIST_PREFIX}${list.id}`,
-    data: { accepts: ["list", "task"], list: list.id, pointerOnly: ["task"] } satisfies DropData,
+    data: { accepts: ["list", "task"], list: list.id, pointerOnly: "task" } satisfies DropData,
   });
   const taskOver = drop.isOver && dragData(drop.active)?.type === "task";
   const row = useRef<HTMLDivElement>(null);

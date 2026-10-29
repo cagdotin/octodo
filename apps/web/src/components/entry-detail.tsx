@@ -1,11 +1,9 @@
 import type { Entry, WorkspaceSnapshot } from "@octodo/contract";
-import { CopyIcon, MoreHorizontalIcon, PanelRightCloseIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useState } from "react";
-import { toastManager } from "@octodo/ui/components/toast";
 import { PaneHeader } from "@octodo/ui/components/pane";
 import { MarkdownEditor } from "@/components/markdown-editor/markdown-editor";
 import type { EnabledSection } from "@/components/section";
-import { SaveState, TitleField, useTitleBody } from "@/components/task-detail";
+import { PanelActions, SaveState, TitleField, useTitleBody } from "@/components/task-detail";
 import { useMentions } from "@/components/task-relations";
 import {
   AlertDialog,
@@ -17,16 +15,6 @@ import {
   AlertDialogTitle,
 } from "@octodo/ui/components/alert-dialog";
 import { Button } from "@octodo/ui/components/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuShortcut,
-  DropdownMenuTrigger,
-} from "@octodo/ui/components/menu";
-import { formatTimestamp } from "@octodo/ui/lib/dates";
 import { useDeleteEntry, useEditEntry } from "@/lib/api";
 
 interface Props {
@@ -67,68 +55,12 @@ export function EntryDetail({ workspace, snapshot, section, entry, onClose }: Pr
           error={error}
           onRetry={() => editor.send({ type: "RETRY" })}
         />
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground"
-                aria-label="More actions"
-              >
-                <MoreHorizontalIcon />
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="end" className="w-64">
-            <DropdownMenuGroup>
-              <DropdownMenuItem onClick={onClose}>
-                <PanelRightCloseIcon />
-                Close panel
-                <DropdownMenuShortcut>Esc</DropdownMenuShortcut>
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 px-1.5 py-1.5 text-xs text-muted-foreground">
-                <dt>ID</dt>
-                <dd className="font-mono text-foreground">{entry.id}</dd>
-                <dt>File</dt>
-                <dd className="font-mono break-all">{entry.path}</dd>
-                <dt>Created</dt>
-                <dd className="font-mono">{formatTimestamp(entry.created)}</dd>
-                <dt>Updated</dt>
-                <dd className="font-mono">{formatTimestamp(entry.updated)}</dd>
-              </dl>
-              <DropdownMenuItem
-                onClick={() =>
-                  void navigator.clipboard
-                    .writeText(entry.path)
-                    .then(() => toastManager.add({ type: "success", title: "File path copied" }))
-                }
-              >
-                <CopyIcon />
-                Copy path
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem variant="destructive" onClick={() => setConfirmDelete(true)}>
-                <Trash2Icon />
-                Delete {web.noun}
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="text-muted-foreground"
-          aria-label="Close panel"
-          onClick={onClose}
-        >
-          <XIcon />
-        </Button>
+        <PanelActions
+          item={entry}
+          noun={web.noun}
+          onClose={onClose}
+          onDelete={() => setConfirmDelete(true)}
+        />
       </PaneHeader>
 
       <div className="shrink-0 px-4 pt-4">

@@ -59,9 +59,9 @@ export function DiagnosticsDialog({
             </Empty>
           ) : (
             <ul className="flex flex-col divide-y">
-              {fixableFirst.map((diagnostic, index) => (
+              {fixableFirst.map((diagnostic) => (
                 <li
-                  key={`${diagnostic.path}-${diagnostic.kind}-${diagnostic.field}-${index}`}
+                  key={`${diagnostic.path}-${diagnostic.kind}-${diagnostic.field}-${diagnostic.message}`}
                   className="flex items-start gap-3 py-2"
                 >
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">

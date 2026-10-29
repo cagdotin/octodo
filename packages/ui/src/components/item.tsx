@@ -6,20 +6,6 @@ import { useRender } from "@base-ui/react/use-render"
 
 import { Separator } from "@octodo/ui/components/separator"
 
-function ItemGroup({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      role="list"
-      data-slot="item-group"
-      className={cn(
-        "group/item-group flex w-full flex-col gap-4 has-data-[size=sm]:gap-2.5 has-data-[size=xs]:gap-2",
-        className
-      )}
-      {...props}
-    />
-  )
-}
-
 function ItemSeparator({
   className,
   ...props
@@ -190,7 +176,6 @@ export {
   ItemMedia,
   ItemContent,
   ItemActions,
-  ItemGroup,
   ItemSeparator,
   ItemTitle,
   ItemDescription,

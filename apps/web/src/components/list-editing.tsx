@@ -107,6 +107,8 @@ export function ListNameInput({
         )}
       >
         <ListGlyph />
+        {/* The field appears because the person asked to name a list, so it takes the focus. */}
+        {/* react-doctor-disable-next-line react-doctor/no-autofocus */}
         <input
           autoFocus
           onFocus={(event) => event.currentTarget.select()}

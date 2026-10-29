@@ -77,6 +77,7 @@ export function MarkdownEditor({
       let closed: EditorState | undefined;
       try {
         for (const [index, image] of images.entries()) {
+          // react-doctor-disable-next-line react-doctor/async-await-in-loop
           const path = await files.upload(image);
           const from = anchor.pos;
           const insert = `${index === 0 ? "" : "\n"}${imageMarkdown(path)}`;

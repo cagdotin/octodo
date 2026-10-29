@@ -117,10 +117,14 @@ export const filterCount = (filter: TaskFilter) =>
   filter.priorities.length + filter.tags.length + filter.lists.length;
 
 /** Within each facet any selected value matches; facets combine with AND. */
-export const matchesFilter = (task: Task, filter: TaskFilter) =>
-  (filter.priorities.length === 0 || filter.priorities.includes(task.priority)) &&
-  (filter.tags.length === 0 || filter.tags.some((tag) => task.tags.includes(tag))) &&
-  (filter.lists.length === 0 || filter.lists.some((list) => isInList(task, list)));
+export const filterMatcher = (filter: TaskFilter) => {
+  const priorities = new Set(filter.priorities);
+  const tags = new Set(filter.tags);
+  return (task: Task) =>
+    (priorities.size === 0 || priorities.has(task.priority)) &&
+    (tags.size === 0 || task.tags.some((tag) => tags.has(tag))) &&
+    (filter.lists.length === 0 || filter.lists.some((list) => isInList(task, list)));
+};
 
 export const allTags = (tasks: ReadonlyArray<Task>) =>
   [...new Set(tasks.flatMap((task) => task.tags))].sort((a, b) => a.localeCompare(b));

@@ -45,7 +45,7 @@ import {
   EMPTY_FILTER,
   filterTasks,
   listViewOrder,
-  matchesFilter,
+  filterMatcher,
   type DisplayOptions,
   type TaskFilter,
   viewTitle,
@@ -165,7 +165,8 @@ function WorkspacePage() {
   const statuses = snapshot.statuses.filter((status) => visibleCategory(status.category, display));
   const shown = new Set(statuses.map((status) => status.id));
   const inList = filterTasks(snapshot, search.list, kindDay, today);
-  const tasks = inList.filter((task) => shown.has(task.status) && matchesFilter(task, filter));
+  const matches = filterMatcher(filter);
+  const tasks = inList.filter((task) => shown.has(task.status) && matches(task));
   const title = viewTitle(search.list, snapshot.lists);
   const shownOrder = (view === "list" ? listViewOrder(statuses) : statuses).flatMap((status) =>
     tasks.filter((task) => task.status === status.id),

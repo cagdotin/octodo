@@ -50,7 +50,7 @@ export interface DropData {
   /** A list in the sidebar (null for "No list"). */
   readonly list?: string | null;
   /** Kinds this only takes from right under the pointer, never as the nearest fallback. */
-  readonly pointerOnly?: ReadonlyArray<DragKind>;
+  readonly pointerOnly?: DragKind;
 }
 
 export const dragData = (entity: { data: { current?: unknown } } | null | undefined) =>
@@ -79,7 +79,7 @@ const collision: CollisionDetection = (args) => {
   return closestCorners({
     ...args,
     droppableContainers: containers.filter(
-      (container) => !(kind && dropData(container)?.pointerOnly?.includes(kind)),
+      (container) => !(kind && dropData(container)?.pointerOnly === kind),
     ),
   });
 };

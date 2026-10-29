@@ -162,7 +162,8 @@ function NewTaskForm({
     (pickedDue === undefined ? (list === SMART.today ? today : null) : pickedDue);
   const viewList = isSmartView(list) ? null : (list ?? null);
   const targetList = parsed.fields.list ?? (pickedList === undefined ? viewList : pickedList);
-  const tags = [...new Set([...pickedTags, ...parsed.fields.tags])];
+  const tagSet = new Set([...pickedTags, ...parsed.fields.tags]);
+  const tags = [...tagSet];
   const knownTags = [...new Set([...allTags(snapshot.tasks), ...tags])].sort((a, b) =>
     a.localeCompare(b),
   );
@@ -430,7 +431,7 @@ function NewTaskForm({
               {knownTags.map((tag) => (
                 <DropdownMenuCheckboxItem
                   key={tag}
-                  checked={tags.includes(tag)}
+                  checked={tagSet.has(tag)}
                   className="font-mono text-xs"
                   closeOnClick={false}
                   onClick={() => toggleTag(tag)}

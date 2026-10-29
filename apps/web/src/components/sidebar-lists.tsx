@@ -36,6 +36,7 @@ import {
 import {
   ChevronRightIcon,
   FolderOpenIcon,
+  FoldersIcon,
   MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
@@ -400,16 +401,12 @@ function ListRow({
     >
       {folded === false ? (
         <FolderOpenIcon className={TOGGLE_HIDES} />
+      ) : folded === true ? (
+        <FoldersIcon className={TOGGLE_HIDES} />
       ) : (
-        <ListGlyph className={cn(folded === true && TOGGLE_HIDES)} />
+        <ListGlyph />
       )}
       <span>{list.name}</span>
-      {folded === true && (
-        <ChevronRightIcon
-          aria-hidden
-          className="-ms-1.5 size-3! shrink-0 text-sidebar-foreground/40"
-        />
-      )}
     </Link>
   );
   // The drop line sits in the gap between rows, so it does not shift anything.

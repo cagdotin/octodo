@@ -39,9 +39,9 @@ that use them ([0017](decisions/0017-the-ui-kit-is-a-package-plugins-type-their-
 - A new list or sublist is named in a dialog; renaming one happens in its sidebar row.
 - List icons sit in the same column as the views above them; a sublist steps in 16px, with a
   hairline guide per level, and ends at the same edge as its parent. A list with sublists shows an
-  open folder while they show and a chevron after its name while they are folded; hovering its icon
-  turns it into the fold chevron. The Lists header's chevron sits in that icon column too. What is
-  folded is kept per workspace in the browser.
+  open folder while they show and a stack of folders while they are folded; hovering its icon turns
+  it into the fold chevron. The Lists header folds when its title is clicked and has no chevron.
+  What is folded is kept per workspace in the browser.
 - The landing page (`apps/site/index.html`) is the reference. Its octopus (`apps/site/octopus.js`)
   should look and move like a real octopus, and stay calm and secondary.
 - Every icon is generated from `brand/glyph.svg` by `pnpm brand`.

@@ -1,4 +1,3 @@
-import { ChevronRightIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import {
   Collapsible,
@@ -36,8 +35,8 @@ export function SidebarBottom({ children }: { children: ReactNode }) {
 }
 
 /**
- * A titled group of sidebar rows that folds away from the chevron before its title, which sits in
- * the rows' icon column. `action` is a button at the header's end; using it unfolds the group first.
+ * A titled group of sidebar rows that folds away when its title is clicked. `action` is a button at
+ * the header's end; using it unfolds the group first.
  */
 export function Section({
   label,
@@ -56,20 +55,8 @@ export function Section({
     <Collapsible open={open} onOpenChange={onOpenChange}>
       <SidebarGroup className="relative py-1">
         <SidebarGroupLabel
-          className="h-7 w-full cursor-pointer gap-2.5 rounded-lg ps-2 pe-8 text-[13px] font-normal text-sidebar-foreground/60 outline-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-          render={
-            <CollapsibleTrigger>
-              <span className="flex size-4 items-center justify-center">
-                <ChevronRightIcon
-                  className={cn(
-                    "size-3.5 text-sidebar-foreground/50 transition-transform",
-                    open && "rotate-90",
-                  )}
-                />
-              </span>
-              {label}
-            </CollapsibleTrigger>
-          }
+          className="h-7 w-full cursor-pointer rounded-lg ps-2 pe-8 text-[13px] font-normal text-sidebar-foreground/60 outline-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          render={<CollapsibleTrigger>{label}</CollapsibleTrigger>}
         />
         {action && (
           <button

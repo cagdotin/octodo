@@ -14,5 +14,8 @@ apps/site/lab/out/
 
 .claude/settings.local.json
 
+# Agents' decision logs (the show-me-your-work skill): working notes, never committed.
+.audit/
+
 # Agent worktrees: full checkouts that tools must not read as part of this one.
 .claude/worktrees/

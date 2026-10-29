@@ -33,6 +33,7 @@ clears a value; `octo <command> --help` lists them):
 - `list_workspaces`, `octo workspace list`: List the workspaces registered on this machine.
 - `add_workspace`, no command: Create a workspace in a folder and register it on this machine: octodo writes .octodo/config.json there with the statuses and plugins of a preset, project unless preset names another.
 - `get_workspace`, no command: Describe a workspace: its statuses (in order), lists, task counts and any files it could not read.
+- `update_workspace`, `octo workspace update`: Change a workspace's name, description (null clears it) or id key; fields left out stay as they are.
 - `list_tasks`, `octo list`: List tasks in board order (by status, then their order), optionally filtered.
 - `get_task`, `octo show <id>`: Read one task, including its markdown body, any extra frontmatter, its parent, its direct subtasks, the tasks it is blocked by and blocks, the tasks it mentions and is mentioned in, and its attachments (read one with read_attachment).
 - `read_attachment`, `octo attachment <id> <path>`: Read one of a task's attachments by its path in the task folder, as get_task lists it.
@@ -63,6 +64,8 @@ clears a value; `octo <command> --help` lists them):
 - `list_counters`, `octo counters list`: List the counters in their order, each with its body, its fields, the tasks and entries that mention it, and today's count.
 
 ```sh
+octo workspace update --name "House move"                              # Rename it
+octo workspace update --key OCT                                        # HM-3 becomes OCT-3
 octo list                                                              # Open tasks, subtasks under their parent
 octo list --ready                                                      # Open tasks that are not blocked
 octo list --due-by 2026-11-01                                          # Open tasks due by November 1, overdue ones, chores and yearly counters included

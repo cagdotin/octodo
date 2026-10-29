@@ -58,11 +58,23 @@ export type StatusDefinition = typeof StatusDefinition.Type;
 export const WorkspaceConfig = Schema.Struct({
   name: Schema.String,
   key: Schema.String,
+  /** What the workspace is for, in a sentence or two; absent for none. */
+  description: Schema.optionalKey(Schema.String),
   statuses: Schema.optionalKey(Schema.Array(StatusDefinition)),
   /** The plugins the workspace enables, by id; none when absent. */
   plugins: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 export type WorkspaceConfig = typeof WorkspaceConfig.Type;
+
+/** What `update_workspace` changes; a field left out stays as it is. */
+export const UpdateWorkspaceInput = Schema.Struct({
+  name: Schema.optionalKey(Schema.NonEmptyString),
+  /** Null or blank removes it. */
+  description: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  /** Rewrites every id that has the old key. */
+  key: Schema.optionalKey(WorkspaceKey),
+});
+export type UpdateWorkspaceInput = typeof UpdateWorkspaceInput.Type;
 
 /** The statuses of a config.json that lists none: the default preset's. */
 export const DEFAULT_STATUSES: ReadonlyArray<StatusDefinition> = PRESETS[DEFAULT_PRESET].statuses;
@@ -328,6 +340,7 @@ export const WorkspaceInfo = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   key: Schema.String,
+  description: Schema.optionalKey(Schema.String),
   root: Schema.String,
 });
 export type WorkspaceInfo = typeof WorkspaceInfo.Type;

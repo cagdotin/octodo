@@ -28,6 +28,7 @@ import {
   TaskNotFound,
   TaskSummary,
   UpdateTaskInput,
+  UpdateWorkspaceInput,
   WorkspaceInfo,
   WorkspaceKey,
   WorkspaceNotFound,
@@ -158,6 +159,35 @@ export const catalog = {
     success: WorkspaceOverview,
     error: inWorkspace(),
     http: { method: "GET", path: "/workspaces/:workspace/overview" },
+  },
+  update_workspace: {
+    description:
+      "Change a workspace's name, description (null clears it) or id key; fields left out stay as they are. A new key keeps every number and rewrites every id that has the old one: HM-3 becomes NEW-3 in every task's and entry's id, in blocked_by and the other links, in [[HM-3]] mentions outside code and in folder names, and config.json takes the new key last. A key change is refused when an id with the new key and the same number is already on disk, or a task file's frontmatter does not read; one that stopped halfway finishes when repeated.",
+    readonly: false,
+    destructive: false,
+    idempotent: true,
+    input: Schema.Struct({
+      workspace: WorkspaceField,
+      name: UpdateWorkspaceInput.fields.name.annotate({ description: "The new name" }),
+      description: UpdateWorkspaceInput.fields.description.annotate({
+        description: "What the workspace is for",
+        ...cli({ clear: "Remove the description" }),
+      }),
+      key: UpdateWorkspaceInput.fields.key.annotate({
+        description: "The new id prefix, e.g. HM for HM-1; rewrites every id that has the old one",
+      }),
+    }),
+    success: WorkspaceInfo,
+    error: inWorkspace(InvalidRequest),
+    http: { method: "PATCH", path: "/workspaces/:workspace" },
+    cli: {
+      command: ["workspace", "update"],
+      description: "Change the workspace's name, description or id key",
+      examples: [
+        { command: 'octo workspace update --name "House move"', description: "Rename it" },
+        { command: "octo workspace update --key OCT", description: "HM-3 becomes OCT-3" },
+      ],
+    },
   },
   list_tasks: {
     description:

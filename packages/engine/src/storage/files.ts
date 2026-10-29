@@ -1,6 +1,6 @@
 import { Effect, Exit, FileSystem, Path, PlatformError, type Schema } from "effect";
 import type { WorkspaceConfig } from "@octodo/contract";
-import { configFile, editedConfig } from "./config.ts";
+import { configFile, editedConfig, type ConfigChanges } from "./config.ts";
 
 /**
  * Names of the temporary files and folders writes build and rename into place, or rename away
@@ -59,12 +59,12 @@ export interface Files {
    */
   readonly remove: (path: string) => Change;
   /**
-   * Sets the keys `edit` returns in config.json and keeps every other key, unknown ones included,
-   * in its place. Fails on a config.json that does not read, so a broken file is reported, never
+   * Sets the keys `edit` returns in config.json, removing those it sets to undefined, and keeps
+   * every other key, unknown ones included, in its place. Fails on a config.json that does not read, so a broken file is reported, never
    * rewritten. Writes nothing when `edit` returns null.
    */
   readonly editConfig: (
-    edit: (config: WorkspaceConfig) => Partial<WorkspaceConfig> | null,
+    edit: (config: WorkspaceConfig) => ConfigChanges | null,
   ) => Effect.Effect<void, PlatformError.PlatformError | Schema.SchemaError>;
 }
 

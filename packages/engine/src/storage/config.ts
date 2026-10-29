@@ -76,13 +76,25 @@ export const hasConfig = (
     return yield* fs.exists(configFile(yield* Path.Path, root));
   });
 
+/** Keys to set in config.json; one set to undefined is removed. */
+export type ConfigChanges = {
+  readonly [K in keyof WorkspaceConfig]?: WorkspaceConfig[K] | undefined;
+};
+
+/** The name, key and description of `config` as `WorkspaceInfo` gives them. */
+export const describedBy = ({ name, key, description }: WorkspaceConfig) => ({
+  name,
+  key,
+  ...(description === undefined ? {} : { description }),
+});
+
 /**
  * config.json's text with the keys `edit` returns set and every other key, unknown ones included,
  * kept in its place; null when `edit` returns null. Fails on a config.json that does not read.
  */
 export const editedConfig = (
   root: string,
-  edit: (config: WorkspaceConfig) => Partial<WorkspaceConfig> | null,
+  edit: (config: WorkspaceConfig) => ConfigChanges | null,
 ) =>
   Effect.gen(function* () {
     const { document, config } = yield* readDocument(root);

@@ -28,10 +28,14 @@ instead of keeping the code because it exists.
   One id sequence covers every section, and mentions reach across them; links name tasks only
   ([0027](docs/decisions/0027-plugins-add-sections-tasks-is-the-built-in-one.md)). `octo init`
   makes `tasks/`; a section's folder is made with its first entry.
-- `.octodo/config.json`: workspace `name`, id `key` (`HM` → ids `HM-1`, `HM-2`, ...) and `statuses`
+- `.octodo/config.json`: workspace `name`, optional `description`, id `key` (`HM` → ids `HM-1`, `HM-2`, ...) and `statuses`
   (id, display name, category). Categories have a fixed order (backlog, unstarted, started,
   completed, canceled, archived); the array only orders statuses within a category. Reordering
-  statuses changes only this file. `plugins` lists the plugins the workspace enables. A new
+  statuses changes only this file. `plugins` lists the plugins the workspace enables.
+  `description` says what the workspace is for. `update_workspace` changes `name`, `description`
+  and `key`; a new key first moves every id, link, `[[mention]]` and folder name to it, and
+  config.json is written last
+  ([0030](docs/decisions/0030-one-update-workspace-and-a-new-key-rewrites-every-id.md)). A new
   workspace copies its statuses and plugins from a preset (`PRESETS` in `contract/src/presets.ts`:
   Checklist, Project, Chores); `enable_plugin` and `disable_plugin` change `plugins` later
   ([0022](docs/decisions/0022-presets-in-the-contract-workspace-and-plugin-settings-are-operations.md)).

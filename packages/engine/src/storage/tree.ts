@@ -527,6 +527,48 @@ export const markdownTexts = (tree: Tree): ReadonlyMap<string, string> => {
   return texts;
 };
 
+/** A task, list or entry folder and its marker file. */
+export interface MarkedFolder {
+  readonly type: "task" | "list" | "entry";
+  readonly path: string;
+  readonly name: string;
+  /** The marker file's absolute path. */
+  readonly file: string;
+  readonly text: Read<string>;
+}
+
+/** Every task, list and entry folder the tree read, in every section, parents before their children. */
+export const markedFolders = (tree: Tree): Array<MarkedFolder> => {
+  const folders: Array<MarkedFolder> = [];
+  const visit = (children: Read<ReadonlyArray<ListChild>>) => {
+    for (const child of Result.isSuccess(children) ? children.success : []) {
+      if (child.type !== "task" && child.type !== "list") continue;
+      const file = `${child.path}${sep}${child.type === "task" ? TASK_FILE : LIST_FILE}`;
+      folders.push({
+        type: child.type,
+        path: child.path,
+        name: child.name,
+        file,
+        text: child.file,
+      });
+      visit(child.children);
+    }
+  };
+  visit(tasksOf(tree));
+  for (const section of Result.isSuccess(tree.children) ? tree.children.success : [])
+    if (section.type === "section" && Result.isSuccess(section.children))
+      for (const entry of section.children.success)
+        if (entry.type === "entry")
+          folders.push({
+            type: "entry",
+            path: entry.path,
+            name: entry.name,
+            file: `${entry.path}${sep}${section.marker}`,
+            text: entry.file,
+          });
+  return folders;
+};
+
 /** The task folders from `dir` down, parents before their subtasks; none when `dir` is not one. */
 export const taskFoldersFrom = (tree: Tree, dir: string): Array<string> => {
   const find = (children: Read<ReadonlyArray<ListChild>>): TaskFolder | undefined => {

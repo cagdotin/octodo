@@ -26,7 +26,9 @@ import {
   type StatusDefinition,
   type Task,
   type UpdateTaskInput,
+  type UpdateWorkspaceInput,
   type WorkspaceConfig,
+  type WorkspaceInfo,
   type WorkspaceSnapshot,
 } from "@octodo/contract";
 import { DEFAULT_PRESET, PRESETS, type PresetId } from "@octodo/contract/presets";
@@ -35,6 +37,7 @@ import { fixAll, fixDiagnostic } from "./health/operations.ts";
 import { createList, deleteList, moveList, renameList } from "./lists/operations.ts";
 import { makeState, storageError } from "./state.ts";
 import { setPluginEnabled } from "./settings/plugins.ts";
+import { updateWorkspace } from "./settings/workspace.ts";
 import { reorderStatuses } from "./statuses/operations.ts";
 import { hasConfig } from "./storage/config.ts";
 import { createWorkspace } from "./storage/storage.ts";
@@ -163,6 +166,10 @@ export interface Workspace {
     plugin: string,
     enabled: boolean,
   ) => Effect.Effect<ReadonlyArray<string>, InvalidRequest | StorageError | WorkspaceBusy>;
+  /** Changes the name, description or key in config.json; a new key rewrites every id that has the old one. */
+  readonly update: (
+    input: UpdateWorkspaceInput,
+  ) => Effect.Effect<WorkspaceInfo, InvalidRequest | StorageError | WorkspaceBusy>;
   /** The files in a task's folder that are its attachments, with their sizes and media types. */
   readonly attachments: (
     taskId: string,
@@ -275,6 +282,7 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     deleteList: (listId, input) => deleteList(state, listId, input),
     reorderStatuses: (input) => reorderStatuses(state, input),
     setPlugin: (plugin, enabled) => setPluginEnabled(state, plugin, enabled),
+    update: (input) => updateWorkspace(state, input),
     attachment: (taskId, relativePath) => getAttachment(state, taskId, relativePath),
     attachments: (taskId) => listAttachments(state, taskId),
     readAttachment: (taskId, relativePath) => readAttachment(state, taskId, relativePath),

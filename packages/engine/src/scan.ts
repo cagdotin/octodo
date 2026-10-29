@@ -18,6 +18,7 @@ import {
   type WorkspaceSnapshot,
 } from "@octodo/contract";
 import { defaultStatus, humanize } from "@octodo/contract/rules";
+import { describedBy } from "./storage/config.ts";
 import { isNotFound } from "./storage/files.ts";
 import { frontmatterId, hasFrontmatter, readFrontmatter } from "./frontmatter.ts";
 import { diagnostic, kindDiagnostic, type DiagnosticOptions } from "./health/problems.ts";
@@ -473,7 +474,7 @@ export const scanWorkspace = (
   diagnostics.push(...linked.diagnostics);
   return {
     snapshot: {
-      workspace: { id, name: config.name, key: config.key, root },
+      workspace: { id, ...describedBy(config), root },
       statuses,
       lists,
       tasks: linked.tasks,

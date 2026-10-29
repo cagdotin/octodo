@@ -9,7 +9,7 @@ import {
   type WorkspaceInfo,
 } from "@octodo/contract";
 import { slugify } from "@octodo/contract/rules";
-import { hasConfig, readConfig } from "./storage/config.ts";
+import { describedBy, hasConfig, readConfig } from "./storage/config.ts";
 import {
   browseFolders,
   readRegistry as readRegistryIn,
@@ -85,9 +85,8 @@ export class Workspaces extends Context.Service<
         const info = (entry: { id: string; root: string }) =>
           Effect.map(withPlatform(readConfig(entry.root)), ({ config }): WorkspaceInfo => ({
             id: entry.id,
+            ...describedBy(config),
             root: entry.root,
-            name: config.name,
-            key: config.key,
           }));
 
         const openHandle = (id: string, root: string) =>

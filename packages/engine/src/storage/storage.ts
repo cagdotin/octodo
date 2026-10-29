@@ -29,6 +29,8 @@ export type AssignedId = string & { readonly [assigned]: true };
 export interface Ids {
   /** The next id with `key`, numbered `atLeast` or past the last one handed out, if that is higher. */
   readonly next: (key: string, atLeast: number) => AssignedId;
+  /** `id`'s number with `key` instead of its own: `HM-3` with `OCT` is `OCT-3`. */
+  readonly rekeyed: (id: string, key: string) => AssignedId;
 }
 
 /** What the files hold, read by the folder grammar and not yet parsed. */
@@ -135,6 +137,7 @@ export const makeStorage = (
         issued = Math.max(issued + 1, atLeast);
         return `${key}-${issued}` as AssignedId;
       },
+      rekeyed: (id, key) => `${key}-${id.slice(id.lastIndexOf("-") + 1)}` as AssignedId,
     };
 
     const write: Storage["write"] = (change) =>

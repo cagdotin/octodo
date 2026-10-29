@@ -191,6 +191,19 @@ const ROWS: ReadonlyArray<Row> = [
   { name: "add_workspace", input: { root: "<root>/shed", preset: "barn" } },
   { name: "add_workspace", input: { root: "cabin" } },
   { name: "list_workspaces", input: {}, argv: ["workspace", "list", "--json"] },
+  {
+    name: "update_workspace",
+    input: { name: "Cottage", description: "Weekend jobs" },
+    argv: ["workspace", "update", "--name", "Cottage", "--description", "Weekend jobs", "--json"],
+  },
+  { name: "update_workspace", input: { name: " " } },
+  {
+    name: "update_workspace",
+    input: { key: "OCT", description: null },
+    argv: ["workspace", "update", "--key", "OCT", "--no-description", "--json"],
+  },
+  { name: "update_workspace", input: { key: "O-T" } },
+  { name: "get_task", input: { id: "OCT-1" }, argv: ["show", "OCT-1", "--json"] },
 ];
 
 /** The row with `<root>` in its input and its words made the folder `root`. */

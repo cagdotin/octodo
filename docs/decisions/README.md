@@ -35,3 +35,4 @@ supersedes the old one and mark the old one's status.
 | [0027](0027-plugins-add-sections-tasks-is-the-built-in-one.md)                       | Plugins add sections; tasks is the built-in one                                                          | accepted                  |
 | [0028](0028-deleting-a-list-moves-its-tasks-out-renaming-renames-its-folder.md)      | Deleting a list moves its tasks out of any list, and renaming a list renames its folder                  | accepted                  |
 | [0029](0029-the-desktop-app-updates-itself-from-github-releases.md)                  | The desktop app updates itself from GitHub releases, on a nightly and a stable channel                   | accepted                  |
+| [0030](0030-one-update-workspace-and-a-new-key-rewrites-every-id.md)                 | One `update_workspace` changes a workspace's name, description and key, and a new key rewrites every id  | accepted                  |

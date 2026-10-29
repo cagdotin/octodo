@@ -59,6 +59,13 @@ export const idNumber = (id: string, key: string): number | null => {
   return match === null ? null : Number(match[1]);
 };
 
+/** `text` with each id that has key `from` given key `to` instead: `HM-3` becomes `OCT-3`. */
+export const rekeyIds = (text: string, from: string, to: string): string =>
+  text.replace(
+    new RegExp(`(?<![A-Za-z0-9-])${escapeRegExp(from)}-(?=\\d+(?![A-Za-z0-9]))`, "g"),
+    `${to}-`,
+  );
+
 /** The number of the id a task folder's `<id>-<slug>` name starts with, when it has key `key`. */
 export const folderIdNumber = (name: string, key: string): number | null => {
   const match = new RegExp(`^${escapeRegExp(key)}-(\\d+)(?:-|$)`).exec(name);

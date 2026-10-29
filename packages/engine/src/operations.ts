@@ -150,6 +150,7 @@ export const handlers: { readonly [K in OperationName]: Handler<K> } = {
   add_workspace: ({ root, ...options }) =>
     Workspaces.use((workspaces) => workspaces.add(root, options)),
   get_workspace: (ws) => Effect.map(ws.snapshot, overview),
+  update_workspace: (ws, input) => ws.update(input),
   list_tasks: (ws, filters) =>
     Effect.map(ws.snapshot, (snapshot) =>
       listTasks(snapshot, filters, {

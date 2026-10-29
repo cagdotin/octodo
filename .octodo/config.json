@@ -1,5 +1,5 @@
 {
-  "name": "octodo",
+  "name": "octodo app",
   "key": "OCT",
   "statuses": [
     {
@@ -28,5 +28,6 @@
       "category": "archived"
     }
   ],
-  "plugins": ["recurring"]
+  "plugins": ["recurring"],
+  "description": "The Linear-style tracker for building the octodo app itself, the task manager cagin and all their agents use. Put octodo bugs, feature requests, roadmap items, design decisions, and CLI, MCP, server, web, and desktop work here. Personal tasks go in Octodo Vault, and other apps' work goes in that app's workspace."
 }

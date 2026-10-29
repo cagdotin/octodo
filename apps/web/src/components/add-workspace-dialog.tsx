@@ -103,12 +103,7 @@ export function AddWorkspaceDialog({ trigger, open, onOpenChange }: Props) {
       return;
     }
     add.mutate(
-      {
-        root: trimmed,
-        ...(!existing && name.trim() ? { name: name.trim() } : {}),
-        ...(!existing && key.trim() ? { key: key.trim().toUpperCase() } : {}),
-        ...(!existing ? { preset } : {}),
-      },
+      existing ? { root: trimmed } : { root: trimmed, ...newWorkspace(name, key, preset) },
       {
         onSuccess: (workspace) => {
           setOpen(false);
@@ -138,97 +133,29 @@ export function AddWorkspaceDialog({ trigger, open, onOpenChange }: Props) {
             </DialogDescription>
           </DialogHeader>
           <DialogPanel className="flex flex-col gap-5">
-            <Field invalid={error !== null}>
-              <FieldLabel htmlFor="ws-root">Folder</FieldLabel>
-              <InputGroup>
-                <InputGroupInput
-                  id="ws-root"
-                  placeholder="/Users/me/code/project"
-                  className="font-mono"
-                  required
-                  autoFocus
-                  value={root}
-                  aria-invalid={error !== null || undefined}
-                  onChange={(event) => {
-                    setRoot(event.target.value);
-                    setPathError(null);
-                  }}
-                />
-                <InputGroupAddon align="inline-end">
-                  <Button
-                    type="button"
-                    size="xs"
-                    variant="secondary"
-                    aria-expanded={desktop ? undefined : browsing}
-                    onClick={() => void pick()}
-                  >
-                    <FolderOpenIcon data-icon="inline-start" />
-                    Choose…
-                  </Button>
-                </InputGroupAddon>
-              </InputGroup>
-              {browsing && (
-                <FolderBrowser start={absolute ? trimmed : undefined} onChoose={choose} />
-              )}
-              {error !== null ? (
-                <FieldError match>{error}</FieldError>
-              ) : existing ? (
-                <FieldDescription className="flex items-center gap-1.5">
-                  <FolderCheckIcon className="size-3.5" />
-                  Already a octodo workspace; it opens as it is.
-                </FieldDescription>
-              ) : (
-                <FieldDescription>A folder on the machine running octodo.</FieldDescription>
-              )}
-            </Field>
+            <FolderField
+              root={root}
+              onRoot={(next) => {
+                setRoot(next);
+                setPathError(null);
+              }}
+              error={error}
+              existing={existing}
+              browsing={browsing}
+              start={absolute ? trimmed : undefined}
+              onPick={() => void pick()}
+              onChoose={choose}
+            />
             {!existing && (
-              <div className="grid grid-cols-[1fr_7rem] gap-3">
-                <Field>
-                  <FieldLabel htmlFor="ws-name">Name</FieldLabel>
-                  <Input
-                    id="ws-name"
-                    placeholder={suggestedName || "Folder name"}
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="ws-key">Key</FieldLabel>
-                  <Input
-                    id="ws-key"
-                    placeholder={deriveKey(name.trim() || suggestedName || "abc")}
-                    className="font-mono uppercase"
-                    maxLength={8}
-                    value={key}
-                    onChange={(event) => setKey(event.target.value)}
-                  />
-                </Field>
-              </div>
-            )}
-            {!existing && (
-              <Fieldset className="gap-2">
-                <FieldsetLegend className="text-sm font-medium">Start with</FieldsetLegend>
-                <RadioGroup
-                  value={preset}
-                  onValueChange={(value) => setPreset(value as PresetId)}
-                  className="gap-2"
-                >
-                  {PRESET_IDS.map((id) => (
-                    <Label
-                      key={id}
-                      className="flex items-start gap-3 rounded-lg border p-3 hover:bg-accent/50 has-data-checked:border-primary/48 has-data-checked:bg-accent/50"
-                    >
-                      <div className="flex flex-1 flex-col gap-1">
-                        <span className="font-medium">{PRESETS[id].name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {PRESETS[id].description}
-                        </span>
-                      </div>
-                      <RadioGroupItem value={id} />
-                    </Label>
-                  ))}
-                </RadioGroup>
-              </Fieldset>
+              <NewWorkspaceFields
+                name={name}
+                onName={setName}
+                workspaceKey={key}
+                onKey={setKey}
+                preset={preset}
+                onPreset={setPreset}
+                suggestedName={suggestedName}
+              />
             )}
           </DialogPanel>
           <DialogFooter>
@@ -243,6 +170,143 @@ export function AddWorkspaceDialog({ trigger, open, onOpenChange }: Props) {
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** What a new workspace sends besides its folder: the preset, and the name and key unless empty. */
+const newWorkspace = (name: string, key: string, preset: PresetId) => ({
+  preset,
+  ...(name.trim() ? { name: name.trim() } : {}),
+  ...(key.trim() ? { key: key.trim().toUpperCase() } : {}),
+});
+
+function FolderField({
+  root,
+  onRoot,
+  error,
+  existing,
+  browsing,
+  start,
+  onPick,
+  onChoose,
+}: {
+  root: string;
+  onRoot: (root: string) => void;
+  error: string | null;
+  existing: boolean;
+  browsing: boolean;
+  start: string | undefined;
+  onPick: () => void;
+  onChoose: (path: string) => void;
+}) {
+  return (
+    <Field invalid={error !== null}>
+      <FieldLabel htmlFor="ws-root">Folder</FieldLabel>
+      <InputGroup>
+        <InputGroupInput
+          id="ws-root"
+          placeholder="/Users/me/code/project"
+          className="font-mono"
+          required
+          autoFocus
+          value={root}
+          aria-invalid={error !== null || undefined}
+          onChange={(event) => onRoot(event.target.value)}
+        />
+        <InputGroupAddon align="inline-end">
+          <Button
+            type="button"
+            size="xs"
+            variant="secondary"
+            aria-expanded={desktop ? undefined : browsing}
+            onClick={onPick}
+          >
+            <FolderOpenIcon data-icon="inline-start" />
+            Choose…
+          </Button>
+        </InputGroupAddon>
+      </InputGroup>
+      {browsing && <FolderBrowser start={start} onChoose={onChoose} />}
+      <FolderHint error={error} existing={existing} />
+    </Field>
+  );
+}
+
+function FolderHint({ error, existing }: { error: string | null; existing: boolean }) {
+  if (error !== null) return <FieldError match>{error}</FieldError>;
+  if (!existing)
+    return <FieldDescription>A folder on the machine running octodo.</FieldDescription>;
+  return (
+    <FieldDescription className="flex items-center gap-1.5">
+      <FolderCheckIcon className="size-3.5" />
+      Already a octodo workspace; it opens as it is.
+    </FieldDescription>
+  );
+}
+
+function NewWorkspaceFields({
+  name,
+  onName,
+  workspaceKey,
+  onKey,
+  preset,
+  onPreset,
+  suggestedName,
+}: {
+  name: string;
+  onName: (name: string) => void;
+  workspaceKey: string;
+  onKey: (key: string) => void;
+  preset: PresetId;
+  onPreset: (preset: PresetId) => void;
+  suggestedName: string;
+}) {
+  return (
+    <>
+      <div className="grid grid-cols-[1fr_7rem] gap-3">
+        <Field>
+          <FieldLabel htmlFor="ws-name">Name</FieldLabel>
+          <Input
+            id="ws-name"
+            placeholder={suggestedName || "Folder name"}
+            value={name}
+            onChange={(event) => onName(event.target.value)}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="ws-key">Key</FieldLabel>
+          <Input
+            id="ws-key"
+            placeholder={deriveKey(name.trim() || suggestedName || "abc")}
+            className="font-mono uppercase"
+            maxLength={8}
+            value={workspaceKey}
+            onChange={(event) => onKey(event.target.value)}
+          />
+        </Field>
+      </div>
+      <Fieldset className="gap-2">
+        <FieldsetLegend className="text-sm font-medium">Start with</FieldsetLegend>
+        <RadioGroup
+          value={preset}
+          onValueChange={(value) => onPreset(value as PresetId)}
+          className="gap-2"
+        >
+          {PRESET_IDS.map((id) => (
+            <Label
+              key={id}
+              className="flex items-start gap-3 rounded-lg border p-3 hover:bg-accent/50 has-data-checked:border-primary/48 has-data-checked:bg-accent/50"
+            >
+              <div className="flex flex-1 flex-col gap-1">
+                <span className="font-medium">{PRESETS[id].name}</span>
+                <span className="text-xs text-muted-foreground">{PRESETS[id].description}</span>
+              </div>
+              <RadioGroupItem value={id} />
+            </Label>
+          ))}
+        </RadioGroup>
+      </Fieldset>
+    </>
   );
 }
 

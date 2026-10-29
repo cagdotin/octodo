@@ -96,13 +96,8 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
   );
   const mentions = useMentions(workspace, snapshot, task.id);
   const setDue = (due: string | null) => update.mutate({ id: task.id, patch: { due } });
-  const due = dueInfo(task.due, useToday());
 
   const currentStatus = snapshot.statuses.find((status) => status.id === task.status);
-  const priority =
-    task.priority === "none"
-      ? undefined
-      : PRIORITIES.find((entry) => entry.value === task.priority);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -197,73 +192,14 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {offersDue(task) && (
-          <DuePicker value={task.due} onChange={setDue}>
-            <Button
-              variant="ghost"
-              size="xs"
-              title={task.due ? `Due ${format(parseISO(task.due), "EEE, MMM d, yyyy")}` : undefined}
-              className={cn(
-                "font-normal text-muted-foreground tabular-nums",
-                due && "text-foreground",
-                due?.overdue && "text-destructive hover:text-destructive",
-              )}
-            >
-              <CalendarIcon data-icon="inline-start" />
-              {due ? due.label : "Due"}
-            </Button>
-          </DuePicker>
-        )}
+        {offersDue(task) && <TaskDueButton task={task} onChange={setDue} />}
 
-        <PriorityMenu workspace={workspace} task={task}>
-          <Button
-            variant="ghost"
-            size="xs"
-            className={cn("font-normal text-muted-foreground", priority && "text-foreground")}
-            aria-label={`Priority: ${priority?.label ?? "none"}`}
-          >
-            {priority ? (
-              <PriorityIcon priority={priority.value} />
-            ) : (
-              <FlagIcon data-icon="inline-start" />
-            )}
-            {priority?.label ?? "Priority"}
-          </Button>
-        </PriorityMenu>
+        <TaskPriorityButton workspace={workspace} task={task} />
 
-        <Popover>
-          <PopoverTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="xs"
-                className="min-w-0 font-normal text-muted-foreground"
-                aria-label={task.tags.length === 0 ? "Add tags" : `Tags: ${task.tags.join(", ")}`}
-                title={task.tags.map((tag) => `#${tag}`).join(" ") || undefined}
-              >
-                {task.tags.length === 0 ? (
-                  <>
-                    <HashIcon data-icon="inline-start" />
-                    Tags
-                  </>
-                ) : (
-                  <span className="flex min-w-0 items-center gap-1">
-                    {task.tags.map((tag) => (
-                      <TagPill key={tag} tag={tag} />
-                    ))}
-                  </span>
-                )}
-              </Button>
-            }
-          />
-          <PopoverContent align="start" side="top" className="w-72 p-1.5">
-            <TagsEditor
-              autoFocus
-              tags={task.tags}
-              onChange={(tags) => update.mutate({ id: task.id, patch: { tags } })}
-            />
-          </PopoverContent>
-        </Popover>
+        <TaskTagsButton
+          tags={task.tags}
+          onChange={(tags) => update.mutate({ id: task.id, patch: { tags } })}
+        />
       </PaneFooter>
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
@@ -294,6 +230,91 @@ export function TaskDetail({ workspace, snapshot, task, onClose }: Props) {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function TaskDueButton({ task, onChange }: { task: Task; onChange: (due: string | null) => void }) {
+  const due = dueInfo(task.due, useToday());
+  return (
+    <DuePicker value={task.due} onChange={onChange}>
+      <Button
+        variant="ghost"
+        size="xs"
+        title={task.due ? `Due ${format(parseISO(task.due), "EEE, MMM d, yyyy")}` : undefined}
+        className={cn(
+          "font-normal text-muted-foreground tabular-nums",
+          due && "text-foreground",
+          due?.overdue && "text-destructive hover:text-destructive",
+        )}
+      >
+        <CalendarIcon data-icon="inline-start" />
+        {due ? due.label : "Due"}
+      </Button>
+    </DuePicker>
+  );
+}
+
+function TaskPriorityButton({ workspace, task }: { workspace: string; task: Task }) {
+  const priority =
+    task.priority === "none"
+      ? undefined
+      : PRIORITIES.find((entry) => entry.value === task.priority);
+  return (
+    <PriorityMenu workspace={workspace} task={task}>
+      <Button
+        variant="ghost"
+        size="xs"
+        className={cn("font-normal text-muted-foreground", priority && "text-foreground")}
+        aria-label={`Priority: ${priority?.label ?? "none"}`}
+      >
+        {priority ? (
+          <PriorityIcon priority={priority.value} />
+        ) : (
+          <FlagIcon data-icon="inline-start" />
+        )}
+        {priority?.label ?? "Priority"}
+      </Button>
+    </PriorityMenu>
+  );
+}
+
+function TaskTagsButton({
+  tags,
+  onChange,
+}: {
+  tags: ReadonlyArray<string>;
+  onChange: (tags: Array<string>) => void;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="xs"
+            className="min-w-0 font-normal text-muted-foreground"
+            aria-label={tags.length === 0 ? "Add tags" : `Tags: ${tags.join(", ")}`}
+            title={tags.map((tag) => `#${tag}`).join(" ") || undefined}
+          >
+            {tags.length === 0 ? (
+              <>
+                <HashIcon data-icon="inline-start" />
+                Tags
+              </>
+            ) : (
+              <span className="flex min-w-0 items-center gap-1">
+                {tags.map((tag) => (
+                  <TagPill key={tag} tag={tag} />
+                ))}
+              </span>
+            )}
+          </Button>
+        }
+      />
+      <PopoverContent align="start" side="top" className="w-72 p-1.5">
+        <TagsEditor autoFocus tags={tags} onChange={onChange} />
+      </PopoverContent>
+    </Popover>
   );
 }
 

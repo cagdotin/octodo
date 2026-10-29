@@ -291,6 +291,45 @@ function Meter({ value, label }: { value: number; label: ReactNode }) {
   );
 }
 
+/** What the card says under the title: when a yearly counter comes back, or since when. */
+const subtitle = (counter: Counter, count: Count) => {
+  if ("next" in count)
+    return `${marks(count.years)} on ${shortDay(count.next)}, a ${weekday(count.next)}`;
+  const { since } = counter.fields;
+  return since === null ? "" : `since ${longDay(localDay(new Date(since)))}`;
+};
+
+function CountFigure({ count }: { count: Count }) {
+  if (!("next" in count)) {
+    return <Figure value={String(count.daysSince)} unit={count.daysSince === 1 ? "day" : "days"} />;
+  }
+  if (count.daysUntil === 0) {
+    return <Figure value="Today" unit={count.years === 0 ? "" : `the ${marks(count.years)}`} />;
+  }
+  return (
+    <Figure
+      value={String(count.daysUntil)}
+      unit={count.daysUntil === 1 ? "day to go" : "days to go"}
+    />
+  );
+}
+
+const yearlyMeterLabel = (daysUntil: number, years: number) => {
+  if (daysUntil === 0) return "Comes back next year";
+  if (years === 0) return "Not here yet";
+  return `${plural(365 - daysUntil, "day")} since the last one`;
+};
+
+function CountMeter({ count }: { count: Count }) {
+  if (!("next" in count)) return <MilestoneMeter days={count.daysSince} />;
+  return (
+    <Meter
+      value={1 - count.daysUntil / 365}
+      label={yearlyMeterLabel(count.daysUntil, count.years)}
+    />
+  );
+}
+
 function CounterCard({
   workspace,
   counter,
@@ -336,13 +375,7 @@ function CounterCard({
         </span>
         <div className="min-w-0 flex-1">
           <OpenTitle title={counter.title} onOpen={onOpen} />
-          <p className="truncate text-xs text-muted-foreground">
-            {"next" in count
-              ? `${marks(count.years)} on ${shortDay(count.next)}, a ${weekday(count.next)}`
-              : counter.fields.since === null
-                ? ""
-                : `since ${longDay(localDay(new Date(counter.fields.since)))}`}
-          </p>
+          <p className="truncate text-xs text-muted-foreground">{subtitle(counter, count)}</p>
         </div>
         <CardMenu
           workspace={workspace}
@@ -353,36 +386,12 @@ function CounterCard({
       </div>
 
       <div className="mt-5 mb-4">
-        {"next" in count ? (
-          isToday ? (
-            <Figure value="Today" unit={count.years === 0 ? "" : `the ${marks(count.years)}`} />
-          ) : (
-            <Figure
-              value={String(count.daysUntil)}
-              unit={count.daysUntil === 1 ? "day to go" : "days to go"}
-            />
-          )
-        ) : (
-          <Figure value={String(count.daysSince)} unit={count.daysSince === 1 ? "day" : "days"} />
-        )}
+        <CountFigure count={count} />
       </div>
 
       <div className="mt-auto flex items-end gap-3">
         <div className="min-w-0 flex-1">
-          {"next" in count ? (
-            <Meter
-              value={1 - count.daysUntil / 365}
-              label={
-                isToday
-                  ? "Comes back next year"
-                  : count.years === 0
-                    ? "Not here yet"
-                    : `${plural(365 - count.daysUntil, "day")} since the last one`
-              }
-            />
-          ) : (
-            <MilestoneMeter days={count.daysSince} />
-          )}
+          <CountMeter count={count} />
         </div>
         {/* Above the title's hit area, so a click here does not open the panel. */}
         <div className="relative z-[1] flex shrink-0 items-center gap-1">

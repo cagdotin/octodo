@@ -231,6 +231,23 @@ export function NewListDialog({
 
 const plural = (count: number, one: string) => `${count} ${one}${count === 1 ? "" : "s"}`;
 
+/** What deleting a list does to its sublists and tasks, in the dialog's words. */
+const deleteListSummary = (sublists: number, tasks: number, deleteTasks: boolean) => {
+  const lists =
+    sublists === 0
+      ? "This deletes the list."
+      : `This deletes the list and its ${sublists === 1 ? "sublist" : plural(sublists, "sublist")}.`;
+  if (tasks === 0) return `${lists} It has no tasks.`;
+  if (deleteTasks)
+    return `${lists} ${tasks === 1 ? "Its task is" : `Its ${tasks} tasks are`} deleted too.`;
+  return tasks === 1
+    ? `${lists} Its task moves to No list, whatever its status.`
+    : `${lists} Its ${tasks} tasks move to No list, whatever their status.`;
+};
+
+const sublistCount = (lists: ReadonlyArray<List>, list: List) =>
+  lists.filter((other) => other.id !== list.id && inSubtree(other.id, list.id)).length;
+
 export function DeleteListDialog({
   snapshot,
   list,
@@ -246,11 +263,7 @@ export function DeleteListDialog({
   const remove = useDeleteList(snapshot.workspace.id);
   const checkboxId = useId();
   const tasks = list === null ? [] : tasksInList(snapshot.tasks, list.id);
-  const sublists =
-    list === null
-      ? 0
-      : snapshot.lists.filter((other) => other.id !== list.id && inSubtree(other.id, list.id))
-          .length;
+  const sublists = list === null ? 0 : sublistCount(snapshot.lists, list);
 
   return (
     <AlertDialog open={list !== null} onOpenChange={(open) => !open && onClose()}>
@@ -258,16 +271,7 @@ export function DeleteListDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {list?.name}?</AlertDialogTitle>
           <AlertDialogDescription>
-            {sublists === 0
-              ? "This deletes the list. "
-              : `This deletes the list and its ${sublists === 1 ? "sublist" : plural(sublists, "sublist")}. `}
-            {tasks.length === 0
-              ? "It has no tasks."
-              : deleteTasks
-                ? `${tasks.length === 1 ? "Its task is" : `Its ${tasks.length} tasks are`} deleted too.`
-                : tasks.length === 1
-                  ? "Its task moves to No list, whatever its status."
-                  : `Its ${tasks.length} tasks move to No list, whatever their status.`}
+            {deleteListSummary(sublists, tasks.length, deleteTasks)}
           </AlertDialogDescription>
           {tasks.length > 0 && (
             <Label htmlFor={checkboxId} className="mt-2 font-normal">

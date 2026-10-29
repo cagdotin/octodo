@@ -15,7 +15,7 @@ import {
   movedListId,
 } from "@octodo/contract/rules";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useRef, useState, type ReactNode, type ReactElement } from "react";
+import { useRef, useState, type ReactElement, type ReactNode, type RefObject } from "react";
 import { dragData, dropData, type DragData, type DropData } from "@/lib/drag";
 import {
   DeleteListDialog,
@@ -333,6 +333,77 @@ export function SidebarLists({
 const TOGGLE_HIDES =
   "md:group-hover/list-row:opacity-0 md:group-has-focus-visible/list-row:opacity-0";
 
+function ListRowIcon({ folded }: { folded: boolean | null }) {
+  if (folded === null) return <ListGlyph />;
+  return folded ? (
+    <FoldersIcon className={TOGGLE_HIDES} />
+  ) : (
+    <FolderOpenIcon className={TOGGLE_HIDES} />
+  );
+}
+
+/** Where a dragged list lands: a line in the gap above or below the row, which shifts nothing. */
+function DropLine({ placement }: { placement: Placement["zone"] | null }) {
+  if (placement !== "before" && placement !== "after") return null;
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute inset-x-1 z-10 h-0.5 rounded-full bg-sidebar-primary",
+        placement === "before" ? "top-0 -translate-y-1/2" : "top-7 -translate-y-1/2",
+      )}
+    />
+  );
+}
+
+function ListActions({
+  list,
+  row,
+  onEdit,
+}: {
+  list: List;
+  row: RefObject<HTMLDivElement | null>;
+  onEdit: (edit: ListEdit) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <SidebarMenuAction
+            aria-label={`Actions for ${list.name}`}
+            className="top-1! text-sidebar-foreground/70 group-hover/list-row:opacity-100 group-has-focus-visible/list-row:opacity-100 data-popup-open:opacity-100 md:opacity-0"
+          />
+        }
+      >
+        <MoreHorizontalIcon />
+      </DropdownMenuTrigger>
+      {/* Anchored to the row, its first item sits level with it: -5px takes up the popup's border and padding. */}
+      <DropdownMenuContent anchor={row} align="start" alignOffset={-5} side="right" sideOffset={8}>
+        <DropdownMenuItem
+          onClick={() =>
+            onEdit({
+              kind: "create",
+              parent: listDepth(list.id) < MAX_LIST_DEPTH ? list.id : list.parent,
+            })
+          }
+        >
+          <PlusIcon />
+          New list
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => onEdit({ kind: "rename", list })}>
+          <PencilIcon />
+          Rename
+        </DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" onClick={() => onEdit({ kind: "delete", list })}>
+          <TrashIcon />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function ListRow({
   workspace,
   list,
@@ -400,65 +471,13 @@ function ListRow({
       {...drag.attributes}
       {...drag.listeners}
     >
-      {folded === false ? (
-        <FolderOpenIcon className={TOGGLE_HIDES} />
-      ) : folded === true ? (
-        <FoldersIcon className={TOGGLE_HIDES} />
-      ) : (
-        <ListGlyph />
-      )}
+      <ListRowIcon folded={folded} />
       <span>{list.name}</span>
     </Link>
   );
-  // The drop line sits in the gap between rows, so it does not shift anything.
-  const line =
-    placement === "before" || placement === "after" ? (
-      <span
-        aria-hidden
-        className={cn(
-          "pointer-events-none absolute inset-x-1 z-10 h-0.5 rounded-full bg-sidebar-primary",
-          placement === "before" ? "top-0 -translate-y-1/2" : "top-7 -translate-y-1/2",
-        )}
-      />
-    ) : null;
+  const line = <DropLine placement={placement} />;
 
-  const actions = (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <SidebarMenuAction
-            aria-label={`Actions for ${list.name}`}
-            className="top-1! text-sidebar-foreground/70 group-hover/list-row:opacity-100 group-has-focus-visible/list-row:opacity-100 data-popup-open:opacity-100 md:opacity-0"
-          />
-        }
-      >
-        <MoreHorizontalIcon />
-      </DropdownMenuTrigger>
-      {/* Anchored to the row, its first item sits level with it: -5px takes up the popup's border and padding. */}
-      <DropdownMenuContent anchor={row} align="start" alignOffset={-5} side="right" sideOffset={8}>
-        <DropdownMenuItem
-          onClick={() =>
-            onEdit({
-              kind: "create",
-              parent: listDepth(list.id) < MAX_LIST_DEPTH ? list.id : list.parent,
-            })
-          }
-        >
-          <PlusIcon />
-          New list
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => onEdit({ kind: "rename", list })}>
-          <PencilIcon />
-          Rename
-        </DropdownMenuItem>
-        <DropdownMenuItem variant="destructive" onClick={() => onEdit({ kind: "delete", list })}>
-          <TrashIcon />
-          Delete
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+  const actions = <ListActions list={list} row={row} onEdit={onEdit} />;
 
   // The row's count gives way to the actions button, which phones without hover always show.
   return (

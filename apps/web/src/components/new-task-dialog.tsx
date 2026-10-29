@@ -1,4 +1,4 @@
-import type { List, Priority, WorkspaceSnapshot } from "@octodo/contract";
+import type { List, Priority, StatusDefinition, WorkspaceSnapshot } from "@octodo/contract";
 import { defaultStatus } from "@octodo/contract/rules";
 import {
   CalendarIcon,
@@ -118,6 +118,37 @@ export function NewTaskDialog({ open, onOpenChange, ...props }: Props) {
   );
 }
 
+/** The due day a new task starts with in a view: today in Today, none elsewhere. */
+const viewDue = (view: string | undefined, today: string) => (view === SMART.today ? today : null);
+
+/** The list a new task starts in: the open list, or none in a smart view. */
+const viewList = (view: string | undefined) => (isSmartView(view) ? null : (view ?? null));
+
+const kindReady = (kind: { kind: CreatableKind; draft: unknown } | undefined) =>
+  kind === undefined || kind.kind.create.ready(kind.draft);
+
+/** The new task's fields, leaving out what is empty and a list a smart view does not say. */
+const newTask = (fields: {
+  title: string;
+  status: string;
+  tags: Array<string>;
+  priority: Priority;
+  notes: string;
+  view: string | undefined;
+  list: string | null;
+}) => ({
+  title: fields.title,
+  status: fields.status,
+  tags: fields.tags,
+  ...(fields.priority === "none" ? {} : { priority: fields.priority }),
+  ...(fields.list === null && isSmartView(fields.view) ? {} : { list: fields.list }),
+  ...(fields.notes.trim() === "" ? {} : { body: fields.notes.trim() }),
+});
+
+/** In the notes, plain Enter is a new line; ⌘/Ctrl+Enter creates the task and opens it. */
+const createsAndOpens = (event: KeyboardEvent) =>
+  event.key === "Enter" && !event.nativeEvent.isComposing && (event.metaKey || event.ctrlKey);
+
 function NewTaskForm({
   workspace,
   snapshot,
@@ -130,7 +161,6 @@ function NewTaskForm({
   const createOfKind = useCreateTaskOfKind(workspace);
   const kinds = creatableKinds(snapshot);
   const [kind, setKind] = useState<{ kind: CreatableKind; draft: unknown }>();
-  const pickedFields = useRef(false);
   const titleInput = useRef<QuickAddInputHandle>(null);
   // A kind has its own date (decision 0023), so with one picked a typed date stays title text.
   const draft = useQuickAdd(snapshot.lists, initialTitle, { dates: kind === undefined });
@@ -157,21 +187,14 @@ function NewTaskForm({
     snapshot.statuses.find((entry) => entry.id === pickedStatus) ??
     defaultStatus(snapshot.statuses);
   const priority = parsed.fields.priority ?? pickedPriority ?? "none";
-  const due =
-    parsed.fields.due ??
-    (pickedDue === undefined ? (list === SMART.today ? today : null) : pickedDue);
-  const viewList = isSmartView(list) ? null : (list ?? null);
-  const targetList = parsed.fields.list ?? (pickedList === undefined ? viewList : pickedList);
+  const due = parsed.fields.due ?? (pickedDue === undefined ? viewDue(list, today) : pickedDue);
+  const targetList = parsed.fields.list ?? (pickedList === undefined ? viewList(list) : pickedList);
   const tagSet = new Set([...pickedTags, ...parsed.fields.tags]);
   const tags = [...tagSet];
   const knownTags = [...new Set([...allTags(snapshot.tasks), ...tags])].sort((a, b) =>
     a.localeCompare(b),
   );
-  const dueLabel = dueInfo(due, today);
-  const ready =
-    parsed.title !== "" &&
-    status !== undefined &&
-    (kind === undefined || kind.kind.create.ready(kind.draft));
+  const ready = parsed.title !== "" && status !== undefined && kindReady(kind);
 
   const toggleTag = (tag: string) => {
     if (parsed.fields.tags.includes(tag)) {
@@ -184,25 +207,24 @@ function NewTaskForm({
 
   const submit = (open: boolean) => {
     if (!ready) return;
-    const task = {
+    const task = newTask({
       title: parsed.title,
       status: status.id,
       tags,
-      ...(priority !== "none" ? { priority } : {}),
-      ...(targetList === null && isSmartView(list) ? {} : { list: targetList }),
-      ...(notes.trim() !== "" ? { body: notes.trim() } : {}),
-    };
+      priority,
+      notes,
+      view: list,
+      list: targetList,
+    });
     const then = open ? { onSuccess: ({ id }: { id: string }) => onOpenTask(id) } : undefined;
     if (kind === undefined) create.mutate({ ...task, ...(due ? { due } : {}) }, then);
     else createOfKind.mutate({ kind: kind.kind.create, task, draft: kind.draft }, then);
     onDone();
   };
-  const onEnter = (event: KeyboardEvent, plainSubmits: boolean) => {
-    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
-    const mod = event.metaKey || event.ctrlKey;
-    if (!mod && !plainSubmits) return;
+  const onNotesKey = (event: KeyboardEvent) => {
+    if (!createsAndOpens(event)) return;
     event.preventDefault();
-    submit(mod);
+    submit(true);
   };
   // Closing a picker returns focus to the title, where Enter creates.
   const refocus = () => {
@@ -233,65 +255,19 @@ function NewTaskForm({
             placeholder="Notes"
             className="field-sizing-content min-h-6 resize-none bg-transparent text-base outline-none placeholder:text-muted-foreground/70 md:text-sm"
             onChange={(event) => setNotes(event.target.value)}
-            onKeyDown={(event) => onEnter(event, false)}
+            onKeyDown={onNotesKey}
           />
         </ScrollArea>
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
         {kinds.length > 0 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Chip set={kind !== undefined}>
-                  {kind === undefined ? (
-                    <>
-                      <SquareCheckIcon />
-                      Task
-                    </>
-                  ) : (
-                    <>
-                      <kind.kind.create.Icon />
-                      {kind.kind.create.noun}
-                    </>
-                  )}
-                </Chip>
-              }
-            />
-            <DropdownMenuContent
-              align="start"
-              className="w-52"
-              finalFocus={() => {
-                // A kind's fields open their own picker, which takes focus; only this once.
-                if (!pickedFields.current) refocus();
-                pickedFields.current = false;
-                return false;
-              }}
-            >
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>Kind</DropdownMenuLabel>
-                <DropdownMenuRadioGroup
-                  value={kind?.kind.id ?? PLAIN}
-                  onValueChange={(value) => {
-                    const picked = kinds.find((entry) => entry.id === value);
-                    pickedFields.current = picked?.create.Fields !== undefined;
-                    setKind(picked && { kind: picked, draft: picked.create.empty });
-                  }}
-                >
-                  <DropdownMenuRadioItem value={PLAIN}>
-                    <SquareCheckIcon />
-                    Task
-                  </DropdownMenuRadioItem>
-                  {kinds.map((entry) => (
-                    <DropdownMenuRadioItem key={entry.id} value={entry.id}>
-                      <entry.create.Icon />
-                      {entry.create.noun}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <KindPicker
+            kinds={kinds}
+            kind={kind?.kind}
+            onPick={(picked) => setKind(picked && { kind: picked, draft: picked.create.empty })}
+            refocus={refocus}
+          />
         )}
         {kind?.kind.create.Fields && (
           <kind.kind.create.Fields
@@ -302,183 +278,355 @@ function NewTaskForm({
           />
         )}
 
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Chip>
-                <StatusIcon category={status?.category} />
-                {status?.name ?? "Status"}
-              </Chip>
-            }
-          />
-          <DropdownMenuContent align="start" className="w-48" finalFocus={refocus}>
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>Status</DropdownMenuLabel>
-              <DropdownMenuRadioGroup value={status?.id ?? ""} onValueChange={setPickedStatus}>
-                {snapshot.statuses.map((entry) => (
-                  <DropdownMenuRadioItem key={entry.id} value={entry.id}>
-                    <StatusIcon category={entry.category} />
-                    {entry.name}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <StatusPicker
+          statuses={snapshot.statuses}
+          status={status}
+          onPick={setPickedStatus}
+          refocus={refocus}
+        />
 
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Chip set={priority !== "none"}>
-                <PriorityIcon priority={priority} />
-                {priority === "none"
-                  ? "Priority"
-                  : PRIORITIES.find((entry) => entry.value === priority)?.label}
-              </Chip>
-            }
-          />
-          <DropdownMenuContent align="start" className="w-44" finalFocus={refocus}>
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>Priority</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={priority}
-                onValueChange={(value) => {
-                  const picked = MENU_PRIORITIES.find((entry) => entry === value);
-                  if (picked === undefined) return;
-                  if (parsed.fields.priority) dropTokens((token) => token.kind === "priority");
-                  setPickedPriority(picked);
-                }}
-              >
-                {MENU_PRIORITIES.map((value) => (
-                  <DropdownMenuRadioItem key={value} value={value}>
-                    <PriorityIcon priority={value} />
-                    {value === "none"
-                      ? "No priority"
-                      : PRIORITIES.find((entry) => entry.value === value)?.label}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <PriorityPicker
+          priority={priority}
+          onPick={(picked) => {
+            if (parsed.fields.priority) dropTokens((token) => token.kind === "priority");
+            setPickedPriority(picked);
+          }}
+          refocus={refocus}
+        />
 
         {kind === undefined && (
-          <DuePicker
-            value={due}
-            onChange={(next) => {
+          <DueChip
+            due={due}
+            onPick={(next) => {
               if (parsed.fields.due) dropTokens((token) => token.kind === "due");
               setPickedDue(next);
             }}
-            finalFocus={refocus}
-          >
-            <Chip set={dueLabel !== null} className={cn(dueLabel?.overdue && "text-destructive")}>
-              <CalendarIcon />
-              {dueLabel ? <span className="font-mono">{dueLabel.label}</span> : "Due date"}
-            </Chip>
-          </DuePicker>
+            refocus={refocus}
+          />
         )}
 
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Chip set={targetList !== null}>
-                <ListGlyph />
-                <span className="max-w-40 truncate">{listLabel(snapshot.lists, targetList)}</span>
-              </Chip>
-            }
-          />
-          <DropdownMenuContent align="start" className="max-h-72 w-52" finalFocus={refocus}>
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>List</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={targetList ?? ""}
-                onValueChange={(value) => {
-                  if (parsed.fields.list) dropTokens((token) => token.kind === "list");
-                  setPickedList(value === "" ? null : value);
-                }}
-              >
-                <DropdownMenuRadioItem value="">No list</DropdownMenuRadioItem>
-                {flatLists(listTree(snapshot.lists)).map(({ list: entry, depth }) => (
-                  <DropdownMenuRadioItem
-                    key={entry.id}
-                    value={entry.id}
-                    style={{ paddingLeft: `${0.375 + depth * 0.875}rem` }}
-                  >
-                    <span className="truncate">{entry.name}</span>
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <ListPicker
+          lists={snapshot.lists}
+          value={targetList}
+          onPick={(picked) => {
+            if (parsed.fields.list) dropTokens((token) => token.kind === "list");
+            setPickedList(picked);
+          }}
+          refocus={refocus}
+        />
 
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Chip set={tags.length > 0}>
-                <HashIcon />
-                {tags.length === 0 ? (
-                  "Tags"
-                ) : (
-                  <span className="max-w-48 truncate font-mono">{tags.join(" ")}</span>
-                )}
-              </Chip>
-            }
-          />
-          <DropdownMenuContent align="start" className="max-h-72 w-48" finalFocus={refocus}>
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>Tags</DropdownMenuLabel>
-              {knownTags.map((tag) => (
-                <DropdownMenuCheckboxItem
-                  key={tag}
-                  checked={tagSet.has(tag)}
-                  className="font-mono text-xs"
-                  closeOnClick={false}
-                  onClick={() => toggleTag(tag)}
-                >
-                  #{tag}
-                </DropdownMenuCheckboxItem>
-              ))}
-              <DropdownMenuLabel className="font-normal">
-                Type <span className="font-mono">#name</span> in the title for a new one
-              </DropdownMenuLabel>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <TagsPicker tags={tagSet} knownTags={knownTags} onToggle={toggleTag} refocus={refocus} />
 
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button variant="ghost" size="icon-xs" aria-label="More options">
-                <MoreHorizontalIcon />
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="start" className="w-48" finalFocus={refocus}>
-            <DropdownMenuGroup>
-              {LATER.map(({ label, icon: Icon }) => (
-                <DropdownMenuItem key={label} disabled>
-                  <Icon />
-                  {label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <MoreOptions refocus={refocus} />
       </div>
 
       <div className="flex items-center gap-3 border-t px-4 py-2.5">
-        <span className="hidden items-center gap-1.5 font-mono text-xs text-muted-foreground sm:flex">
-          <Kbd>↵</Kbd> create
-          <span aria-hidden>·</span>
-          <Kbd>⌘↵</Kbd> create and open
-          <span aria-hidden>·</span>
-          <Kbd>esc</Kbd>
-        </span>
+        <ShortcutHints />
         <Button size="sm" className="ml-auto" disabled={!ready} onClick={() => submit(false)}>
           Create {kind === undefined ? "task" : kind.kind.create.noun.toLowerCase()}
         </Button>
       </div>
     </div>
+  );
+}
+
+/** The kind menu. A kind with fields opens its own picker, which keeps the focus that once. */
+function KindPicker({
+  kinds,
+  kind,
+  onPick,
+  refocus,
+}: {
+  kinds: ReadonlyArray<CreatableKind>;
+  kind: CreatableKind | undefined;
+  onPick: (kind: CreatableKind | undefined) => void;
+  refocus: () => false;
+}) {
+  const pickedFields = useRef(false);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Chip set={kind !== undefined}>
+            {kind === undefined ? (
+              <>
+                <SquareCheckIcon />
+                Task
+              </>
+            ) : (
+              <>
+                <kind.create.Icon />
+                {kind.create.noun}
+              </>
+            )}
+          </Chip>
+        }
+      />
+      <DropdownMenuContent
+        align="start"
+        className="w-52"
+        finalFocus={() => {
+          // A kind's fields open their own picker, which takes focus; only this once.
+          if (!pickedFields.current) refocus();
+          pickedFields.current = false;
+          return false;
+        }}
+      >
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Kind</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={kind?.id ?? PLAIN}
+            onValueChange={(value) => {
+              const picked = kinds.find((entry) => entry.id === value);
+              pickedFields.current = picked?.create.Fields !== undefined;
+              onPick(picked);
+            }}
+          >
+            <DropdownMenuRadioItem value={PLAIN}>
+              <SquareCheckIcon />
+              Task
+            </DropdownMenuRadioItem>
+            {kinds.map((entry) => (
+              <DropdownMenuRadioItem key={entry.id} value={entry.id}>
+                <entry.create.Icon />
+                {entry.create.noun}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function StatusPicker({
+  statuses,
+  status,
+  onPick,
+  refocus,
+}: {
+  statuses: ReadonlyArray<StatusDefinition>;
+  status: StatusDefinition | undefined;
+  onPick: (id: string) => void;
+  refocus: () => false;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Chip>
+            <StatusIcon category={status?.category} />
+            {status?.name ?? "Status"}
+          </Chip>
+        }
+      />
+      <DropdownMenuContent align="start" className="w-48" finalFocus={refocus}>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Status</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={status?.id ?? ""} onValueChange={onPick}>
+            {statuses.map((entry) => (
+              <DropdownMenuRadioItem key={entry.id} value={entry.id}>
+                <StatusIcon category={entry.category} />
+                {entry.name}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+const priorityLabel = (priority: Priority) =>
+  PRIORITIES.find((entry) => entry.value === priority)?.label;
+
+function PriorityPicker({
+  priority,
+  onPick,
+  refocus,
+}: {
+  priority: Priority;
+  onPick: (priority: Priority) => void;
+  refocus: () => false;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Chip set={priority !== "none"}>
+            <PriorityIcon priority={priority} />
+            {priority === "none" ? "Priority" : priorityLabel(priority)}
+          </Chip>
+        }
+      />
+      <DropdownMenuContent align="start" className="w-44" finalFocus={refocus}>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Priority</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={priority}
+            onValueChange={(value) => {
+              const picked = MENU_PRIORITIES.find((entry) => entry === value);
+              if (picked !== undefined) onPick(picked);
+            }}
+          >
+            {MENU_PRIORITIES.map((value) => (
+              <DropdownMenuRadioItem key={value} value={value}>
+                <PriorityIcon priority={value} />
+                {value === "none" ? "No priority" : priorityLabel(value)}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function DueChip({
+  due,
+  onPick,
+  refocus,
+}: {
+  due: string | null;
+  onPick: (due: string | null) => void;
+  refocus: () => false;
+}) {
+  const dueLabel = dueInfo(due, useToday());
+  return (
+    <DuePicker value={due} onChange={onPick} finalFocus={refocus}>
+      <Chip set={dueLabel !== null} className={cn(dueLabel?.overdue && "text-destructive")}>
+        <CalendarIcon />
+        {dueLabel ? <span className="font-mono">{dueLabel.label}</span> : "Due date"}
+      </Chip>
+    </DuePicker>
+  );
+}
+
+function ListPicker({
+  lists,
+  value,
+  onPick,
+  refocus,
+}: {
+  lists: ReadonlyArray<List>;
+  value: string | null;
+  onPick: (list: string | null) => void;
+  refocus: () => false;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Chip set={value !== null}>
+            <ListGlyph />
+            <span className="max-w-40 truncate">{listLabel(lists, value)}</span>
+          </Chip>
+        }
+      />
+      <DropdownMenuContent align="start" className="max-h-72 w-52" finalFocus={refocus}>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>List</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={value ?? ""}
+            onValueChange={(picked) => onPick(picked === "" ? null : picked)}
+          >
+            <DropdownMenuRadioItem value="">No list</DropdownMenuRadioItem>
+            {flatLists(listTree(lists)).map(({ list: entry, depth }) => (
+              <DropdownMenuRadioItem
+                key={entry.id}
+                value={entry.id}
+                style={{ paddingLeft: `${0.375 + depth * 0.875}rem` }}
+              >
+                <span className="truncate">{entry.name}</span>
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function TagsPicker({
+  tags,
+  knownTags,
+  onToggle,
+  refocus,
+}: {
+  tags: ReadonlySet<string>;
+  knownTags: ReadonlyArray<string>;
+  onToggle: (tag: string) => void;
+  refocus: () => false;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Chip set={tags.size > 0}>
+            <HashIcon />
+            {tags.size === 0 ? (
+              "Tags"
+            ) : (
+              <span className="max-w-48 truncate font-mono">{[...tags].join(" ")}</span>
+            )}
+          </Chip>
+        }
+      />
+      <DropdownMenuContent align="start" className="max-h-72 w-48" finalFocus={refocus}>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Tags</DropdownMenuLabel>
+          {knownTags.map((tag) => (
+            <DropdownMenuCheckboxItem
+              key={tag}
+              checked={tags.has(tag)}
+              className="font-mono text-xs"
+              closeOnClick={false}
+              onClick={() => onToggle(tag)}
+            >
+              #{tag}
+            </DropdownMenuCheckboxItem>
+          ))}
+          <DropdownMenuLabel className="font-normal">
+            Type <span className="font-mono">#name</span> in the title for a new one
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function MoreOptions({ refocus }: { refocus: () => false }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button variant="ghost" size="icon-xs" aria-label="More options">
+            <MoreHorizontalIcon />
+          </Button>
+        }
+      />
+      <DropdownMenuContent align="start" className="w-48" finalFocus={refocus}>
+        <DropdownMenuGroup>
+          {LATER.map(({ label, icon: Icon }) => (
+            <DropdownMenuItem key={label} disabled>
+              <Icon />
+              {label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ShortcutHints() {
+  return (
+    <span className="hidden items-center gap-1.5 font-mono text-xs text-muted-foreground sm:flex">
+      <Kbd>↵</Kbd> create
+      <span aria-hidden>·</span>
+      <Kbd>⌘↵</Kbd> create and open
+      <span aria-hidden>·</span>
+      <Kbd>esc</Kbd>
+    </span>
   );
 }

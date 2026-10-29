@@ -30,7 +30,7 @@ ids, order and folders consistent. With MCP, call `get_workspace` first. Each op
 tool and, where it has one, an `octo` command with the same inputs as flags (`--no-<flag>`
 clears a value; `octo <command> --help` lists them):
 
-- `list_workspaces`, `octo workspace list`: List the workspaces registered on this machine.
+- `list_workspaces`, `octo workspace list`: List the workspaces registered on this machine, each with its description when it has one: what the workspace is for, to pick the right one.
 - `add_workspace`, no command: Create a workspace in a folder and register it on this machine: octodo writes .octodo/config.json there with the statuses and plugins of a preset, project unless preset names another.
 - `get_workspace`, no command: Describe a workspace: its statuses (in order), lists, task counts and any files it could not read.
 - `update_workspace`, `octo workspace update`: Change a workspace's name, description (null clears it) or id key; fields left out stay as they are.

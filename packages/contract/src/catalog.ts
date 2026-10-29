@@ -119,7 +119,8 @@ export const inWorkspace = <const Errors extends ReadonlyArray<Schema.Top>>(...e
 
 export const catalog = {
   list_workspaces: {
-    description: "List the workspaces registered on this machine.",
+    description:
+      "List the workspaces registered on this machine, each with its description when it has one: what the workspace is for, to pick the right one.",
     readonly: true,
     input: Schema.Struct({}),
     success: Schema.Array(WorkspaceInfo),

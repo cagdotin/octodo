@@ -100,7 +100,13 @@ export const renderers: {
   ) => ReadonlyArray<string>;
 } = {
   list_workspaces: (all) =>
-    all.map((info) => `${info.id.padEnd(20)} ${info.key.padEnd(6)} ${info.root}`),
+    all.flatMap((info) => [
+      `${info.id.padEnd(20)} ${info.key.padEnd(6)} ${info.root}`,
+      ...(info.description ?? "")
+        .split("\n")
+        .filter((text) => text.trim() !== "")
+        .map((text) => `  ${text.trim()}`),
+    ]),
   list_tasks: (rows, label) => {
     const tasks = rows.filter((row): row is TaskSummary => !isEntryDay(row));
     const days = rows.filter(isEntryDay);

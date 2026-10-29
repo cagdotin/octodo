@@ -4,7 +4,6 @@ title: Rename and delete lists
 created: 2026-10-25T18:04:32.639Z
 order: aD
 status: backlog
-blocked_by: [OCT-52]
 ---
 
 Lists can be created and moved, but not renamed or deleted, from the app, the CLI or MCP. List kinds were dropped on 2026-10-26, so the old "expose listKinds labels" part is gone.

@@ -367,6 +367,26 @@ export const descendantCount = (tasks: ReadonlyArray<Task>, id: string) =>
   taskSubtree(tasks, id).size - 1;
 
 /** Removes a task and its subtasks at any depth, as deleting its folder does. */
+/** The tasks in list `id` or its sublists, subtasks included. */
+export const tasksInList = (tasks: ReadonlyArray<Task>, id: string) =>
+  tasks.filter((task) => task.list !== null && inSubtree(task.list, id));
+
+/** The snapshot as `delete_list` leaves it: the list and its sublists gone, their tasks unlisted or deleted. */
+export const applyListDelete = (
+  snapshot: WorkspaceSnapshot,
+  id: string,
+  deleteTasks: boolean,
+): WorkspaceSnapshot => {
+  const inList = new Set(tasksInList(snapshot.tasks, id).map((task) => task.id));
+  return {
+    ...snapshot,
+    lists: snapshot.lists.filter((list) => !inSubtree(list.id, id)),
+    tasks: deleteTasks
+      ? snapshot.tasks.filter((task) => !inList.has(task.id))
+      : snapshot.tasks.map((task) => (inList.has(task.id) ? { ...task, list: null } : task)),
+  };
+};
+
 export const withoutSubtree = (tasks: ReadonlyArray<Task>, id: string) => {
   const ids = taskSubtree(tasks, id);
   return tasks.filter((task) => !ids.has(task.id));

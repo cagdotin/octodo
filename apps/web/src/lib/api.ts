@@ -17,7 +17,13 @@ import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query
 import { toastManager } from "@octodo/ui/components/toast";
 import { attachmentName, attachmentPath, type Attachments } from "@/lib/attachments";
 import { completesInPlace } from "@/components/task-kind";
-import { applyListMove, applyMove, withBlockedBy, withoutSubtree } from "@/lib/tasks";
+import {
+  applyListDelete,
+  applyListMove,
+  applyMove,
+  withBlockedBy,
+  withoutSubtree,
+} from "@/lib/tasks";
 
 export const api = createClient(typeof window === "undefined" ? "" : window.location.origin);
 
@@ -190,6 +196,25 @@ export const useMoveList = (ws: string) =>
         payload: { id, ...move },
       }),
     (snapshot, { id, move }) => applyListMove(snapshot, id, move),
+  );
+
+export const useRenameList = (ws: string) =>
+  useSnapshotMutation(ws, ({ id, name }: { id: string; name: string }) =>
+    api.request("POST /api/workspaces/:workspace/lists/rename", {
+      params: { workspace: ws },
+      payload: { id, name },
+    }),
+  );
+
+export const useDeleteList = (ws: string) =>
+  useSnapshotMutation(
+    ws,
+    ({ id, deleteTasks }: { id: string; deleteTasks: boolean }) =>
+      api.request("POST /api/workspaces/:workspace/lists/delete", {
+        params: { workspace: ws },
+        payload: { id, delete_tasks: deleteTasks },
+      }),
+    (snapshot, { id, deleteTasks }) => applyListDelete(snapshot, id, deleteTasks),
   );
 
 /** Toasts the fixes that failed; the snapshot refetch shows the rest. */

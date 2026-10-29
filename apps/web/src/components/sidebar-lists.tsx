@@ -11,8 +11,17 @@ import { inSubtree, listMoveError, movedListId } from "@octodo/contract/rules";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState, type ReactNode, type ReactElement } from "react";
 import { dragData, dropData, type DragData, type DropData } from "@/components/drag-and-drop";
+import { ListDialogs, type ListEdit } from "@/components/list-dialogs";
 import { ListGlyph } from "@/components/task-bits";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@octodo/ui/components/menu";
+import { MoreHorizontalIcon, PencilIcon, TrashIcon } from "lucide-react";
+import {
+  SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -110,6 +119,7 @@ export function SidebarLists({
   const moveTask = useMoveTask(ws);
   const navigate = useNavigate();
   const [placement, setPlacement] = useState<Placement | null>(null);
+  const [edit, setEdit] = useState<ListEdit>(null);
 
   const listOver = (over: Over | null) => {
     const list = dropData(over)?.list;
@@ -178,6 +188,7 @@ export function SidebarLists({
       active={activeList === node.list.id}
       placement={placement?.over === node.list.id ? placement.zone : null}
       onNavigate={onNavigate}
+      onEdit={setEdit}
     >
       {node.children.length > 0 ? (
         <SidebarMenuSub>{node.children.map((child) => render(child, depth + 1))}</SidebarMenuSub>
@@ -185,7 +196,17 @@ export function SidebarLists({
     </ListRow>
   );
 
-  return <>{listTree(snapshot.lists).map((node) => render(node, 0))}</>;
+  return (
+    <>
+      {listTree(snapshot.lists).map((node) => render(node, 0))}
+      <ListDialogs
+        snapshot={snapshot}
+        edit={edit}
+        activeList={activeList}
+        onClose={() => setEdit(null)}
+      />
+    </>
+  );
 }
 
 function ListRow({
@@ -196,6 +217,7 @@ function ListRow({
   active,
   placement,
   onNavigate,
+  onEdit,
   children,
 }: {
   workspace: string;
@@ -205,6 +227,7 @@ function ListRow({
   active: boolean;
   placement: Placement["zone"] | null;
   onNavigate: () => void;
+  onEdit: (edit: ListEdit) => void;
   children: ReactNode;
 }) {
   const drag = useDraggable({
@@ -261,29 +284,73 @@ function ListRow({
       />
     ) : null;
 
+  const actions = (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <SidebarMenuAction
+            aria-label={`Actions for ${list.name}`}
+            className="top-1! text-sidebar-foreground/70 group-focus-within/list-row:opacity-100 group-hover/list-row:opacity-100 data-popup-open:opacity-100 md:opacity-0"
+          />
+        }
+      >
+        <MoreHorizontalIcon />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" side="right">
+        <DropdownMenuItem onClick={() => onEdit({ kind: "rename", list })}>
+          <PencilIcon />
+          Rename
+        </DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" onClick={() => onEdit({ kind: "delete", list })}>
+          <TrashIcon />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+  // Sublists sit inside their parent's item, so the row gets its own hover group. Its count gives
+  // way to the actions button, which phones without hover always show.
+  const yields =
+    "max-md:hidden group-focus-within/list-row:opacity-0 group-hover/list-row:opacity-0 group-has-data-popup-open/list-row:opacity-0";
+  const row = (button: ReactNode, count: ReactNode) => (
+    <div className="group/list-row relative">
+      {button}
+      {count}
+      {actions}
+      {line}
+    </div>
+  );
+
   if (depth === 0) {
     return (
       <SidebarMenuItem>
-        <SidebarMenuButton isActive={active} className={ITEM} render={link as ReactElement} />
-        {count > 0 && <SidebarMenuBadge className={COUNT}>{count}</SidebarMenuBadge>}
-        {line}
+        {row(
+          <SidebarMenuButton isActive={active} className={ITEM} render={link as ReactElement} />,
+          count > 0 && <SidebarMenuBadge className={cn(COUNT, yields)}>{count}</SidebarMenuBadge>,
+        )}
         {children}
       </SidebarMenuItem>
     );
   }
   return (
     <SidebarMenuSubItem>
-      <SidebarMenuSubButton
-        isActive={active}
-        className="h-7 pe-9 text-[13px] text-sidebar-foreground/90 [&>span:last-child]:truncate [&>svg]:text-sidebar-foreground/70"
-        render={link as ReactElement}
-      />
-      {count > 0 && (
-        <span className="pointer-events-none absolute top-1.5 right-2 text-xs text-sidebar-foreground/50 tabular-nums">
-          {count}
-        </span>
+      {row(
+        <SidebarMenuSubButton
+          isActive={active}
+          className="h-7 pe-9 text-[13px] text-sidebar-foreground/90 [&>span:last-child]:truncate [&>svg]:text-sidebar-foreground/70"
+          render={link as ReactElement}
+        />,
+        count > 0 && (
+          <span
+            className={cn(
+              "pointer-events-none absolute top-1.5 right-2 text-xs text-sidebar-foreground/50 tabular-nums",
+              yields,
+            )}
+          >
+            {count}
+          </span>
+        ),
       )}
-      {line}
       {children}
     </SidebarMenuSubItem>
   );

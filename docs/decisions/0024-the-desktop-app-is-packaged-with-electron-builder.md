@@ -1,6 +1,6 @@
 # 0024. The desktop app is packaged with electron-builder, and its server child runs from app.asar
 
-- Status: accepted
+- Status: accepted, amended by 0029
 - Date: 2026-10-28
 
 ## Context
@@ -58,6 +58,8 @@ The configuration is the `build` field of `apps/desktop/package.json`.
 
 - The app the build makes is unsigned for distribution: Gatekeeper blocks it on another Mac until
   it is signed with a Developer ID and notarized, which needs a certificate and its own task.
+  [0029](0029-the-desktop-app-updates-itself-from-github-releases.md) publishes these builds anyway
+  and updates them in place; a first download is allowed once by hand.
 - The first `pnpm package` downloads Electron (unless cached), and for the dmg, 7-Zip and
   dmgbuild; later builds run from electron-builder's cache.
 - Windows and Linux targets are not configured.

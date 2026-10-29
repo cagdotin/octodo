@@ -40,6 +40,25 @@ blocked_by: [HM-9]
 Three quotes so far. Notes in markdown.
 ```
 
+## Install
+
+Download the `.dmg` of the [latest release](https://github.com/cagdotin/tasksmd/releases/latest)
+(Apple Silicon Macs) and drag octodo to Applications. The app is not notarized yet, so the first
+time macOS says it cannot verify it: open System Settings > Privacy & Security and click Open
+Anyway. After that octodo updates itself: when a new version is downloaded, an Update button
+appears at the bottom of the sidebar.
+
+Releases marked "Pre-release" are nightlies, built from every change to `master`. A nightly
+updates to newer nightlies and to stable releases; a stable release updates only to stable ones.
+
+The app ships the `octo` CLI. Put it on your PATH, and it updates along with the app:
+
+```sh
+ln -s /Applications/octodo.app/Contents/Resources/bin/octo ~/.local/bin/octo
+octo upgrade                    # update the app (and this octo) now
+octo upgrade --channel nightly  # move to the nightly channel
+```
+
 ## Use it
 
 ```sh
@@ -53,7 +72,7 @@ octo skills export                   # teach this project's agents about octodo
 octo serve                           # web app + API + MCP on http://127.0.0.1:4520
 ```
 
-Run `bin/octo` from the repository, or link it onto your PATH (`ln -s "$PWD/bin/octo" ~/.local/bin/`).
+From a checkout, run `bin/octo`, or link it onto your PATH (`ln -s "$PWD/bin/octo" ~/.local/bin/`).
 
 ### Agents (MCP)
 

@@ -1,0 +1,56 @@
+# Every push to master publishes a nightly prerelease and points the nightly feed at it
+# (decision 0029). A newer push cancels a build still running, so only the newest commit publishes.
+name: Nightly
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  nightly:
+    runs-on: macos-15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: jdx/mise-action@v2
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - id: version
+        run: echo "version=$(node scripts/release.ts nightly-version)" >> "$GITHUB_OUTPUT"
+      - run: pnpm build
+      - name: Package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: >
+          pnpm --filter @octodo/desktop exec electron-builder --mac zip dmg --publish never
+          -c.extraMetadata.version="$VERSION"
+      # A draft first, published once its files are up, so no app sees a release without its zip.
+      - name: Publish
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        working-directory: apps/desktop/release
+        run: |
+          zip="octodo-$VERSION-arm64-mac.zip"
+          gh release create "v$VERSION" "$zip" "octodo-$VERSION-arm64.dmg" --draft --prerelease \
+            --latest=false --target "$GITHUB_SHA" --title "Nightly $VERSION" \
+            --notes "Built from $GITHUB_SHA. Nightlies can be broken; stable releases are the ones not marked as prereleases."
+          gh release edit "v$VERSION" --draft=false
+          node ../../../scripts/release.ts feed "$zip" "$VERSION" \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/$zip" > nightly.json
+          gh release view nightly > /dev/null 2>&1 || gh release create nightly --prerelease \
+            --latest=false --title "Nightly feed" \
+            --notes "nightly.json names the newest nightly. Installed apps on the nightly channel read it."
+          gh release upload nightly nightly.json --clobber
+      - run: node scripts/release.ts prune

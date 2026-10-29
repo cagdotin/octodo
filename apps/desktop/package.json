@@ -12,6 +12,7 @@
   },
   "devDependencies": {
     "@effect/platform-node": "4.0.6",
+    "@octodo/cli": "workspace:*",
     "@octodo/client": "workspace:*",
     "@octodo/engine": "workspace:*",
     "@octodo/server": "workspace:*",
@@ -31,6 +32,10 @@
       {
         "from": "../web/dist",
         "to": "web"
+      },
+      {
+        "from": "bin",
+        "to": "bin"
       }
     ],
     "directories": {

@@ -17,7 +17,10 @@ import {
   type FixRequest,
   type FixResult,
   type List,
+  type DeletedList,
+  type DeleteListInput,
   type MoveListInput,
+  type RenameListInput,
   type MoveTaskInput,
   type ReorderStatusesInput,
   type StatusDefinition,
@@ -29,7 +32,7 @@ import {
 import { DEFAULT_PRESET, PRESETS, type PresetId } from "@octodo/contract/presets";
 import { deriveKey, humanize } from "@octodo/contract/rules";
 import { fixAll, fixDiagnostic } from "./health/operations.ts";
-import { createList, moveList } from "./lists/operations.ts";
+import { createList, deleteList, moveList, renameList } from "./lists/operations.ts";
 import { makeState, storageError } from "./state.ts";
 import { setPluginEnabled } from "./settings/plugins.ts";
 import { reorderStatuses } from "./statuses/operations.ts";
@@ -138,6 +141,14 @@ export interface Workspace {
     id: string,
     input: MoveListInput,
   ) => Effect.Effect<List, InvalidRequest | StorageError | WorkspaceBusy>;
+  readonly renameList: (
+    id: string,
+    input: RenameListInput,
+  ) => Effect.Effect<List, InvalidRequest | StorageError | WorkspaceBusy>;
+  readonly deleteList: (
+    id: string,
+    input: DeleteListInput,
+  ) => Effect.Effect<DeletedList, InvalidRequest | StorageError | WorkspaceBusy>;
   readonly reorderStatuses: (
     input: ReorderStatusesInput,
   ) => Effect.Effect<
@@ -260,6 +271,8 @@ export const makeWorkspace = Effect.fnUntraced(function* (
     deleteTask: (taskId) => deleteTask(state, taskId),
     createList: (input) => createList(state, input),
     moveList: (listId, input) => moveList(state, listId, input),
+    renameList: (listId, input) => renameList(state, listId, input),
+    deleteList: (listId, input) => deleteList(state, listId, input),
     reorderStatuses: (input) => reorderStatuses(state, input),
     setPlugin: (plugin, enabled) => setPluginEnabled(state, plugin, enabled),
     attachment: (taskId, relativePath) => getAttachment(state, taskId, relativePath),

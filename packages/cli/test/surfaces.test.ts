@@ -90,6 +90,28 @@ const ROWS: ReadonlyArray<Row> = [
     input: { id: "garden/seeds", parent: null },
     argv: ["lists", "move", "garden/seeds", "--no-parent", "--json"],
   },
+  { name: "create_list", input: { name: "Shed" }, argv: ["lists", "create", "Shed", "--json"] },
+  {
+    name: "create_task",
+    input: { title: "Rake", list: "shed" },
+    argv: ["create", "Rake", "-l", "shed", "--json"],
+  },
+  {
+    name: "rename_list",
+    input: { id: "shed", name: "Tool Shed" },
+    argv: ["lists", "rename", "shed", "Tool Shed", "--json"],
+  },
+  { name: "rename_list", input: { id: "tool-shed", name: "Garden" } },
+  {
+    name: "delete_list",
+    input: { id: "tool-shed" },
+    argv: ["lists", "delete", "tool-shed", "--json"],
+  },
+  {
+    name: "delete_list",
+    input: { id: "seeds", delete_tasks: true },
+    argv: ["lists", "delete", "seeds", "--delete-tasks", "--json"],
+  },
   { name: "list_tasks", input: {}, argv: ["list", "--json"] },
   {
     name: "list_tasks",

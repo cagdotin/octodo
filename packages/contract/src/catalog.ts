@@ -8,6 +8,8 @@ import {
   AttachmentTooLarge,
   CreateListInput,
   CreateTaskInput,
+  DeletedList,
+  DeleteListInput,
   Diagnostic,
   DueDate,
   EntryDay,
@@ -18,6 +20,7 @@ import {
   MoveListInput,
   MoveTaskInput,
   PluginInfo,
+  RenameListInput,
   StorageError,
   WorkspaceBusy,
   Task,
@@ -105,6 +108,8 @@ const pluginsOfWorkspace = Schema.Array(Schema.String).annotate({
 });
 
 const listId = "List id, e.g. groceries or garden/seeds";
+
+const ListIdField = Schema.String.annotate({ description: listId, ...cli({ positional: true }) });
 const parentTask = "Parent task id, making this a subtask";
 
 /** The errors of an operation in a workspace: finding the workspace and reading it can fail too. */
@@ -401,10 +406,7 @@ export const catalog = {
     destructive: false,
     input: Schema.Struct({
       workspace: WorkspaceField,
-      id: Schema.String.annotate({
-        description: "List id, e.g. garden/seeds",
-        ...cli({ positional: true }),
-      }),
+      id: ListIdField,
       ...MoveListInput.fields,
       parent: MoveListInput.fields.parent.annotate({
         description: "List to nest it under",
@@ -413,11 +415,56 @@ export const catalog = {
     }),
     success: List,
     error: inWorkspace(InvalidRequest),
-    // List ids contain slashes, so the id travels in the body rather than the path.
+    // List ids contain slashes, so list operations take the id in the body rather than the path.
     http: { method: "POST", path: "/workspaces/:workspace/lists/move" },
     cli: {
       command: ["lists", "move"],
       description: "Reorder a list or move it under another list",
+    },
+  },
+  rename_list: {
+    description:
+      "Rename a list. Its folder takes the new name's slug, which changes its id when the slug changes.",
+    readonly: false,
+    destructive: false,
+    idempotent: true,
+    input: Schema.Struct({
+      workspace: WorkspaceField,
+      id: ListIdField,
+      name: RenameListInput.fields.name.annotate({
+        description: "The new name",
+        ...cli({ positional: true }),
+      }),
+    }),
+    success: List,
+    error: inWorkspace(InvalidRequest),
+    http: { method: "POST", path: "/workspaces/:workspace/lists/rename" },
+    cli: { command: ["lists", "rename"], description: "Rename a list and its folder" },
+  },
+  delete_list: {
+    description:
+      "Delete a list and its sublists. Their tasks, whatever their status, move out of any list with their subtasks; delete_tasks deletes them too. Refused while a file in the list is not a task or a list (list_diagnostics names it), so nothing unread is lost.",
+    readonly: false,
+    destructive: true,
+    input: Schema.Struct({
+      workspace: WorkspaceField,
+      id: ListIdField,
+      delete_tasks: DeleteListInput.fields.delete_tasks.annotate({
+        description: "Delete the list's tasks and their subtasks instead of moving them out",
+      }),
+    }),
+    success: DeletedList,
+    error: inWorkspace(InvalidRequest),
+    http: { method: "POST", path: "/workspaces/:workspace/lists/delete" },
+    cli: {
+      command: ["lists", "delete"],
+      description: "Delete a list; its tasks move out of any list",
+      examples: [
+        {
+          command: "octo lists delete garden --delete-tasks",
+          description: "Delete the list garden with its tasks",
+        },
+      ],
     },
   },
   list_diagnostics: {

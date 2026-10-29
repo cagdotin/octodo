@@ -33,3 +33,4 @@ supersedes the old one and mark the old one's status.
 | [0025](0025-a-kind-gives-its-due-day-and-list-tasks-filters-by-it.md)                | A kind gives its due day, and Today, Next 7 days and `list_tasks` filter by it                           | accepted, amended by 0027 |
 | [0026](0026-a-server-claims-its-home-with-a-lock.md)                                 | A server claims its home with a lock, so one runs per home                                               | accepted                  |
 | [0027](0027-plugins-add-sections-tasks-is-the-built-in-one.md)                       | Plugins add sections; tasks is the built-in one                                                          | accepted                  |
+| [0028](0028-deleting-a-list-moves-its-tasks-out-renaming-renames-its-folder.md)      | Deleting a list moves its tasks out of any list, and renaming a list renames its folder                  | accepted                  |

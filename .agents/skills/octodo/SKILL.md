@@ -42,6 +42,8 @@ clears a value; `octo <command> --help` lists them):
 - `delete_task`, `octo delete <id>`: Delete a task's file permanently.
 - `create_list`, `octo lists create <name>`: Create a list, last among its siblings.
 - `move_list`, `octo lists move <id>`: Reorder a list among its siblings (before/after another list id) and/or move it under another parent (null for the top level).
+- `rename_list`, `octo lists rename <id> <name>`: Rename a list.
+- `delete_list`, `octo lists delete <id>`: Delete a list and its sublists.
 - `list_diagnostics`, no command: List the problems with files in the workspace: each has a path, a kind, the frontmatter field at fault, a message saying what to do, and a fix when octodo can repair it.
 - `fix_diagnostic`, no command: Apply the fix of one diagnostic, given its path, kind and fix action from list_diagnostics.
 - `list_plugins`, `octo plugins list`: List the plugins octodo has, each a kind of task a workspace can enable: get_workspace says which ones it enables.
@@ -73,6 +75,7 @@ octo update HM-4 --blocked-by HM-2,HM-3                                # HM-4 wa
 octo update HM-4 --blocked-by ''                                       # HM-4 waits for nothing
 octo move HM-42 in-progress                                            # Change its status
 octo move HM-43 --parent HM-42                                         # Make it a subtask; --no-parent lifts it out
+octo lists delete garden --delete-tasks                                # Delete the list garden with its tasks
 octo plugins enable recurring                                          # Let tasks repeat
 octo recurring create "Water the plants" --repeat "every 3 days"       # A chore that comes back three days after each time
 octo recurring log HM-4 --at 2026-10-25                                # It was done on the 25th

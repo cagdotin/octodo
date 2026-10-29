@@ -441,6 +441,27 @@ export const MoveListInput = Schema.Struct({
 });
 export type MoveListInput = typeof MoveListInput.Type;
 
+export const RenameListInput = Schema.Struct({ name: Schema.NonEmptyString });
+export type RenameListInput = typeof RenameListInput.Type;
+
+/**
+ * Deletes a list with its sublists. Their tasks, whatever their status, go out of any list with
+ * their subtasks, unless `delete_tasks` deletes them too.
+ */
+export const DeleteListInput = Schema.Struct({
+  delete_tasks: Schema.optionalKey(Schema.Boolean),
+});
+export type DeleteListInput = typeof DeleteListInput.Type;
+
+export const DeletedList = Schema.Struct({
+  deleted: Schema.String,
+  /** The tasks now in no list; their subtasks went with them. */
+  unlisted: Schema.Array(Schema.String),
+  /** Every task deleted, subtasks included. */
+  deletedTasks: Schema.Array(Schema.String),
+});
+export type DeletedList = typeof DeletedList.Type;
+
 /**
  * The new order of every status, by id. Categories keep their fixed order whatever is sent, so
  * only the order within a category takes effect.

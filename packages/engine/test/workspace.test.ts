@@ -846,6 +846,102 @@ describe("workspace", () => {
     ]);
   });
 
+  it("renames a list in list.md and its folder, which changes its id and its tasks' list", async () => {
+    const root = fresh();
+    const result = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        yield* ws.createList({ name: "Garden" });
+        yield* ws.createList({ name: "Seeds", parent: "garden" });
+        yield* ws.createList({ name: "Bulbs", parent: "garden" });
+        const task = yield* ws.createTask({ title: "Sow", list: "garden/seeds" });
+        const renamed = yield* ws.renameList("garden", { name: "Yard" });
+        const again = yield* ws.renameList("yard", { name: "Yard" });
+        const taken = yield* Effect.flip(ws.renameList("yard/seeds", { name: "Bulbs" }));
+        return { renamed, again, taken, task: yield* ws.getTask(task.id) };
+      }),
+    );
+    expect(result.renamed).toEqual({ id: "yard", name: "Yard", parent: null, folder: "yard" });
+    expect(result.again).toEqual(result.renamed);
+    expect(result.taken).toMatchObject({ message: 'There is already a list "yard/bulbs"' });
+    expect(result.task).toMatchObject({ list: "yard/seeds" });
+    expect(read(root, "yard/list.md")).toMatch(/^---\nname: Yard\norder: \S+\n---\n$/);
+  });
+
+  it("deletes a list and its sublists, moving their tasks of every status out of any list", async () => {
+    const root = fresh();
+    const result = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        yield* ws.createList({ name: "Garden" });
+        yield* ws.createList({ name: "Seeds", parent: "garden" });
+        const loose = yield* ws.createTask({ title: "Loose" });
+        const open_ = yield* ws.createTask({ title: "Weed", list: "garden" });
+        const done = yield* ws.createTask({ title: "Plant", list: "garden", status: "done" });
+        const sub = yield* ws.createTask({ title: "Water", parent: open_.id });
+        const seed = yield* ws.createTask({ title: "Sow", list: "garden/seeds" });
+        const deleted = yield* ws.deleteList("garden", {});
+        const snapshot = yield* ws.snapshot;
+        return { deleted, snapshot, ids: { loose, open_, done, sub, seed } };
+      }),
+    );
+    const { ids } = result;
+    expect(result.deleted).toEqual({
+      deleted: "garden",
+      unlisted: [ids.open_.id, ids.done.id, ids.seed.id],
+      deletedTasks: [],
+    });
+    expect(result.snapshot.lists).toEqual([]);
+    const byId = new Map(result.snapshot.tasks.map((task) => [task.id, task]));
+    expect(byId.get(ids.done.id)).toMatchObject({ list: null, parent: null, status: "done" });
+    expect(byId.get(ids.sub.id)).toMatchObject({ list: null, parent: ids.open_.id });
+    expect(
+      result.snapshot.tasks
+        .filter((task) => task.parent === null)
+        .toSorted((a, b) => (a.order < b.order ? -1 : 1))
+        .map((task) => task.id),
+    ).toEqual([ids.loose.id, ids.open_.id, ids.done.id, ids.seed.id]);
+    expect(existsSync(at(root, "garden"))).toBe(false);
+  });
+
+  it("deletes a list with its tasks when asked, taking them out of other tasks' links", async () => {
+    const root = fresh();
+    const result = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        yield* ws.createList({ name: "Garden" });
+        const weed = yield* ws.createTask({ title: "Weed", list: "garden" });
+        const sub = yield* ws.createTask({ title: "Water", parent: weed.id });
+        const other = yield* ws.createTask({ title: "Mow" });
+        yield* ws.updateTask(other.id, { blocked_by: [sub.id] });
+        const deleted = yield* ws.deleteList("garden", { delete_tasks: true });
+        return { deleted, ids: [weed.id, sub.id], other: yield* ws.getTask(other.id) };
+      }),
+    );
+    expect(result.deleted).toEqual({ deleted: "garden", unlisted: [], deletedTasks: result.ids });
+    expect(result.other.blockedBy).toEqual([]);
+    expect(files(root)).toEqual([expect.stringMatching(/^HM-3-mow\/task\.md$/)]);
+  });
+
+  it("refuses to delete a list holding a file that is not a task or a list, and keeps it", async () => {
+    const root = fresh();
+    const outcome = await run(
+      Effect.gen(function* () {
+        const ws = yield* open(root);
+        yield* ws.createList({ name: "Garden" });
+        yield* ws.createTask({ title: "Weed", list: "garden" });
+        write(root, "garden/notes.md", "Plant after the frost.\n");
+        return yield* Effect.flip(ws.deleteList("garden", { delete_tasks: true }));
+      }),
+    );
+    expect(outcome).toMatchObject({
+      _tag: "InvalidRequest",
+      message: expect.stringContaining(".octodo/tasks/garden/notes.md"),
+    });
+    expect(read(root, "garden/notes.md")).toBe("Plant after the frost.\n");
+    expect(files(root)).toHaveLength(3);
+  });
+
   it("rejects unknown statuses, lists and parents", async () => {
     const root = fresh();
     const errors = await run(

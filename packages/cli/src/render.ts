@@ -149,6 +149,12 @@ export const renderers: {
   delete_task: ({ deleted }) => [`Deleted ${deleted}`],
   create_list: (list) => [`Created list ${list.id} in ${list.folder}`],
   move_list: (list) => [`Moved list ${list.id} to ${list.folder}`],
+  rename_list: (list) => [`Renamed list ${list.id} to ${list.name}`],
+  delete_list: ({ deleted, unlisted, deletedTasks }) => [
+    `Deleted list ${deleted}`,
+    ...(unlisted.length > 0 ? [`Moved out of any list: ${unlisted.join(", ")}`] : []),
+    ...(deletedTasks.length > 0 ? [`Deleted tasks: ${deletedTasks.join(", ")}`] : []),
+  ],
   list_plugins: (plugins) =>
     plugins.map((plugin) => `${plugin.id.padEnd(14)} ${plugin.name}: ${plugin.description}`),
   enable_plugin: enabledPlugins,

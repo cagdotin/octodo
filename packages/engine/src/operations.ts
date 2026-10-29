@@ -165,6 +165,8 @@ export const handlers: { readonly [K in OperationName]: Handler<K> } = {
   delete_task: (ws, { id }) => Effect.as(ws.deleteTask(id), { deleted: id }),
   create_list: (ws, input) => ws.createList(input),
   move_list: (ws, { id, ...input }) => ws.moveList(id, input),
+  rename_list: (ws, { id, ...input }) => ws.renameList(id, input),
+  delete_list: (ws, { id, ...input }) => ws.deleteList(id, input),
   list_diagnostics: (ws) => Effect.map(ws.snapshot, (snapshot) => snapshot.diagnostics),
   fix_diagnostic: (ws, request) => ws.fixDiagnostic(request),
   list_plugins: () =>

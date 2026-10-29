@@ -64,7 +64,10 @@ instead of keeping the code because it exists.
   in a task folder is an attachment of that task (`images/plan.png`).
 - A folder with `list.md` (`name`, `order`; the body describes the list) is a list, nested up to
   three levels. `.octodo/tasks/` is the root list. A list id is its folder names joined by `/`
-  (`garden/seeds`), so moving a list to another parent changes its id.
+  (`garden/seeds`), so moving a list to another parent changes its id. Renaming a list renames its
+  folder to the name's slug; deleting one takes its sublists with it and moves their tasks to the
+  root list, or deletes them when asked
+  ([0028](docs/decisions/0028-deleting-a-list-moves-its-tasks-out-renaming-renames-its-folder.md)).
 - Folder names carry no meaning for the scanner; they are for people: `<id>-<slug>` for a task, the
   slug for a list. Anything else (a loose `.md`, a folder with neither marker or both, a symlink,
   which is never followed) is a diagnostic. A loose `.md` without frontmatter is a note: reported,

@@ -173,12 +173,11 @@
   --sync-live: #3f9a58;
   --sync-pending: #c08a2a;
   --card-shadow: 0 1px 2px rgb(34 33 31 / 4%);
-  --glass-blur: blur(18px) saturate(1.3);
   --background: #f7f6f3;
   --foreground: #22211f;
   --card: #fbfaf8;
   --card-foreground: #22211f;
-  --popover: rgb(251 250 248 / 80%);
+  --popover: #fbfaf8;
   --popover-foreground: #22211f;
   --primary: #22211f;
   --primary-foreground: #f8f6f2;
@@ -237,12 +236,11 @@
   --sync-live: #7cc58f;
   --sync-pending: #e0b25a;
   --card-shadow: 0 1px 2px rgb(0 0 0 / 20%);
-  --glass-blur: blur(18px) saturate(1.2);
   --background: #1b1b1a;
   --foreground: #f0ece5;
   --card: #1f1f1e;
   --card-foreground: #f0ece5;
-  --popover: rgb(36 36 34 / 80%);
+  --popover: #242422;
   --popover-foreground: #f0ece5;
   --primary: oklch(0.9 0.19 124);
   --primary-foreground: oklch(0.27 0.06 130);
@@ -302,17 +300,6 @@
   body {
     @apply text-sm;
   }
-  /*
-   * Glass: surfaces that float over the page are translucent and blur what is under them. Modals
-   * (dialogs, sheets, the command palette) sit on a dimmed backdrop, so they are opaque cards.
-   */
-  [data-slot="popover-popup"],
-  [data-slot="menu-popup"],
-  [data-slot="select-popup"],
-  [data-slot="tooltip-popup"] {
-    -webkit-backdrop-filter: var(--glass-blur);
-    backdrop-filter: var(--glass-blur);
-  }
 }
 
 /* POC: coss ui's stock theme, swapped in by <html data-kit="coss"> (Shift+K). */
@@ -359,7 +346,6 @@
   --sidebar-primary-foreground: var(--color-neutral-50);
   --sidebar-ring: var(--color-neutral-400);
   --card-shadow: none;
-  --glass-blur: none;
   --band: --alpha(var(--color-black) / 2%);
   --row-hover: --alpha(var(--color-black) / 3%);
   --chrome: var(--color-neutral-100);
@@ -408,7 +394,6 @@
   --sidebar-primary-foreground: var(--color-neutral-800);
   --sidebar-ring: var(--color-neutral-400);
   --card-shadow: none;
-  --glass-blur: none;
   --band: --alpha(var(--color-white) / 2%);
   --row-hover: --alpha(var(--color-white) / 3%);
   --chrome: var(--color-neutral-950);

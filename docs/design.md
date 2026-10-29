@@ -34,8 +34,8 @@ that use them ([0017](decisions/0017-the-ui-kit-is-a-package-plugins-type-their-
 - Group headers are plain rows with no fill band and no rule. They toggle on the whole row and stack
   with no gaps, like task rows.
 - Status marks are monochrome. The active row has an inset ink bar.
-- Surfaces that float over the page (menus, popovers, selects, tooltips) are translucent with a
-  backdrop blur. Modals sit on a dimmed backdrop and are opaque cards.
+- Every surface is opaque: menus, popovers, selects, tooltips and modals never show what is behind
+  them, so stacked menus stay readable.
 - A new list or sublist is named in a dialog; renaming one happens in its sidebar row.
 - List icons sit in the same column as the views above them; a sublist steps in 16px, with a
   hairline guide per level, and ends at the same edge as its parent. A list with sublists shows an

@@ -302,14 +302,14 @@
   body {
     @apply text-sm;
   }
-  /* Glass: floating surfaces are translucent and blur what is under them. */
+  /*
+   * Glass: surfaces that float over the page are translucent and blur what is under them. Modals
+   * (dialogs, sheets, the command palette) sit on a dimmed backdrop, so they are opaque cards.
+   */
   [data-slot="popover-popup"],
   [data-slot="menu-popup"],
   [data-slot="select-popup"],
-  [data-slot="tooltip-popup"],
-  [data-slot="dialog-popup"],
-  [data-slot="command-dialog-popup"],
-  [data-slot="sheet-popup"] {
+  [data-slot="tooltip-popup"] {
     -webkit-backdrop-filter: var(--glass-blur);
     backdrop-filter: var(--glass-blur);
   }

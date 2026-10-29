@@ -18,6 +18,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogPanel,
   DialogTitle,
   DialogTrigger,
 } from "@octodo/ui/components/dialog";
@@ -136,7 +137,7 @@ export function AddWorkspaceDialog({ trigger, open, onOpenChange }: Props) {
               there, and opens the one that is already there.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-5">
+          <DialogPanel className="flex flex-col gap-5">
             <Field data-invalid={error !== null || undefined}>
               <FieldLabel htmlFor="ws-root">Folder</FieldLabel>
               <InputGroup>
@@ -229,7 +230,7 @@ export function AddWorkspaceDialog({ trigger, open, onOpenChange }: Props) {
                 </RadioGroup>
               </Fieldset>
             )}
-          </div>
+          </DialogPanel>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel

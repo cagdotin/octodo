@@ -7,10 +7,10 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogPanel,
   DialogTitle,
 } from "@octodo/ui/components/dialog";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@octodo/ui/components/empty";
-import { ScrollArea } from "@octodo/ui/components/scroll-area";
 import { Spinner } from "@octodo/ui/components/spinner";
 import { useFixAllDiagnostics, useFixDiagnostic } from "@/lib/api";
 
@@ -47,18 +47,18 @@ export function DiagnosticsDialog({
             other problem says what to change by hand. This updates live.
           </DialogDescription>
         </DialogHeader>
-        {diagnostics.length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <CircleCheckIcon />
-              </EmptyMedia>
-              <EmptyTitle>All files look good</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <ScrollArea className="max-h-96">
-            <ul className="flex flex-col divide-y pr-3">
+        <DialogPanel>
+          {diagnostics.length === 0 ? (
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <CircleCheckIcon />
+                </EmptyMedia>
+                <EmptyTitle>All files look good</EmptyTitle>
+              </EmptyHeader>
+            </Empty>
+          ) : (
+            <ul className="flex flex-col divide-y">
               {fixableFirst.map((diagnostic, index) => (
                 <li
                   key={`${diagnostic.path}-${diagnostic.kind}-${diagnostic.field}-${index}`}
@@ -88,8 +88,8 @@ export function DiagnosticsDialog({
                 </li>
               ))}
             </ul>
-          </ScrollArea>
-        )}
+          )}
+        </DialogPanel>
         {fixable > 1 && (
           <DialogFooter>
             <Button disabled={busy} onClick={() => fixAll.mutate(undefined)}>

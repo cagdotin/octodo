@@ -3,6 +3,7 @@ import { Link, type LinkProps, useMatchRoute } from "@tanstack/react-router";
 import { type LucideIcon, SettingsIcon, SquareCheckBigIcon } from "lucide-react";
 import { WorkspaceSwitcher } from "@/components/app-sidebar";
 import { enabledSections } from "@/components/section";
+import { UpdateButton } from "@/components/update-button";
 import { Button } from "@octodo/ui/components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@octodo/ui/components/tooltip";
 import { snapshotQuery } from "@/lib/api";
@@ -13,7 +14,7 @@ const RAIL_BUTTON =
 /**
  * The app's outermost column, as in ChatGPT's and TickTick's desktop apps: the workspace switcher
  * on top, then the sections, Tasks first and then each one the workspace enables (decision 0027),
- * the workspace's settings at the bottom. Wider screens only; a phone reaches the same places through the sidebar sheet.
+ * the workspace's settings at the bottom, with the desktop app's update above them once one is ready. Wider screens only; a phone reaches the same places through the sidebar sheet.
  */
 export function AppRail({ workspace }: { workspace: string }) {
   const matchRoute = useMatchRoute();
@@ -47,7 +48,8 @@ export function AppRail({ workspace }: { workspace: string }) {
           active={inSection(id)}
         />
       ))}
-      <div className="mt-auto">
+      <div className="mt-auto flex flex-col items-center gap-2">
+        <UpdateButton />
         <RailLink
           label="Settings"
           icon={SettingsIcon}

@@ -35,9 +35,10 @@ under `~/Documents` stayed readable after the restart.
   both feeds, taking the newer, so it lands on each stable release; anything else reads only the
   stable feed. Nothing stores a channel. `octo upgrade --channel <name>` moves to the other one.
   `0.0.0`, the version of a local `pnpm package`, never updates.
-- **The app.** `apps/desktop/src/updates.ts` checks 10 s after launch and then hourly. It
+- **The app.** `apps/desktop/src/updates.ts` checks 10 s after launch and then every 30 minutes. It
   downloads a newer release next to the app, in `.octodo-update-*`, checks its sha256 and unpacks
-  it with `ditto`. The sidebar then shows an Update button; a click swaps the folders and restarts.
+  it with `ditto`. The rail then shows an update button above Settings, its tooltip naming the
+  version; a click swaps the folders and restarts.
   The next launch deletes what the update left. An app that cannot write its own folder, such as a
   download macOS translocated, does not check. `packages/client/src/release.ts` holds the steps
   the app and `octo upgrade` share.

@@ -1,10 +1,10 @@
 import { Button } from "@octodo/ui/components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@octodo/ui/components/tooltip";
-import { ArrowUpCircleIcon } from "lucide-react";
+import { DownloadIcon } from "lucide-react";
 import { useState } from "react";
 import { desktop, useUpdateReady } from "@/lib/desktop";
 
-/** Shown once the desktop app has downloaded a new version; a click restarts into it. */
+/** Shown in the rail once the desktop app has downloaded a new version; a click restarts into it. */
 export function UpdateButton() {
   const version = useUpdateReady();
   const [failure, setFailure] = useState<string>();
@@ -14,13 +14,24 @@ export function UpdateButton() {
     <Tooltip>
       <TooltipTrigger
         render={
-          <Button size="xs" className="rounded-full" onClick={() => void restart()}>
-            <ArrowUpCircleIcon data-icon="inline-start" />
-            Update
+          <Button
+            size="icon"
+            className="size-8 rounded-full border-transparent bg-info text-white shadow-none hover:bg-info/90"
+            aria-label={`Update available: ${version}`}
+            onClick={() => void restart()}
+          >
+            <DownloadIcon />
           </Button>
         }
       />
-      <TooltipContent>{failure ?? `Restart into octodo ${version}`}</TooltipContent>
+      <TooltipContent side="right">
+        {failure ?? (
+          <span className="flex flex-col">
+            Update available
+            <span className="font-mono text-[11px] opacity-70">{version}</span>
+          </span>
+        )}
+      </TooltipContent>
     </Tooltip>
   );
 }

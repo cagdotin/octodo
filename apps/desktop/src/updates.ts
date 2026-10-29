@@ -1,6 +1,6 @@
 /**
  * Keeps the app up to date (decision 0029): checks its build's channel soon after launch and then
- * every hour, downloads a newer release in the background, and installs it when the person asks.
+ * every 30 minutes, downloads a newer release in the background, and installs it when the person asks.
  */
 import {
   channelOf,
@@ -16,7 +16,7 @@ import { app } from "electron";
 import { dirname } from "node:path";
 
 const FIRST_CHECK_MS = 10_000;
-const CHECK_EVERY_MS = 60 * 60_000;
+const CHECK_EVERY_MS = 30 * 60_000;
 
 /** A release downloaded and unpacked next to the app, waiting for the person to restart. */
 interface Ready {

@@ -285,10 +285,10 @@ function ResizeHandle({
     >
       {grip ? (
         <motion.span
-          animate={{ height: dragging ? 56 : 32 }}
+          animate={{ scaleY: dragging ? 56 / 32 : 1 }}
           transition={spring}
           className={cn(
-            "w-1 rounded-full bg-muted-foreground/24 transition-colors group-hover/handle:bg-muted-foreground/48 group-focus-visible/handle:bg-ring",
+            "h-8 w-1 rounded-full bg-muted-foreground/24 transition-colors group-hover/handle:bg-muted-foreground/48 group-focus-visible/handle:bg-ring",
             dragging && "bg-foreground/60!",
           )}
         />
@@ -315,6 +315,8 @@ function SplitPanel({
   return (
     <AnimatePresence initial={false}>
       {children && (
+        // The main column reflows as the panel opens, which only a width animation does.
+        // react-doctor-disable-next-line react-doctor/no-layout-property-animation
         <motion.div
           key="panel"
           className={cn("hidden shrink-0 overflow-hidden md:flex", dragging && "select-none")}

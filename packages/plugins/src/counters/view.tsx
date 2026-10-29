@@ -282,7 +282,7 @@ function Meter({ value, label }: { value: number; label: ReactNode }) {
         <motion.div
           className="h-full rounded-full bg-foreground/70"
           initial={false}
-          animate={{ width: `${Math.max(2, Math.min(100, value * 100))}%` }}
+          animate={{ x: `${Math.max(2, Math.min(100, value * 100)) - 100}%` }}
           transition={{ type: "spring", stiffness: 300, damping: 40 }}
         />
       </div>

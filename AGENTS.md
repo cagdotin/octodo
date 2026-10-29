@@ -151,7 +151,7 @@ OCT-69.
 
 ## Development
 
-- Toolchain: `mise run setup` (Node 26, pnpm 12). Node runs the TypeScript sources directly, so
+- Toolchain: `mise run setup` (Node 26, pnpm 12, gitleaks). Node runs the TypeScript sources directly, so
   keep to erasable syntax (no enums, namespaces or parameter properties) and import with `.ts`
   extensions.
 - `pnpm dev`: Vite on 5520 plus Electron, which attaches to the server `server.json` names or
@@ -162,8 +162,8 @@ OCT-69.
   dmg, zip; ad-hoc signed, [0024](docs/decisions/0024-the-desktop-app-is-packaged-with-electron-builder.md)).
   Try a build on scratch state, or it attaches to the octodo you run:
   `OCTODO_HOME=<tmp> OCTODO_PORT=<spare> apps/desktop/release/mac-arm64/octodo.app/Contents/MacOS/octodo --user-data-dir=<tmp>/ud`.
-- `pnpm check`: format check, lint, typecheck, tests. Lefthook runs format, lint and typecheck on
-  commit and `pnpm check` before push.
+- `pnpm check`: format check, lint, typecheck, tests. Lefthook runs gitleaks on the staged changes, format, lint and
+  typecheck on commit and `pnpm check` before push.
 - Test against scratch folders (`OCTODO_HOME=<tmp> bin/octo ...`), never a real project's
   `.octodo/`.
 - UI work: follow the `devl` skill in `.agents/skills/` (also visible as `.claude/skills`). The

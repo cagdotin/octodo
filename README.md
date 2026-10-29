@@ -43,7 +43,7 @@ Three quotes so far. Notes in markdown.
 ## Use it
 
 ```sh
-mise run setup                       # Node 26 + pnpm 12 + dependencies
+mise run setup                       # Node 26 + pnpm 12 + gitleaks + dependencies
 bin/octo init ~/code/my-project      # create .octodo/ and register the workspace
 cd ~/code/my-project
 octo create "First task" -p high -t setup

@@ -1,8 +1,11 @@
-# Git hooks. Commits get a fast gate (format and lint the staged files, typecheck); the full
+# Git hooks. Commits get a fast gate (no secrets, format and lint the staged files, typecheck); the full
 # `pnpm check` with tests runs before a push.
 pre-commit:
   piped: true
   jobs:
+    - name: secrets
+      run: gitleaks git --pre-commit --staged --redact --no-banner
+
     - name: format staged
       glob: "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,json,jsonc,yaml,yml,toml,html,css,md}"
       run: pnpm exec oxfmt --no-error-on-unmatched-pattern {staged_files}

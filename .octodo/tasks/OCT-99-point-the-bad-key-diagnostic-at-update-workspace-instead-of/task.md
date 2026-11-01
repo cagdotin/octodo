@@ -1,7 +1,7 @@
 ---
 id: OCT-99
 title: Point the bad-key diagnostic at update_workspace instead of a hand edit
-status: todo
+status: done
 tags:
   - engine
 created: 2026-10-29T18:53:09.140Z

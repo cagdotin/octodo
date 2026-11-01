@@ -38,9 +38,9 @@ const keyProblem = ({ key, name }: WorkspaceConfig): Problem => {
   const usable = key.replace(/[^A-Za-z0-9]/g, "");
   const suggested = isWorkspaceKey(usable) ? usable : deriveKey(name);
   return {
-    kind: "invalid-config",
+    kind: "invalid-key",
     field: "key",
-    detail: `The key ${JSON.stringify(key)} is not letters and digits starting with a letter, so a mention such as [[${key}-1]] is not read. Its tasks still load; to fix it, set "key" in config.json to letters and digits such as "${suggested}" and change each id ${key}-<n> to ${suggested}-<n>`,
+    detail: `The key ${JSON.stringify(key)} is not letters and digits starting with a letter, so a mention such as [[${key}-1]] is not read. Its tasks still load; a key such as "${suggested}" works`,
   };
 };
 

@@ -245,6 +245,7 @@ export type TaskDetail = typeof TaskDetail.Type;
 /** Every problem the engine itself finds; the engine's `PROBLEMS` table says what each means. */
 export const CoreDiagnosticKind = Schema.Literals([
   "invalid-config",
+  "invalid-key",
   "invalid-frontmatter",
   "missing-id",
   "malformed-id",

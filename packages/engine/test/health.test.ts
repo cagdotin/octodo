@@ -279,8 +279,8 @@ describe("file health", () => {
       ["MY_K-3", []],
     ]);
     const found = (await snapshot(root)).diagnostics;
-    expect(found.map(summary)).toEqual([one("config.json", "invalid-config", "key", null)]);
-    expect(found[0]?.message).toContain('set "key" in config.json to letters and digits');
+    expect(found.map(summary)).toEqual([one("config.json", "invalid-key", "key", null)]);
+    expect(found[0]?.message).toContain("octo workspace update --key <KEY>");
   });
 
   it("adds an unknown status to config.json as unstarted only when asked", async () => {

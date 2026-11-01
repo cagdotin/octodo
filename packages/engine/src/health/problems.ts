@@ -16,6 +16,11 @@ export const PROBLEMS = {
     remedy: "Fix config.json by hand",
     fixes: [],
   },
+  "invalid-key": {
+    remedy:
+      "Change the key in Settings > General or with `octo workspace update --key <KEY>`, which moves every id to it",
+    fixes: [],
+  },
   "invalid-frontmatter": {
     remedy: "Fix the YAML between the --- lines by hand",
     fixes: [],

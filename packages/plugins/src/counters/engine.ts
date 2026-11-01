@@ -11,7 +11,8 @@ import {
   removeOccurrence,
   sectionLog,
 } from "../log.ts";
-import { COUNTER_TYPES, countOf, readDay, type CounterFields, type CounterType } from "./count.ts";
+import { readDay } from "../day.ts";
+import { COUNTER_TYPES, countOf, type CounterFields, type CounterType } from "./count.ts";
 import { countersShared, type Counter } from "./shared.ts";
 
 const NONE: CounterFields = { type: null, since: null, last: null, date: null };

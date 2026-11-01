@@ -27,7 +27,33 @@ describe("the repeat rule", () => {
     expect(rule("every monday, wednesday, friday")).toEqual({ kind: "weekdays", days: [1, 3, 5] });
     expect(rule("monthly on the 1st")).toEqual({ kind: "month-day", day: 1 });
     expect(rule("every month on the 31st")).toEqual({ kind: "month-day", day: 31 });
-    const refused = ["sometimes", "every 0 days", "every funday", "monthly on the 32nd", ""];
+    expect(rule("yearly on november 27")).toEqual({ kind: "year-day", month: 11, day: 27 });
+    expect(rule("every year on the 29th of feb")).toEqual({ kind: "year-day", month: 2, day: 29 });
+    expect(rule("yearly on the day after the fourth thursday of november")).toEqual({
+      kind: "nth-weekday",
+      nth: 4,
+      weekday: 4,
+      month: 11,
+      after: 1,
+    });
+    expect(rule("monthly on the last friday")).toEqual({
+      kind: "nth-weekday",
+      nth: -1,
+      weekday: 5,
+      month: null,
+      after: 0,
+    });
+    const refused = [
+      "sometimes",
+      "every 0 days",
+      "every funday",
+      "monthly on the 32nd",
+      "",
+      "yearly on november 31",
+      "yearly on the fourth thursday",
+      "monthly on the first monday of may",
+      "yearly on the sixth sunday of june",
+    ];
     expect(refused.filter((text) => !("error" in parseRule(text)))).toEqual([]);
   });
 
@@ -51,6 +77,21 @@ describe("the repeat rule", () => {
     expect(nextDue(rent, ["2026-10-31"], null)).toBe("2026-11-30");
     expect(nextDue(rent, ["2026-11-30"], null)).toBe("2026-12-31");
     expect(nextDue(rule("monthly on the 1st"), ["2026-10-15"], null)).toBe("2026-11-01");
+  });
+
+  it("names the day of the year a yearly rule gives, Black Friday included", () => {
+    const blackFriday = rule("yearly on the day after the fourth thursday of november");
+    expect(nextDue(blackFriday, [], "2026-10-30"), "created in October").toBe("2026-11-27");
+    expect(nextDue(blackFriday, ["2026-11-27"], "2026-10-30"), "the year after").toBe("2027-11-26");
+    expect(nextDue(blackFriday, [], "2026-11-28"), "started after this year's").toBe("2027-11-26");
+    const leap = rule("yearly on february 29");
+    expect(nextDue(leap, [], "2026-01-10"), "a year without one").toBe("2026-02-28");
+    expect(nextDue(leap, ["2027-02-28"], null)).toBe("2028-02-29");
+    const payday = rule("monthly on the last friday");
+    expect(nextDue(payday, [], "2026-10-31")).toBe("2026-11-27");
+    expect(nextDue(payday, ["2026-11-27"], null)).toBe("2026-12-25");
+    const lateMonday = rule("monthly on 2 days after the last monday");
+    expect(nextDue(lateMonday, [], "2026-11-01"), "into the next month").toBe("2026-12-02");
   });
 
   it("moves a calendar rule past its current due when it is done early, and never back", () => {
@@ -190,7 +231,8 @@ describe("a recurring task in a workspace", () => {
       id: "recurring",
       fields: {
         repeat: "every 3 days",
-        next: created.created!.slice(0, 10),
+        start: localDay(created.created!),
+        next: localDay(created.created!),
         last: null,
         count: 0,
         recent: [],
@@ -199,6 +241,27 @@ describe("a recurring task in a workspace", () => {
     expect(
       (await ws.call("create_recurring", { title: "Bad", repeat: "sometimes" })).error,
     ).toMatch(/^InvalidRequest: The repeat rule "sometimes" is not one octodo reads/);
+  });
+
+  it("starts from its start day, and refuses one that is not a day", async () => {
+    const ws = await fresh();
+    const wishlist: Task = (
+      await ws.call("create_recurring", {
+        title: "Black Friday wishlist",
+        repeat: "every year",
+        start: "2026-11-27",
+      })
+    ).value;
+    expect(ws.file("HM-1-black-friday-wishlist/task.md")).toContain("start: 2026-11-27\n");
+    expect(wishlist.kind?.fields).toMatchObject({ start: "2026-11-27", next: "2026-11-27" });
+    const moved: Task = (
+      await ws.call("set_repeat", { id: "HM-1", repeat: "every year", start: "2027-01-02" })
+    ).value;
+    expect(moved.kind?.fields).toMatchObject({ start: "2027-01-02", next: "2027-01-02" });
+    expect(
+      (await ws.call("create_recurring", { title: "Bad", repeat: "daily", start: "2026-02-30" }))
+        .error,
+    ).toMatch(/^InvalidRequest: The date 2026-02-30 is not a day the calendar has/);
   });
 
   it("logs an occurrence when it is completed, and stays open", async () => {
@@ -261,21 +324,22 @@ describe("a recurring task in a workspace", () => {
     );
   });
 
-  it("reports a broken rule and a broken log line, and counts the rest", async () => {
+  it("reports a broken rule, start day and log line, and counts the rest", async () => {
     const ws = await fresh();
     await ws.call("create_recurring", { title: "Water", repeat: "every day" });
     await ws.call("log_occurrence", { id: "HM-1", at: "2026-10-20" });
     ws.write(
       "HM-1-water/task.md",
-      ws.file("HM-1-water/task.md").replace("repeat: every day", "repeat: whenever"),
+      ws.file("HM-1-water/task.md").replace("repeat: every day", "repeat: whenever\nstart: soon"),
     );
     ws.write("HM-1-water/log.jsonl", `${ws.file("HM-1-water/log.jsonl")}{"at":"soon"}\n`);
     const { value } = await ws.call("list_diagnostics", {});
     expect(value.map((d: any) => [d.kind, d.path, d.field])).toEqual([
       ["recurring/bad-repeat", ".octodo/tasks/HM-1-water/task.md", "repeat"],
+      ["recurring/bad-start", ".octodo/tasks/HM-1-water/task.md", "start"],
       ["recurring/bad-line", ".octodo/tasks/HM-1-water/log.jsonl", null],
     ]);
-    expect(value[1].message).toBe(
+    expect(value[2].message).toBe(
       "Line 2 has no event. That line does not count as an occurrence.",
     );
     const summary: TaskSummary = (await ws.call("list_tasks", {})).value[0];
@@ -304,6 +368,7 @@ describe("a recurring task in a workspace", () => {
     expect(
       recurringShared.label({
         repeat: "every 3 days",
+        start: "2026-10-28",
         next: "2026-10-31",
         last: null,
         count: 0,

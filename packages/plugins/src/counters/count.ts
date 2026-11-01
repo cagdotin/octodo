@@ -34,19 +34,6 @@ const pad = (value: number, width = 2) => String(value).padStart(width, "0");
 
 const isLeap = (year: number) => (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
 
-/** `value` as a day that exists, or why it is not one. */
-export const readDay = (value: unknown): { readonly day: string } | { readonly error: string } => {
-  const text = typeof value === "string" ? value.trim() : value;
-  const parts = typeof text === "string" ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(text) : null;
-  if (parts === null)
-    return { error: `The date ${JSON.stringify(value)} is not a day written YYYY-MM-DD` };
-  const [year, month, day] = parts.slice(1).map(Number) as [number, number, number];
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day)
-    return { error: `The date ${text} is not a day the calendar has` };
-  return { day: parts[0] };
-};
-
 /** The day `date` falls on in `year`; February 29 falls on the 28th in a year without one. */
 const inYear = (date: string, year: number) => {
   const monthDay = date.slice(5);

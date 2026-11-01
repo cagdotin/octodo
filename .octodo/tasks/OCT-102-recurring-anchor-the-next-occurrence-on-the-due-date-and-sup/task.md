@@ -1,7 +1,7 @@
 ---
 id: OCT-102
 title: "Recurring: anchor the next occurrence on the due date, and support yearly rules like Black Friday"
-status: backlog
+status: done
 priority: low
 tags:
   - plugins

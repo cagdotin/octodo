@@ -46,7 +46,9 @@ instead of keeping the code because it exists.
   and files in its folder; no `type` is the plain task, and a `type` the workspace does not enable
   reads as a plain task with an `unknown-kind` diagnostic
   ([0014](docs/decisions/0014-one-plugin-api-for-the-plain-task-and-every-plugin.md)). A
-  recurring task keeps its rule in `repeat` and one line per time it was done in `log.jsonl`;
+  recurring task keeps its rule in `repeat`, the day it starts from in `start` (its created day
+  without one, [0031](docs/decisions/0031-a-recurring-task-starts-on-its-start-day-and-rules-name-days-of-the-year.md))
+  and one line per time it was done in `log.jsonl`;
   moving it into a completed status logs that line and leaves it in the first unstarted status
   ([0016](docs/decisions/0016-recurring-tasks-complete-in-place.md)).
 - Counters are a section, not tasks: `.octodo/counters/<id>-<slug>/counter.md` with `type: since`

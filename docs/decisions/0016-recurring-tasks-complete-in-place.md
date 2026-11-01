@@ -1,6 +1,11 @@
 # 0016. Recurring tasks complete in place, through a hook on the move
 
-- Status: accepted
+- Status: accepted, amended by 0031
+
+> Amended by [0031](0031-a-recurring-task-starts-on-its-start-day-and-rules-name-days-of-the-year.md) (OCT-102): a task never done is due on its `start` day when it has one, and the
+> grammar names days of the year (`yearly on november 27`) and the nth weekday of a month
+> (`yearly on the day after the fourth thursday of november`).
+
 - Date: 2026-10-28
 
 ## Context

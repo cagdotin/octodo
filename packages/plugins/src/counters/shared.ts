@@ -6,7 +6,7 @@ import { Schema } from "effect";
 import { COUNTER_TYPES, counterDay, countText, type CounterFields as Fields } from "./count.ts";
 
 const workspace = Schema.optionalKey(Schema.String).annotate({
-  description: "Registered workspace id or absolute path. Omit to use the current project.",
+  description: "Registered workspace id or key, or absolute path. Omit to use the current project.",
 });
 
 const id = Schema.String.annotate({

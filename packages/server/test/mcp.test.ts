@@ -100,7 +100,10 @@ describe("the workspace over HTTP", () => {
     for (const workspace of [".", "./house", "../house"])
       expect(await attempt("list_tasks", { workspace })).toEqual({
         isError: true,
-        value: { _tag: "InvalidRequest", message: "Use a workspace id or an absolute folder path" },
+        value: {
+          _tag: "InvalidRequest",
+          message: "Use a workspace id or key, or an absolute folder path",
+        },
       });
   });
 });

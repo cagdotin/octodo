@@ -41,10 +41,11 @@ export class Workspaces extends Context.Service<
       options?: WorkspaceOptions,
     ) => Effect.Effect<WorkspaceInfo, InvalidRequest | StorageError | WorkspaceBusy>;
     readonly remove: (id: string) => Effect.Effect<void, WorkspaceNotFound | StorageError>;
-    readonly get: (id: string) => Effect.Effect<Workspace, WorkspaceNotFound | StorageError>;
+    /** A registered workspace by its id, or by its key when one workspace has it. */
+    readonly get: (idOrKey: string) => Effect.Effect<Workspace, WorkspaceNotFound | StorageError>;
     /**
      * `target` as a folder when it starts with `/` or `.` (the nearest ancestor holding a
-     * `.octodo/config.json`), otherwise as a registered id.
+     * `.octodo/config.json`), otherwise as `get` reads it.
      */
     readonly open: (target: string) => Effect.Effect<Workspace, WorkspaceNotFound | StorageError>;
     /**
@@ -147,10 +148,20 @@ export class Workspaces extends Context.Service<
             }),
           );
 
-        const get = (id: string) =>
+        const byKey = (key: string) =>
           Effect.gen(function* () {
-            const entry = (yield* readRegistry).workspaces.find((candidate) => candidate.id === id);
-            if (entry === undefined) return yield* new WorkspaceNotFound({ workspace: id });
+            const { workspaces } = yield* readRegistry;
+            const known = yield* Effect.forEach(workspaces, info);
+            const matches = known.filter((workspace) => workspace.key === key.toUpperCase());
+            return matches.length === 1 ? matches[0] : undefined;
+          });
+
+        const get = (idOrKey: string) =>
+          Effect.gen(function* () {
+            const entry =
+              (yield* readRegistry).workspaces.find((candidate) => candidate.id === idOrKey) ??
+              (yield* byKey(idOrKey));
+            if (entry === undefined) return yield* new WorkspaceNotFound({ workspace: idOrKey });
             return yield* openHandle(entry.id, entry.root);
           });
 

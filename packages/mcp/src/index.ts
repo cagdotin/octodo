@@ -22,7 +22,7 @@ const INSTRUCTIONS = `octodo manages tasks stored as markdown files under a proj
 - blocked_by in a task's frontmatter lists the task ids it waits for. A task is blocked while any of them is open or missing; update_task sets blocked_by, and list_tasks with ready: true lists open tasks that are not blocked. [[HM-3]] in a body mentions task HM-3.
 - Call get_workspace first to learn the statuses and lists before creating or moving tasks.
 - Files that octodo cannot read cleanly show up as diagnostics (list_diagnostics). Fix one with fix_diagnostic when it offers a fix; otherwise tell the user what its message says to do. Never edit the files to fix them.
-- The workspace parameter takes a registered workspace id or an absolute folder path. Over stdio (octo mcp), omit it to use the workspace containing the folder the server started in; over HTTP, always pass it.`;
+- The workspace parameter takes a registered workspace id or key (OCT), or an absolute folder path. Over stdio (octo mcp), omit it to use the workspace containing the folder the server started in; over HTTP, always pass it.`;
 
 /** Runs an operation by name on its decoded input, the way the process reaches the engine. */
 export type RunOperation = (name: string, input: object) => Effect.Effect<unknown, unknown>;

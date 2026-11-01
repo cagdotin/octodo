@@ -70,14 +70,14 @@ export type OperationEndpoint<
 >;
 
 /** Why a server refuses a relative folder as a workspace: it would resolve against its own. */
-export const RELATIVE_WORKSPACE = "Use a workspace id or an absolute folder path";
+export const RELATIVE_WORKSPACE = "Use a workspace id or key, or an absolute folder path";
 
 /** A `:workspace` path parameter, as MCP over HTTP takes `workspace` too. */
 const WorkspaceSelector = Schema.String.pipe(
   Schema.check(Schema.isPattern(/^[^.]/, { message: RELATIVE_WORKSPACE })),
 ).annotate({
   description:
-    "A registered workspace id, or an absolute folder path as one percent-encoded segment (the workspace containing it)",
+    "A registered workspace id or key, or an absolute folder path as one percent-encoded segment (the workspace containing it)",
 });
 
 const RegisteredWorkspace = Schema.String.annotate({ description: "Registered workspace id" });

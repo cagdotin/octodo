@@ -54,7 +54,7 @@ describe("workspaces", () => {
     ]);
   });
 
-  it("opens a folder path, a relative path or a registered id, and names what it could not find", async () => {
+  it("opens a folder path, a relative path, a registered id or key, and names what it could not find", async () => {
     const base = mkdtempSync(join(tmpdir(), "octodo-open-"));
     const home = join(base, ".home");
     const garden = join(base, "garden");
@@ -66,7 +66,7 @@ describe("workspaces", () => {
         Workspaces.use((w) =>
           Effect.gen(function* () {
             yield* w.add(garden);
-            const targets = [join(garden, "seeds"), ".", "../seeds", "garden"];
+            const targets = [join(garden, "seeds"), ".", "../seeds", "garden", "GAR", "gar"];
             const found = yield* Effect.forEach(targets, (target) => w.open(target));
             const missing = yield* Effect.forEach(["nosuch", base], (target) =>
               Effect.flip(w.open(target)),
@@ -77,7 +77,7 @@ describe("workspaces", () => {
         home,
       );
       expect(opened.found.map(({ id, root }) => ({ id, root }))).toEqual(
-        Array(4).fill({ id: "garden", root: garden }),
+        Array(6).fill({ id: "garden", root: garden }),
       );
       expect(opened.missing.map((error) => error.message)).toEqual([
         "No workspace found for nosuch",

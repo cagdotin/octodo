@@ -33,7 +33,7 @@ const root = Command.make("octo").pipe(
     workspace: Flag.String("workspace").pipe(
       Flag.withAlias("w"),
       Flag.withDescription(
-        "Workspace id or folder; defaults to the one containing the current directory",
+        "Workspace id, key (OCT) or folder; defaults to the one containing the current directory",
       ),
       Flag.optional,
     ),

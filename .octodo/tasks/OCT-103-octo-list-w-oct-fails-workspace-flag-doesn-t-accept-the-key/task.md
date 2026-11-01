@@ -1,7 +1,7 @@
 ---
 id: OCT-103
 title: "octo list -w OCT fails: workspace flag doesn't accept the key"
-status: todo
+status: done
 created: 2026-10-31T08:28:13.611Z
 order: a4
 ---

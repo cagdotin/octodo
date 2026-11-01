@@ -5,7 +5,7 @@ import { Schema } from "effect";
 import { dueDay, RULE_EXAMPLES } from "./rule.ts";
 
 const workspace = Schema.optionalKey(Schema.String).annotate({
-  description: "Registered workspace id or absolute path. Omit to use the current project.",
+  description: "Registered workspace id or key, or absolute path. Omit to use the current project.",
 });
 
 const id = Schema.String.annotate({
@@ -18,12 +18,19 @@ const repeat = Schema.NonEmptyString.annotate({
   ...cli({ alias: "r" }),
 });
 
+const start = Schema.optionalKey(Schema.String).annotate({
+  description:
+    "The day it is first due, YYYY-MM-DD, or the first day the rule names from then; the day it is created if omitted",
+});
+
 /** One time the task was done: UTC, to the minute. */
 export const Occurrence = Schema.Struct({ at: Schema.String });
 
 export const RecurringFields = Schema.Struct({
   /** The rule as `repeat` has it, or null when the task has no rule in text. */
   repeat: Schema.NullOr(Schema.String),
+  /** The day it starts from, `YYYY-MM-DD`: its `start`, or the day it was created. */
+  start: Schema.NullOr(Schema.String),
   /** The day it is due next, `YYYY-MM-DD`; null when the rule cannot be read. */
   next: Schema.NullOr(Schema.String),
   /** When it was last done, or null if never. */
@@ -43,18 +50,19 @@ export const recurringShared = {
   name: "Recurring tasks",
   description:
     "Tasks that come back on a schedule. Completing one logs it and keeps it open until it is due again.",
-  keys: Schema.Struct({ repeat: Schema.String }),
+  keys: Schema.Struct({ repeat: Schema.String, start: Schema.optionalKey(Schema.String) }),
   files: ["log.jsonl"],
   fields: RecurringFields,
   operations: {
     create_recurring: {
-      description: `Create a recurring task, which comes back after it is done. repeat is its rule, such as ${RULE_EXAMPLES}. It is due on the day it is created, then by its rule after each time it is done. Complete it with move_task to a completed status: that logs the occurrence and keeps it open.`,
+      description: `Create a recurring task, which comes back after it is done. repeat is its rule, such as ${RULE_EXAMPLES}. It is first due on start (the day it is created if omitted), or the first day its rule names from then, and then by its rule after each time it is done. Complete it with move_task to a completed status: that logs the occurrence and keeps it open.`,
       readonly: false,
       destructive: false,
       input: Schema.Struct({
         workspace,
         title: title.annotate(cli({ positional: true })),
         repeat,
+        start,
         ...createFields,
       }),
       success: Task,
@@ -68,15 +76,26 @@ export const recurringShared = {
             command: 'octo recurring create "Water the plants" --repeat "every 3 days"',
             description: "A chore that comes back three days after each time",
           },
+          {
+            command:
+              'octo recurring create "Black Friday wishlist" --repeat "yearly on the day after the fourth thursday of november"',
+            description: "Due on Black Friday every year",
+          },
         ],
       },
     },
     set_repeat: {
-      description: "Change a recurring task's rule. The next due day follows the new rule.",
+      description:
+        "Change a recurring task's rule, and the day it starts from when start is given. The next due day follows them.",
       readonly: false,
       destructive: false,
       idempotent: true,
-      input: Schema.Struct({ workspace, id, repeat: repeat.annotate(cli({ positional: true })) }),
+      input: Schema.Struct({
+        workspace,
+        id,
+        repeat: repeat.annotate(cli({ positional: true })),
+        start,
+      }),
       success: Task,
       error: inWorkspace(InvalidRequest, TaskNotFound),
       http: { method: "PATCH", path: "/workspaces/:workspace/recurring/:id" },
@@ -140,6 +159,7 @@ export const recurringShared = {
   },
   problems: {
     "bad-repeat": "Until it is fixed the task has no next due day; set one with set_repeat",
+    "bad-start": "Until it is fixed it starts on the day it was created; set one with set_repeat",
     "bad-line": "That line does not count as an occurrence",
   },
   label: (fields: RecurringFields) =>

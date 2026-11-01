@@ -87,7 +87,7 @@ export interface Operation {
 
 const WorkspaceField = Schema.optionalKey(Schema.String).annotate({
   description:
-    "Registered workspace id or absolute folder path. Over stdio (octo mcp) omit it to use the workspace containing the folder the server started in; over HTTP it is required.",
+    "Registered workspace id or key, or absolute folder path. Over stdio (octo mcp) omit it to use the workspace containing the folder the server started in; over HTTP it is required.",
 });
 
 const TaskId = Schema.String.annotate({
